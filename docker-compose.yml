@@ -61,8 +61,7 @@ services:
   migrate:
     build:
       <<: *build
-      target: builder
-    command: ["npx", "prisma", "migrate", "deploy"]
+      target: migrator
     environment: *app-env
     depends_on:
       postgres:

@@ -2,9 +2,10 @@
 
 # Imagen de producción de Agendia. La misma imagen sirve para el SaaS y para
 # una instalación independiente (DEPLOYMENT_MODE). Tres etapas:
-#   deps    → dependencias exactas del lockfile
-#   builder → cliente de Prisma + build de Next.js (también corre migraciones)
-#   runner  → servidor autocontenido, sin dependencias de desarrollo, usuario sin privilegios
+#   deps     → dependencias exactas del lockfile
+#   builder  → cliente de Prisma + build de Next.js
+#   migrator → solo migraciones y scripts de operación (sin el código de la app)
+#   runner   → servidor autocontenido, sin dependencias de desarrollo, usuario sin privilegios
 
 FROM node:24-alpine AS deps
 WORKDIR /app
@@ -31,6 +32,18 @@ RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" \
     DATABASE_URL="postgresql://build:build@localhost:5432/build" \
     AUTH_SECRET="build-time-placeholder" \
     npm run build
+
+# Imagen auxiliar: aplica migraciones y corre los scripts de operación
+# (scripts/*.mjs). No contiene el código fuente de la aplicación, así que
+# también es la que se entrega en una instalación independiente.
+FROM node:24-alpine AS migrator
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json prisma.config.ts ./
+COPY prisma ./prisma
+COPY scripts ./scripts
+CMD ["npx", "prisma", "migrate", "deploy"]
 
 FROM node:24-alpine AS runner
 WORKDIR /app

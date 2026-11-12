@@ -1,0 +1,121 @@
+# Agendia — instalación independiente (licencia de pago único).
+#
+# Igual que docker-compose.yml, pero con imágenes ya construidas en lugar del
+# código fuente: la licencia es de uso y no incluye el código. En el servidor
+# del cliente solo hacen falta este archivo, Caddyfile, backup.sh y un
+# .env.production (ver docs/PRODUCTION_READINESS.md §7).
+#
+#   docker compose -f docker-compose.standalone.yml --env-file .env.production up -d
+#
+# AGENDIA_IMAGE / AGENDIA_MIGRATOR_IMAGE apuntan a las imágenes entregadas
+# (cargadas con `docker load` o desde un registro privado).
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DEPLOYMENT_MODE: standalone
+  DATABASE_URL: postgresql://${POSTGRES_USER:-agendia}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agendia}
+  APP_URL: https://${DOMAIN:?definir DOMAIN}
+  AUTH_URL: https://${DOMAIN}
+  AUTH_SECRET: ${AUTH_SECRET:?definir AUTH_SECRET}
+  CRON_SECRET: ${CRON_SECRET:?definir CRON_SECRET}
+  CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  EMAIL_FROM: ${EMAIL_FROM:-}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agendia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-agendia}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  migrate:
+    image: ${AGENDIA_MIGRATOR_IMAGE:?definir AGENDIA_MIGRATOR_IMAGE}
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *logging
+
+  web:
+    image: ${AGENDIA_IMAGE:?definir AGENDIA_IMAGE}
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+  worker:
+    image: ${AGENDIA_IMAGE}
+    restart: unless-stopped
+    command: ["node", "scripts/worker.mjs"]
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+      WORKER_TARGET_URL: http://web:3000
+    healthcheck:
+      disable: true
+    depends_on:
+      web:
+        condition: service_healthy
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    logging: *logging
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-agendia}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-agendia}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:
