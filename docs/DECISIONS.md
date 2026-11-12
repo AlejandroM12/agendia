@@ -14,10 +14,13 @@
 **Contexto:** confirmado que no hay eliminación automática de datos ni en `trial_readonly` (30 días) ni en `locked`. Falta definir qué pasa con los datos de una organización `locked` a largo plazo (retención indefinida, exportación y borrado a pedido, u otro esquema).
 **Próximo paso:** decisión comercial a tomar antes de la Fase 5.
 
-### D-21 · Migraciones de la Fase 1 sin aplicar (bloqueo de entorno, no de diseño)
-**Estado:** PENDIENTE — no bloquea el resto de la Fase 1, pero impide probar el flujo de registro/login de punta a punta hasta resolverse.
-**Contexto:** Docker Desktop no está corriendo en esta máquina al momento de implementar la Fase 1 (`docker ps` falla con "no se pudo encontrar dockerDesktopLinuxEngine"), así que no hay una base de datos PostgreSQL alcanzable. `prisma/schema.prisma` y `prisma.config.ts` quedan listos, pero la migración inicial (`npx prisma migrate dev --name init`) no se pudo ejecutar ni verificar contra una base real.
-**Próximo paso:** iniciar Docker Desktop (o cualquier PostgreSQL alcanzable vía `DATABASE_URL` en `.env.local`) y ejecutar `npm run db:migrate` — ver el informe de cierre de la Fase 1 para el detalle exacto.
+### D-21 · Migraciones de la Fase 1 (RESUELTO)
+**Estado:** RESUELTO. Bloqueaba temporalmente la validación de punta a punta por falta de un PostgreSQL alcanzable (Docker Desktop no estaba corriendo). Se inició Docker Desktop, se reactivó el contenedor local `agendia-postgres` y se aplicó la migración inicial (`20261112084852_init`) con `npx prisma migrate dev --name init`. El SQL generado coincide con `docs/DATABASE_DESIGN.md` (tablas, enums, índices únicos y foreign keys con cascada). El registro/login/recuperación de contraseña se probaron de punta a punta contra esta base — ver el informe de validación de la Fase 1.
+
+### D-22 · Framework de tests
+**Estado:** CONFIRMADO.
+**Decisión:** Vitest para pruebas unitarias y de integración (`npm run test`), sin Jest ni Playwright todavía. Las pruebas de `lib/organization-access.ts` son unitarias puras; las de registro, recuperación de contraseña y aislamiento multi-tenant son de integración y corren contra la base de datos real de desarrollo (no hay una base de datos de test separada todavía), limpiando sus propios datos en cada `afterEach`.
+**Motivo:** Vitest es liviano, rápido y no requiere configuración adicional para TypeScript/ESM, coherente con "no sobreingenierizar". Playwright (end-to-end real de UI) se evalúa para una fase posterior, cuando haya suficientes flujos de UI como para justificar esa infraestructura; mientras tanto, los flujos HTTP (registro, login, logout, recuperación de contraseña) se validaron manualmente contra `next dev` y quedan documentados en el informe de la Fase 1, no como suite automatizada todavía.
 
 ### D-12 · Estrategia operativa de backups
 **Estado:** PENDIENTE (no bloqueante para el MVP, pero requerido antes de manejar datos reales de clientes).
