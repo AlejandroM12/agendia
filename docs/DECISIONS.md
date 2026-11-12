@@ -4,6 +4,12 @@
 
 ## Pendientes (bloquean o condicionan avance)
 
+### D-23 · Revisión propuesta de D-04: proveedor de hosting de producción
+**Estado:** PENDIENTE DE TU APROBACIÓN — propuesta de cambio sobre una decisión ya confirmada (D-04), con justificación concreta.
+**Contexto:** D-04 eligió Vercel + Neon como "opción inicial" cuando todavía no había un requisito explícito de operación 24/7 sin suspensión por inactividad. Con ese requisito ahora explícito (ver `docs/INFRASTRUCTURE.md`), aparecieron tres fricciones: (1) el diseño del worker de notificaciones (D-13) existe específicamente para rodear la falta de procesos persistentes en Vercel; (2) el plan gratuito de Vercel solo permite cron una vez al día, insuficiente para recordatorios — haría falta Vercel Pro de pago; (3) Neon escala a cero por diseño salvo que se pague por mantener cómputo mínimo activo, reintroduciendo el mismo problema de "suspensión" que se quiere evitar.
+**Propuesta:** migrar la opción de hosting inicial a **Railway** (app + worker + PostgreSQL en una sola plataforma, sin suspensión por inactividad, procesos persistentes reales). Ver comparación completa y costos estimados en `docs/INFRASTRUCTURE.md` §2 y §11.
+**Próximo paso:** tu aprobación explícita antes de contratar o configurar nada. Si se aprueba, esta entrada se reclasifica como confirmada y D-04 se marca como superada por esta.
+
 ### D-10 · Infraestructura de rate limiting a escala
 **Estado:** PENDIENTE (no bloqueante para el MVP).
 **Contexto:** se usa un contador en base de datos o en memoria para limitar abuso en endpoints públicos (sin Redis obligatorio, para no complicar la instalación standalone). Si el SaaS escala a múltiples instancias sin estado compartido, este mecanismo deja de ser confiable.
@@ -23,9 +29,9 @@
 **Motivo:** Vitest es liviano, rápido y no requiere configuración adicional para TypeScript/ESM, coherente con "no sobreingenierizar". Playwright (end-to-end real de UI) se evalúa para una fase posterior, cuando haya suficientes flujos de UI como para justificar esa infraestructura; mientras tanto, los flujos HTTP (registro, login, logout, recuperación de contraseña) se validaron manualmente contra `next dev` y quedan documentados en el informe de la Fase 1, no como suite automatizada todavía.
 
 ### D-12 · Estrategia operativa de backups
-**Estado:** PENDIENTE (no bloqueante para el MVP, pero requerido antes de manejar datos reales de clientes).
-**Contexto:** Neon ofrece backups automáticos/branching; falta definir frecuencia de verificación de restauración y procedimiento para la modalidad standalone (backup de PostgreSQL propio en Docker Compose).
-**Próximo paso:** definir en la Fase 6 junto con la documentación de instalación.
+**Estado:** PENDIENTE (diseño propuesto en `docs/INFRASTRUCTURE.md` §8; falta aprobar la infraestructura de producción, D-23, antes de implementarlo).
+**Contexto:** backup nativo del proveedor de base de datos (Railway/Neon, según se resuelva D-23) más un `pg_dump` diario propio e independiente (retención 7 diarios + 4 semanales), con un simulacro de restauración mensual. Para la modalidad standalone, el mismo esquema aplica contra el PostgreSQL propio en Docker Compose.
+**Próximo paso:** implementar junto con la infraestructura de producción, una vez aprobada D-23.
 
 ---
 
@@ -65,6 +71,16 @@
 **Estado:** CONFIRMADO (detalle de entorno, no de infraestructura productiva).
 **Decisión:** PostgreSQL 17 vía un contenedor Docker local (`agendia-postgres`, puerto `54330`) para desarrollo. No es un recurso de infraestructura productiva ni tiene costo.
 **Motivo:** permite ejecutar migraciones y probar la aplicación localmente sin depender de Neon todavía (ver D-04), consistente con "no desplegar a producción ni crear recursos con costo" durante la Fase 1.
+
+### D-24 · Row-Level Security como segunda capa de aislamiento multi-tenant
+**Estado:** CONFIRMADO como diseño; implementación en la Fase 3 (cuando existan tablas operativas a las que aplicarle policies — hoy no hay ninguna).
+**Decisión:** además del filtrado por `organizationId` ya implementado en `lib/dal.ts`, agregar policies RLS de PostgreSQL sobre las tablas operativas (`appointments`, `customers`, `services`, etc.), usando `SET LOCAL app.current_organization_id` por transacción. Ver `docs/SECURITY.md` §1.
+**Motivo:** una segunda capa de aislamiento que no depende de que cada query de aplicación recuerde filtrar correctamente — PostgreSQL se convierte en el árbitro final, no solo el código.
+
+### D-25 · CI/CD con GitHub Actions, staging separado y migraciones manuales a producción
+**Estado:** CONFIRMADO como diseño; implementación cuando se apruebe la infraestructura de producción (D-23).
+**Decisión:** GitHub Actions corre lint/typecheck/test/build en cada PR (sin deploy). El deploy a producción es automático vía la integración nativa de la plataforma al hacer merge a `main`, pero `prisma migrate deploy` contra la base de producción requiere una aprobación manual explícita — nunca migra solo. Staging usa una base de datos completamente separada. Ver `docs/INFRASTRUCTURE.md` §6.
+**Motivo:** evita que una migración destructiva llegue a producción sin que un humano la confirme, sin renunciar a que el resto del pipeline sea automático.
 
 ### D-02 · Stack tecnológico base
 **Estado:** CONFIRMADO.

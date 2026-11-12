@@ -55,8 +55,9 @@ Definir identidad comercial (nombre + identidad visual) — ver `DECISIONS.md`, 
 
 ## Fase 7 — Calidad y lanzamiento
 - Tests de reglas críticas (solapamientos, ciclo de prueba gratuita, idempotencia de webhooks y notificaciones).
-- Revisión de seguridad (checklist de `ARCHITECTURE.md` sección 10).
+- Revisión de seguridad (`docs/SECURITY.md`).
 - Performance y SEO de la landing.
-- Deploy a producción (Vercel + Neon).
+- Infraestructura de producción aprobada (ver `docs/INFRASTRUCTURE.md` y la decisión D-23) y checklist de lanzamiento (`docs/INFRASTRUCTURE.md` §10) completa.
+- Deploy a producción.
 
-**Aceptación:** suite de tests cubre las reglas de negocio críticas; Core Web Vitals en verde en la landing; checklist de seguridad revisado y sin pendientes críticos abiertos.
+**Aceptación:** suite de tests cubre las reglas de negocio críticas; Core Web Vitals en verde en la landing; checklist de seguridad y de lanzamiento revisadas y sin pendientes críticos abiertos.

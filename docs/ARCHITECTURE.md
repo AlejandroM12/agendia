@@ -66,6 +66,8 @@ Requisito confirmado: el procesamiento debe funcionar correctamente en el hostin
 
 Se descarta una cola dedicada (BullMQ/Redis) para el MVP: agrega infraestructura y costo operativo innecesarios en esta etapa y complica la instalación standalone. Si el volumen de notificaciones lo justifica más adelante, se puede migrar sin cambiar la interfaz del módulo `notifications`.
 
+**Nota de producción:** si se aprueba la revisión de hosting propuesta en `docs/INFRASTRUCTURE.md` (D-23), el mecanismo de disparo se simplifica a un proceso Node persistente real (sin la restricción de Vercel que motivó este diseño) — el patrón outbox + idempotencia descrito arriba no cambia, solo deja de necesitar una invocación HTTP externa programada.
+
 ## 5. Prevención de solapamientos de turnos
 
 Garantía a nivel de base de datos, no solo de interfaz:
@@ -87,9 +89,8 @@ Garantía a nivel de base de datos, no solo de interfaz:
 
 ## 8. Hosting (modo SaaS)
 
-- **Opción inicial confirmada:** Vercel (aplicación) + Neon (PostgreSQL serverless). No se configura entorno de producción todavía — queda para cuando se apruebe el lanzamiento comercial.
-- Justificación: bajo costo operativo inicial, despliegue simple, buen soporte de Next.js App Router, Neon ofrece branching de base de datos útil para `preview deployments`.
-- **Modo standalone:** Docker Compose con PostgreSQL propio (contenedor), sin dependencia de Vercel/Neon ni de nuestros servidores en tiempo de ejecución.
+- **Bajo revisión:** la elección original (Vercel + Neon, D-04) está en proceso de reevaluación frente al requisito de operación 24/7 sin suspensión por inactividad. Ver `docs/INFRASTRUCTURE.md` para la comparación completa de opciones y `docs/DECISIONS.md` D-23 para la propuesta concreta pendiente de aprobación. No se configura entorno de producción todavía en ningún caso.
+- **Modo standalone:** Docker Compose con PostgreSQL propio (contenedor), sin dependencia de ningún proveedor de hosting SaaS ni de nuestros servidores en tiempo de ejecución. Este punto no cambia sea cual sea el resultado de la revisión anterior.
 
 ## 9. Licencias (modalidad standalone — diseño para Fase 6)
 
