@@ -1,6 +1,6 @@
 # Progreso
 
-- **Última funcionalidad completada:** infraestructura de producción en el repo (Dockerfile, `docker-compose.yml` con caddy/web/worker/migrate/postgres/backup, scripts de deploy/backup/restore, CI de GitHub Actions), probada localmente con un stack descartable. Antes: MVP completo (onboarding, agenda, reservas públicas, clientes, recordatorios, plan, admin, Mercado Pago, landing).
-- **Validación:** lint, typecheck, build, 76 tests (Vitest) y E2E Playwright mobile + desktop en verde.
-- **Próxima funcionalidad:** páginas legales (términos y privacidad, requieren texto aprobado); copia externa de backups; envío por SMTP para instalaciones independientes; WhatsApp; pulido de UX según uso real.
-- **Bloqueos reales (requieren al dueño):** credenciales de Resend (emails) y de Mercado Pago (pago online; validar en sandbox); contratar VPS + dominio y desplegar; textos legales.
+- **Última funcionalidad completada:** evaluación de producción (`docs/PRODUCTION_READINESS.md`): comparación de infraestructura y costos, auditoría multi-tenant con correcciones y tests de aislamiento, registro condicionado al email, scripts de soporte (admin, enlace de recuperación, email de prueba), checklist de sandbox de Mercado Pago y empaquetado de la instalación independiente sin código fuente.
+- **Validación:** lint, typecheck, build, 95 tests (Vitest) y E2E Playwright mobile + desktop en verde.
+- **Próxima funcionalidad:** verificación de email al registrarse; envío por SMTP para instalaciones independientes; páginas legales cuando esté el texto.
+- **Bloqueos reales (requieren al dueño):** contratar VPS + dominio; cuenta de Resend con dominio verificado (hasta entonces el registro queda cerrado en producción); credenciales de Mercado Pago y checklist de sandbox; términos y privacidad; destino de la copia externa de backups.
