@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { AuthError } from "next-auth";
-import { signIn, signOut } from "@/auth";
+import { signIn } from "@/auth";
 import {
   registerOrganizationSchema,
   registerOrganization,
@@ -85,10 +85,6 @@ export async function loginAction(
     }
     throw error;
   }
-}
-
-export async function logoutAction() {
-  await signOut({ redirectTo: "/" });
 }
 
 export async function requestPasswordResetAction(

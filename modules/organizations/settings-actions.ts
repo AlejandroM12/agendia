@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireContext, requireWriteContext } from "@/lib/dal";
@@ -103,10 +102,10 @@ export async function changePasswordAction(_prev: ActionState, formData: FormDat
   }
 
   // sessionVersion + 1 cierra todas las sesiones abiertas, incluida esta:
-  // se vuelve a ingresar con la contraseña nueva.
+  // el formulario navega a /logout y se vuelve a ingresar con la nueva.
   await db.user.update({
     where: { id: user.id },
     data: { passwordHash: await hashPassword(parsed.data.next), sessionVersion: { increment: 1 } },
   });
-  redirect("/logout");
+  return { ok: true };
 }

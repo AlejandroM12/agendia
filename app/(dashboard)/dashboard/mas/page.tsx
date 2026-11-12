@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Bell, ChevronRight, Clock, CreditCard, LogOut, Scissors, Search, Settings, type LucideIcon } from "lucide-react";
-import { logoutAction } from "@/app/(auth)/actions";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { requireOrganization } from "@/lib/dal";
 import { isStandalone } from "@/lib/deployment";
@@ -39,14 +38,14 @@ export default async function MorePage() {
           </li>
         ))}
       </ul>
-      <form action={logoutAction} className="mt-6">
-        <button
-          type="submit"
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          <LogOut className="size-4" aria-hidden="true" /> Cerrar sesión
-        </button>
-      </form>
+      {/* /logout es un route handler: tiene que ser una navegación completa. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      <a
+        href="/logout"
+        className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        <LogOut className="size-4" aria-hidden="true" /> Cerrar sesión
+      </a>
     </>
   );
 }

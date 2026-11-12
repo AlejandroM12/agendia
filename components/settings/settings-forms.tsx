@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
@@ -117,6 +117,14 @@ export function BusinessForm({
 
 export function PasswordForm() {
   const [state, action] = useActionState(changePasswordAction, undefined);
+
+  // Navegación completa (no del router): descarta del navegador todo lo que
+  // quedaba cargado de la sesión anterior.
+  useEffect(() => {
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    if (state?.ok) window.location.assign("/logout");
+  }, [state]);
+
   return (
     <form action={action} className="max-w-lg space-y-5">
       <Field label="Contraseña actual" htmlFor="current" error={firstError(state, "current")}>

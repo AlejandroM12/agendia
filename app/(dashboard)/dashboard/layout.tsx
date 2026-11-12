@@ -1,5 +1,4 @@
 import { LogOut, Plus } from "lucide-react";
-import { logoutAction } from "@/app/(auth)/actions";
 import { Logo } from "@/components/brand/logo";
 import { ButtonLink } from "@/components/ui/button-link";
 import { AccountBanner } from "@/components/dashboard/account-banner";
@@ -31,14 +30,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <div className="border-t border-sidebar-border pt-3">
           <p className="truncate px-3 text-sm font-medium text-foreground">{organization.name}</p>
           <p className="truncate px-3 text-xs text-muted-foreground">{user.email}</p>
-          <form action={logoutAction} className="mt-2">
-            <button
-              type="submit"
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="size-4.5" aria-hidden="true" /> Cerrar sesión
-            </button>
-          </form>
+          {/* Enlace común (no <Link>): cerrar sesión recarga la página y no deja datos en memoria. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a
+            href="/logout"
+            className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <LogOut className="size-4.5" aria-hidden="true" /> Cerrar sesión
+          </a>
         </div>
       </aside>
 
