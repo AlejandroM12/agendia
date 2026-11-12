@@ -1,9 +1,4 @@
-// Esquema de base de datos — Agendia (Fase 1)
-//
-// Alcance de esta fase: Organization, User, Membership, PasswordResetToken.
-// El resto de las entidades (Professional, Service, Appointment, Notification,
-// Subscription, License, etc.) se incorporan en fases posteriores según
-// docs/DATABASE_DESIGN.md y docs/ROADMAP.md.
+// Esquema de base de datos — Agendia
 
 generator client {
   provider = "prisma-client-js"
@@ -49,9 +44,293 @@ model Organization {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
-  memberships Membership[]
+  // Perfil público del negocio
+  industry    String?
+  description String?
+  phone       String?
+  address     String?
+
+  onboardingCompletedAt DateTime?
+
+  // Reglas de agenda (ver modules/availability)
+  slotIntervalMinutes     Int @default(30)
+  bufferMinutes           Int @default(0)
+  minNoticeMinutes        Int @default(120)
+  maxAdvanceDays          Int @default(60)
+  cancellationNoticeHours Int @default(2)
+
+  // Recordatorios
+  remindersEnabled     Boolean @default(true)
+  reminderHoursBefore  Int     @default(24)
+  notifyOwnerOnBooking Boolean @default(true)
+
+  memberships            Membership[]
+  professionals          Professional[]
+  services               Service[]
+  availabilityRules      AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  customers              Customer[]
+  appointments           Appointment[]
+  notifications          Notification[]
+  subscription           Subscription?
 
   @@map("organizations")
+}
+
+model Professional {
+  id             String   @id @default(uuid())
+  organizationId String
+  displayName    String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([organizationId])
+  @@map("professionals")
+}
+
+model Service {
+  id              String   @id @default(uuid())
+  organizationId  String
+  name            String
+  description     String?
+  durationMinutes Int
+  price           Int? // en la moneda local, sin decimales
+  active          Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([organizationId, active, sortOrder])
+  @@map("services")
+}
+
+// Horario semanal recurrente. Minutos desde la medianoche, en la zona
+// horaria de la organización. Varias filas por día = horario cortado.
+model AvailabilityRule {
+  id             String @id @default(uuid())
+  organizationId String
+  weekday        Int // 0 = domingo … 6 = sábado
+  startMinute    Int
+  endMinute      Int
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, weekday])
+  @@map("availability_rules")
+}
+
+// Bloqueo puntual. Sin startMinute/endMinute = día completo.
+model AvailabilityException {
+  id             String   @id @default(uuid())
+  organizationId String
+  date           DateTime @db.Date
+  startMinute    Int?
+  endMinute      Int?
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, date])
+  @@map("availability_exceptions")
+}
+
+model Customer {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  email          String?
+  phone          String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([organizationId, name])
+  @@index([organizationId, email])
+  @@index([organizationId, phone])
+  @@map("customers")
+}
+
+enum AppointmentStatus {
+  confirmed
+  completed
+  canceled
+  no_show
+}
+
+enum AppointmentSource {
+  manual
+  public_booking
+}
+
+// La migración agrega además una exclusion constraint
+// (appointments_no_overlap) que impide dos turnos no cancelados
+// superpuestos para el mismo profesional — ver la migración SQL.
+model Appointment {
+  id             String            @id @default(uuid())
+  organizationId String
+  professionalId String
+  serviceId      String
+  customerId     String
+  startsAt       DateTime
+  endsAt         DateTime
+  status         AppointmentStatus @default(confirmed)
+  source         AppointmentSource @default(manual)
+  manageToken    String            @unique
+  notes          String?
+  price          Int?
+  canceledAt     DateTime?
+  canceledBy     String? // "professional" | "customer"
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  professional  Professional   @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  service       Service        @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  notifications Notification[]
+
+  @@index([organizationId, startsAt])
+  @@index([customerId])
+  @@map("appointments")
+}
+
+enum NotificationType {
+  booking_confirmation
+  booking_received_owner
+  reminder
+  cancellation
+  reschedule
+  cancellation_owner
+  reschedule_owner
+}
+
+enum NotificationChannel {
+  email
+  whatsapp
+  sms
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  failed
+  canceled
+  skipped // el canal no está configurado: no se intentó enviar
+}
+
+// Outbox de notificaciones: se persisten en la misma transacción que el
+// cambio del turno y un proceso en segundo plano las envía.
+model Notification {
+  id             String              @id @default(uuid())
+  organizationId String
+  appointmentId  String?
+  type           NotificationType
+  channel        NotificationChannel @default(email)
+  recipient      String
+  scheduledFor   DateTime
+  status         NotificationStatus  @default(pending)
+  attempts       Int                 @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  idempotencyKey String              @unique
+  lockedUntil    DateTime? // reclamada por un worker hasta este instante
+  createdAt      DateTime            @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([organizationId, createdAt])
+  @@map("notifications")
+}
+
+model Plan {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  price     Int
+  currency  String   @default("ARS")
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+enum SubscriptionStatus {
+  pending
+  active
+  paused
+  past_due
+  canceled
+}
+
+model Subscription {
+  id                     String             @id @default(uuid())
+  organizationId         String             @unique
+  planId                 String
+  status                 SubscriptionStatus @default(pending)
+  provider               String             @default("mercadopago")
+  providerSubscriptionId String?            @unique
+  currentPeriodEnd       DateTime?
+  lastPaymentAt          DateTime?
+  canceledAt             DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@map("subscriptions")
+}
+
+// Registro idempotente de webhooks de pago: se persiste antes de procesar.
+model PaymentEvent {
+  id              String    @id @default(uuid())
+  provider        String
+  providerEventId String
+  type            String
+  resourceId      String?
+  payload         Json
+  processedAt     DateTime?
+  error           String?
+  receivedAt      DateTime  @default(now())
+
+  @@unique([provider, providerEventId])
+  @@map("payment_events")
+}
+
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+
+  @@map("rate_limits")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String?
+  userId         String?
+  action         String
+  entityType     String?
+  entityId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, createdAt])
+  @@map("audit_logs")
 }
 
 model User {
@@ -59,6 +338,8 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+  // Se incrementa al cambiar la contraseña: invalida las sesiones previas.
+  sessionVersion Int    @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

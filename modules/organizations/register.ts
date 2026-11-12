@@ -7,11 +7,8 @@ import { generateUniqueOrganizationSlug } from "@/lib/slug";
 import { trialPolicy } from "@/lib/brand";
 
 export const registerOrganizationSchema = z.object({
-  businessName: z
-    .string()
-    .trim()
-    .min(2, "Ingresá al menos 2 caracteres.")
-    .max(120),
+  // Opcional: el nombre del negocio se termina de definir en el onboarding.
+  businessName: z.string().trim().max(120).optional(),
   name: z.string().trim().min(2, "Ingresá tu nombre.").max(120),
   email: z.email("Ingresá un email válido.").trim().toLowerCase(),
   password: z
@@ -41,9 +38,10 @@ export async function registerOrganization(
     return { success: false, error: "Ya existe una cuenta con ese email." };
   }
 
+  const businessName = input.businessName || input.name;
   const [passwordHash, slug] = await Promise.all([
     hashPassword(input.password),
-    generateUniqueOrganizationSlug(input.businessName),
+    generateUniqueOrganizationSlug(businessName),
   ]);
 
   const now = new Date();
@@ -52,7 +50,7 @@ export async function registerOrganization(
   const user = await db.$transaction(async (tx) => {
     const organization = await tx.organization.create({
       data: {
-        name: input.businessName,
+        name: businessName,
         slug,
         trialStartedAt: now,
         trialEndsAt,
@@ -73,6 +71,11 @@ export async function registerOrganization(
         userId: createdUser.id,
         role: "owner",
       },
+    });
+
+    // Regla del MVP: un profesional activo por organización.
+    await tx.professional.create({
+      data: { organizationId: organization.id, displayName: input.name },
     });
 
     return createdUser;

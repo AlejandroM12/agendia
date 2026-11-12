@@ -9,7 +9,8 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
+  --font-display: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,6 +40,13 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-highlight: var(--highlight);
+  --color-highlight-soft: var(--highlight-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger-soft: var(--danger-soft);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -49,88 +57,63 @@
 }
 
 /*
- * Tokens de marca — Agendia (docs/DECISIONS.md, identidad visual aprobada).
- * Paleta: celeste suave, blanco y grises. Cambiar la identidad de marca
- * implica editar únicamente los valores hexadecimales de este bloque.
+ * Identidad visual de Agendia — "papel y tinta".
+ *
+ * Fondo de papel cálido, tinta casi negra, verde pino como color de acción
+ * y terracota como único acento (el "ahora" de la agenda, los avisos).
+ * Títulos en Fraunces (serif con carácter), interfaz en Geist.
+ *
+ * Toda la identidad se cambia desde este bloque + lib/brand.ts.
  */
 :root {
-  --brand-primary: #0284c7;
-  --brand-primary-light: #e0f2fe;
-  --brand-surface: #f8fafc;
-  --brand-border: #e2e8f0;
-  --brand-text: #0f172a;
+  --brand-paper: #faf7f2;
+  --brand-ink: #1d1b18;
+  --brand-pine: #1f4d3f;
+  --brand-pine-soft: #e3ede8;
+  --brand-terracotta: #c8643c;
+  --brand-terracotta-soft: #f8e9e1;
+  --brand-sand: #f1ebe1;
+  --brand-line: #e3dbcd;
 
-  --background: #ffffff;
-  --foreground: var(--brand-text);
+  --background: var(--brand-paper);
+  --foreground: var(--brand-ink);
   --card: #ffffff;
-  --card-foreground: var(--brand-text);
+  --card-foreground: var(--brand-ink);
   --popover: #ffffff;
-  --popover-foreground: var(--brand-text);
-  --primary: var(--brand-primary);
-  --primary-foreground: #ffffff;
-  --secondary: var(--brand-surface);
-  --secondary-foreground: var(--brand-text);
-  --muted: var(--brand-surface);
-  --muted-foreground: #64748b;
-  --accent: var(--brand-primary-light);
-  --accent-foreground: var(--brand-primary);
-  --destructive: #dc2626;
-  --border: var(--brand-border);
-  --input: var(--brand-border);
-  --ring: var(--brand-primary);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: var(--brand-surface);
-  --sidebar-foreground: var(--brand-text);
-  --sidebar-primary: var(--brand-primary);
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--brand-primary-light);
-  --sidebar-accent-foreground: var(--brand-primary);
-  --sidebar-border: var(--brand-border);
-  --sidebar-ring: var(--brand-primary);
-}
-
-/*
- * Modo oscuro: no forma parte del alcance visual pedido para el MVP, pero
- * se deja preparado (clase .dark, sin selector de tema todavía) para no
- * tener que rediseñar los tokens cuando se incorpore.
- */
-.dark {
-  --background: #0b1220;
-  --foreground: #f1f5f9;
-  --card: #111827;
-  --card-foreground: #f1f5f9;
-  --popover: #111827;
-  --popover-foreground: #f1f5f9;
-  --primary: #38bdf8;
-  --primary-foreground: #0b1220;
-  --secondary: #1e293b;
-  --secondary-foreground: #f1f5f9;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #0c4a6e;
-  --accent-foreground: #e0f2fe;
-  --destructive: #f87171;
-  --border: #1e293b;
-  --input: #1e293b;
-  --ring: #38bdf8;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: #111827;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: #38bdf8;
-  --sidebar-primary-foreground: #0b1220;
-  --sidebar-accent: #0c4a6e;
-  --sidebar-accent-foreground: #e0f2fe;
-  --sidebar-border: #1e293b;
-  --sidebar-ring: #38bdf8;
+  --popover-foreground: var(--brand-ink);
+  --primary: var(--brand-pine);
+  --primary-foreground: #fbf9f5;
+  --secondary: var(--brand-sand);
+  --secondary-foreground: var(--brand-ink);
+  --muted: var(--brand-sand);
+  --muted-foreground: #6b645a;
+  --accent: var(--brand-pine-soft);
+  --accent-foreground: var(--brand-pine);
+  --destructive: #b3372d;
+  --danger-soft: #f9e7e4;
+  --highlight: var(--brand-terracotta);
+  --highlight-soft: var(--brand-terracotta-soft);
+  --success: #2c6e49;
+  --success-soft: #e2f0e7;
+  --warning: #96650f;
+  --warning-soft: #f8edd4;
+  --border: var(--brand-line);
+  --input: #d6cdbd;
+  --ring: var(--brand-pine);
+  --chart-1: var(--brand-pine);
+  --chart-2: var(--brand-terracotta);
+  --chart-3: #8a8275;
+  --chart-4: #c9bfae;
+  --chart-5: var(--brand-ink);
+  --radius: 0.75rem;
+  --sidebar: #f4efe7;
+  --sidebar-foreground: var(--brand-ink);
+  --sidebar-primary: var(--brand-pine);
+  --sidebar-primary-foreground: #fbf9f5;
+  --sidebar-accent: var(--brand-pine-soft);
+  --sidebar-accent-foreground: var(--brand-pine);
+  --sidebar-border: var(--brand-line);
+  --sidebar-ring: var(--brand-pine);
 }
 
 @layer base {
@@ -142,5 +125,50 @@
   }
   html {
     @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  /* En celulares, un input con menos de 16px dispara zoom automático en iOS. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 0.875rem;
+    }
+  }
+}
+
+@utility font-display {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-optical-sizing: auto;
+  letter-spacing: -0.015em;
+}
+
+/* Campo nativo (select, date, time, textarea) con el mismo aspecto que Input. */
+@utility field {
+  @apply h-10 w-full min-w-0 rounded-lg border border-input bg-card px-3 text-foreground outline-none transition-colors;
+  &:focus-visible {
+    @apply border-ring ring-3 ring-ring/25;
+  }
+  &:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
