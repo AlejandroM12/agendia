@@ -4,12 +4,6 @@
 
 ## Pendientes (bloquean o condicionan avance)
 
-### D-23 · Revisión propuesta de D-04: proveedor de hosting de producción
-**Estado:** PENDIENTE DE TU APROBACIÓN — propuesta de cambio sobre una decisión ya confirmada (D-04), con justificación concreta.
-**Contexto:** D-04 eligió Vercel + Neon como "opción inicial" cuando todavía no había un requisito explícito de operación 24/7 sin suspensión por inactividad. Con ese requisito ahora explícito (ver `docs/INFRASTRUCTURE.md`), aparecieron tres fricciones: (1) el diseño del worker de notificaciones (D-13) existe específicamente para rodear la falta de procesos persistentes en Vercel; (2) el plan gratuito de Vercel solo permite cron una vez al día, insuficiente para recordatorios — haría falta Vercel Pro de pago; (3) Neon escala a cero por diseño salvo que se pague por mantener cómputo mínimo activo, reintroduciendo el mismo problema de "suspensión" que se quiere evitar.
-**Propuesta:** migrar la opción de hosting inicial a **Railway** (app + worker + PostgreSQL en una sola plataforma, sin suspensión por inactividad, procesos persistentes reales). Ver comparación completa y costos estimados en `docs/INFRASTRUCTURE.md` §2 y §11.
-**Próximo paso:** tu aprobación explícita antes de contratar o configurar nada. Si se aprueba, esta entrada se reclasifica como confirmada y D-04 se marca como superada por esta.
-
 ### D-10 · Infraestructura de rate limiting a escala
 **Estado:** PENDIENTE (no bloqueante para el MVP).
 **Contexto:** se usa un contador en base de datos o en memoria para limitar abuso en endpoints públicos (sin Redis obligatorio, para no complicar la instalación standalone). Si el SaaS escala a múltiples instancias sin estado compartido, este mecanismo deja de ser confiable.
@@ -36,6 +30,41 @@
 ---
 
 ## Confirmadas
+
+### D-23 · Hosting de producción: VPS + Docker Compose (reemplaza a D-04)
+**Estado:** CONFIRMADO. D-04 (Vercel + Neon) queda superada.
+**Decisión:** un servidor propio con Docker Compose: `caddy` (HTTPS), `web`, `worker`, `migrate`, `postgres` y `backup` (ver `docker-compose.yml` y `docs/DEPLOYMENT.md`). La misma imagen sirve para el SaaS y para instalaciones independientes.
+**Motivo:** operación continua sin suspensión por inactividad, costo fijo bajo, y un único empaquetado para las dos modalidades comerciales. No se contrató ni desplegó nada todavía.
+
+### D-26 · Worker: proceso que dispara un "tick" de la aplicación (ajusta D-13)
+**Estado:** CONFIRMADO.
+**Decisión:** el `worker` es un proceso mínimo (`scripts/worker.mjs`) que cada minuto llama a `POST /api/internal/tick` con `CRON_SECRET`. La lógica y el estado (outbox de notificaciones con bloqueo `FOR UPDATE SKIP LOCKED`, vencimiento de pruebas, reconciliación de pagos) viven en la app y en la base. Caddy bloquea `/api/internal/*` desde Internet.
+**Motivo:** separa el trabajo en segundo plano del servidor web sin duplicar el código de dominio ni sumar una cola externa; si el worker se cae, al volver procesa lo pendiente.
+
+### D-27 · Página pública en la raíz: `/[slug]` (reemplaza `/reservar/[slug]`)
+**Estado:** CONFIRMADO.
+**Decisión:** el enlace de reservas es `dominio/nombre-del-negocio`. Los slugs no pueden coincidir con rutas de la app ni con una lista de nombres reservados (`lib/slug.ts`). El cliente gestiona su turno en `/turno/[token]` (token opaco).
+**Motivo:** un enlace más corto y fácil de compartir, que es el principal canal de adquisición de reservas.
+
+### D-28 · Rate limiting en PostgreSQL (resuelve D-10)
+**Estado:** CONFIRMADO.
+**Decisión:** ventana fija con un UPSERT atómico en la tabla `rate_limits` (`lib/rate-limit.ts`), aplicado a login, registro, recuperación de contraseña, disponibilidad pública, reserva y gestión por token.
+**Motivo:** funciona igual con una o varias instancias y no agrega Redis.
+
+### D-29 · Reservas simultáneas: lock por profesional + exclusion constraint
+**Estado:** CONFIRMADO.
+**Decisión:** cada alta o reprogramación toma un advisory lock transaccional por profesional y la constraint `appointments_no_overlap` es la garantía final. Los conflictos transitorios se reintentan.
+**Motivo:** con solo la constraint, ráfagas de reservas simultáneas terminaban en deadlocks lentos; el lock las pone en fila y la respuesta "horario ocupado" es inmediata.
+
+### D-30 · Precios de referencia y alta manual
+**Estado:** CONFIRMADO.
+**Decisión:** plan mensual ARS 7.900 (editable desde `/admin`, tabla `plans`) y licencia de pago único ARS 99.000 (por consulta). Mientras Mercado Pago no tenga credenciales, el plan se activa manualmente desde `/admin`.
+**Motivo:** permite vender desde el primer día sin depender de la integración de pagos.
+
+### D-31 · Nueva identidad visual
+**Estado:** CONFIRMADO (reemplaza la paleta celeste de D-01; el nombre y el eslogan no cambian).
+**Decisión:** "papel y tinta": fondo de papel cálido, verde pino como color de acción, terracota como único acento, títulos en Fraunces e interfaz en Geist. Tokens en `app/globals.css`, tipografías en `app/layout.tsx`, textos y precios en `lib/brand.ts`.
+**Motivo:** una identidad propia y reconocible, lejos de la plantilla de panel administrativo.
 
 ### D-01 · Identidad comercial (nombre + identidad visual)
 **Estado:** CONFIRMADO. Identidad visual inicial aprobada.
@@ -73,7 +102,7 @@
 **Motivo:** permite ejecutar migraciones y probar la aplicación localmente sin depender de Neon todavía (ver D-04), consistente con "no desplegar a producción ni crear recursos con costo" durante la Fase 1.
 
 ### D-24 · Row-Level Security como segunda capa de aislamiento multi-tenant
-**Estado:** CONFIRMADO como diseño; implementación en la Fase 3 (cuando existan tablas operativas a las que aplicarle policies — hoy no hay ninguna).
+**Estado:** DIFERIDO. El aislamiento actual es por aplicación: toda consulta y toda escritura filtra por el `organizationId` resuelto en el servidor (`lib/dal.ts`, `updateMany`/`deleteMany` con `organizationId`), con tests de aislamiento. RLS exige un rol de base separado y envolver cada consulta en una transacción con `SET LOCAL`, incluidas las públicas y las del worker (que cruzan organizaciones por diseño); se retoma cuando haya equipos por organización o más de un desarrollador.
 **Decisión:** además del filtrado por `organizationId` ya implementado en `lib/dal.ts`, agregar policies RLS de PostgreSQL sobre las tablas operativas (`appointments`, `customers`, `services`, etc.), usando `SET LOCAL app.current_organization_id` por transacción. Ver `docs/SECURITY.md` §1.
 **Motivo:** una segunda capa de aislamiento que no depende de que cada query de aplicación recuerde filtrar correctamente — PostgreSQL se convierte en el árbitro final, no solo el código.
 
@@ -93,7 +122,7 @@
 **Motivo:** es una librería, no un servicio alojado — funciona igual en SaaS y standalone sin dependencia externa; permite agregar OAuth más adelante sin rediseño.
 
 ### D-04 · Hosting inicial del SaaS
-**Estado:** CONFIRMADO (como punto de partida; no se configura producción todavía).
+**Estado:** SUPERADA por D-23.
 **Decisión:** Vercel (aplicación) + Neon (PostgreSQL serverless).
 **Motivo:** bajo costo operativo inicial, despliegue simple, buen soporte de Next.js App Router.
 

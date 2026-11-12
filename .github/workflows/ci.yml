@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Lint, tipos, tests y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: agendia
+          POSTGRES_PASSWORD: agendia_ci
+          POSTGRES_DB: agendia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agendia"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Valores exclusivos de CI: no son secretos ni se usan en ningún otro entorno.
+      - name: Entorno de CI
+        run: |
+          cat > .env.local <<'EOF'
+          DEPLOYMENT_MODE=saas
+          DATABASE_URL=postgresql://agendia:agendia_ci@localhost:5432/agendia
+          AUTH_SECRET=ci-only-secret-not-used-anywhere-else
+          AUTH_URL=http://localhost:3100
+          EOF
+
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - name: Pruebas de punta a punta
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Trazas de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 7
+
+  docker:
+    name: Imagen de producción
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen (sin publicarla)
+        run: docker build -t agendia:ci .

@@ -1,5 +1,7 @@
 # Infraestructura de producción — Agendia
 
+> **Actualización:** se eligió la Opción C (VPS + Docker Compose) — ver `DECISIONS.md` D-23. La guía operativa vigente es `DEPLOYMENT.md`; este documento queda como el análisis comparativo previo a esa decisión.
+
 > Este documento define **cómo se opera Agendia en producción**: proveedor de hosting, topología app/DB/worker, CI/CD, backups, monitoreo, costos y la checklist de lanzamiento. La arquitectura de aplicación (patrones de código) sigue en `ARCHITECTURE.md`; la seguridad y el aislamiento multi-tenant en detalle están en `SECURITY.md`. Las decisiones puntuales (confirmadas y pendientes de aprobación) se registran, como siempre, en `DECISIONS.md`.
 >
 > **Nada de este documento está desplegado todavía.** Es una propuesta para revisión. Los números de costo son estimaciones de mercado a la fecha de redacción (noviembre de 2026), no cotizaciones confirmadas — antes de contratar cualquier servicio, hay que verificar el precio vigente en la página oficial del proveedor.

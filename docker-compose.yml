@@ -1,0 +1,131 @@
+# Agendia en producción sobre un único servidor (VPS) con Docker Compose.
+#
+#   caddy    → HTTPS automático (Let's Encrypt) y proxy inverso
+#   web      → aplicación Next.js
+#   worker   → dispara el trabajo periódico (recordatorios, vencimientos, pagos)
+#   migrate  → aplica migraciones pendientes y termina (corre antes que web)
+#   postgres → base de datos, con volumen persistente
+#   backup   → copia diaria de la base, con rotación
+#
+# Uso: copiar deploy/.env.production.example a .env.production, completarlo y
+#   docker compose --env-file .env.production up -d --build
+# Guía completa: docs/DEPLOYMENT.md
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-saas}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-agendia}:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-agendia}
+  APP_URL: https://${DOMAIN:?definir DOMAIN}
+  AUTH_URL: https://${DOMAIN}
+  AUTH_SECRET: ${AUTH_SECRET:?definir AUTH_SECRET}
+  CRON_SECRET: ${CRON_SECRET:?definir CRON_SECRET}
+  CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+  PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  EMAIL_FROM: ${EMAIL_FROM:-}
+  MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
+  MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
+  PRICE_MONTHLY: ${PRICE_MONTHLY:-7900}
+  PRICE_ONE_TIME: ${PRICE_ONE_TIME:-99000}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-agendia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-agendia}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  migrate:
+    build:
+      context: .
+      target: builder
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *logging
+
+  web:
+    build: .
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["node", "scripts/worker.mjs"]
+    environment:
+      CRON_SECRET: ${CRON_SECRET}
+      WORKER_TARGET_URL: http://web:3000
+      WORKER_INTERVAL_SECONDS: ${WORKER_INTERVAL_SECONDS:-60}
+    healthcheck:
+      disable: true
+    depends_on:
+      web:
+        condition: service_healthy
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - web
+    logging: *logging
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-agendia}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-agendia}
+      BACKUP_KEEP_DAILY: ${BACKUP_KEEP_DAILY:-7}
+      BACKUP_KEEP_WEEKLY: ${BACKUP_KEEP_WEEKLY:-4}
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

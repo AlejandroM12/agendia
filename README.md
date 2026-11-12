@@ -54,8 +54,15 @@ Auth.js (NextAuth v5) · Zod.
 | `npm run start` | Sirve el build de producción. |
 | `npm run lint` | ESLint. |
 | `npm run typecheck` | Chequeo de tipos de TypeScript sin emitir archivos. |
+| `npm test` | Tests unitarios y de integración (Vitest, contra la base local). |
+| `npm run test:e2e` | Recorrido completo en navegador (Playwright, build de producción). |
+| `npm run worker` | Proceso que dispara recordatorios y tareas periódicas (requiere `CRON_SECRET`). |
 | `npm run db:migrate` | Aplica migraciones de Prisma (`prisma migrate dev`). |
 | `npm run db:studio` | Abre Prisma Studio. |
+
+## Producción
+
+Docker Compose en un servidor propio (app, worker, PostgreSQL, HTTPS y copias de seguridad). Ver `docs/DEPLOYMENT.md`.
 
 ## Variables de entorno
 
