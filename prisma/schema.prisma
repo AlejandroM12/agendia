@@ -1,0 +1,98 @@
+// Esquema de base de datos — Agendia (Fase 1)
+//
+// Alcance de esta fase: Organization, User, Membership, PasswordResetToken.
+// El resto de las entidades (Professional, Service, Appointment, Notification,
+// Subscription, License, etc.) se incorporan en fases posteriores según
+// docs/DATABASE_DESIGN.md y docs/ROADMAP.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 ya no acepta `url` en el datasource del schema: la conexión para
+// Migrate/Studio se configura en prisma.config.ts, y el runtime recibe un
+// driver adapter explícito en el constructor de PrismaClient (ver lib/db.ts).
+datasource db {
+  provider = "postgresql"
+}
+
+enum DeploymentMode {
+  saas
+  standalone
+}
+
+enum OrganizationStatus {
+  trial // prueba gratuita activa (7 días)
+  trial_readonly // prueba vencida, acceso de solo lectura (30 días)
+  locked // período de solo lectura agotado, sin acceso operativo
+  active // suscripción vigente
+  past_due // pago vencido, en regularización
+  canceled
+  suspended // suspendida manualmente por administración SaaS
+}
+
+enum MembershipRole {
+  owner
+  admin
+}
+
+model Organization {
+  id              String             @id @default(uuid())
+  name            String
+  slug            String             @unique
+  timezone        String             @default("America/Argentina/Buenos_Aires")
+  deploymentMode  DeploymentMode     @default(saas)
+  status          OrganizationStatus @default(trial)
+  trialStartedAt  DateTime           @default(now())
+  trialEndsAt     DateTime
+  readonlyUntil   DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  memberships Membership[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships         Membership[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@map("users")
+}
+
+model Membership {
+  id             String         @id @default(uuid())
+  organizationId String
+  userId         String
+  role           MembershipRole @default(owner)
+  createdAt      DateTime       @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("memberships")
+}
+
+// El token en texto plano nunca se persiste: solo se guarda su hash.
+// Ver lib/password-reset.ts.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
