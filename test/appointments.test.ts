@@ -54,7 +54,7 @@ describe("turnos", () => {
 
   it("dos reservas simultáneas del mismo horario: entra exactamente una", async () => {
     const attempts = await Promise.all(
-      [1, 2, 3, 4, 5].map((n) =>
+      Array.from({ length: 12 }, (_, i) => i + 1).map((n) =>
         createAppointment({
           organization: ctx.organization,
           serviceId: ctx.service.id,

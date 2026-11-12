@@ -53,7 +53,7 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
           <p className="mt-2 text-muted-foreground">
             {service.name} en {businessName}
             <br />
-            <span className="font-medium text-foreground capitalize">
+            <span className="inline-block font-medium text-foreground first-letter:uppercase">
               {formatDateLong(slot.dateStr)}, {slot.label} h
             </span>
           </p>
@@ -149,7 +149,7 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
 
             <div className="rounded-xl bg-secondary px-4 py-3 text-sm">
               <span className="font-medium">{service.name}</span> ·{" "}
-              <span className="capitalize">{formatDateLong(slot.dateStr)}</span>, {slot.label} h
+              {formatDateLong(slot.dateStr)}, {slot.label} h
             </div>
             <SubmitButton size="lg" className="w-full" pendingLabel="Reservando…">
               Confirmar reserva

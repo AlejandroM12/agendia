@@ -152,7 +152,7 @@ function DaySlotPickerInner({ load, value, onChange }: Props) {
         </p>
       ) : current ? (
         <div>
-          <p className="mb-2 text-sm font-medium text-muted-foreground capitalize">{formatDateLong(current.dateStr)}</p>
+          <p className="mb-2 text-sm font-medium text-muted-foreground first-letter:uppercase">{formatDateLong(current.dateStr)}</p>
           <div role="radiogroup" aria-label="Horario" className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {current.slots.map((slot) => {
               const active = value?.iso === slot.iso;

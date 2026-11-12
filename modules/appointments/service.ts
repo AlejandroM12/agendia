@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
-import type { Appointment, AppointmentStatus, Organization } from "@prisma/client";
+import type { Appointment, AppointmentStatus, Organization, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { toZoned } from "@/lib/time";
 import { getAvailability } from "@/modules/availability/queries";
@@ -34,6 +34,41 @@ const SLOT_TAKEN = fail("slot_taken", "Ese horario acaba de ocuparse. Elegí otr
 export function isOverlapError(error: unknown): boolean {
   const text = error instanceof Error ? `${error.message} ${JSON.stringify(error)}` : String(error);
   return text.includes("appointments_no_overlap") || text.includes("23P01");
+}
+
+/**
+ * Con varias reservas simultáneas sobre el mismo horario, PostgreSQL puede
+ * abortar alguna transacción por deadlock en vez de por la constraint.
+ * Es un error transitorio: se reintenta, y en el reintento la constraint
+ * ya ve el turno ganador y responde "horario ocupado".
+ */
+function isTransientConflict(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  const text = error instanceof Error ? error.message : String(error);
+  return code === "P2034" || /deadlock|write conflict|40P01|40001/i.test(text);
+}
+
+async function withConflictRetry<T>(run: () => Promise<T>, attempts = 4): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (error) {
+      if (attempt >= attempts || isOverlapError(error) || !isTransientConflict(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25 * attempt + Math.random() * 50));
+    }
+  }
+}
+
+const TX_OPTIONS = { maxWait: 10_000, timeout: 15_000 } as const;
+
+/**
+ * Pone en fila las escrituras de agenda de un mismo profesional (lock
+ * transaccional de PostgreSQL, se libera solo al terminar la transacción).
+ * Así, ante muchas reservas simultáneas, cada una ve el resultado de la
+ * anterior y la constraint responde de inmediato, sin deadlocks.
+ */
+async function lockProfessionalAgenda(tx: Prisma.TransactionClient, professionalId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${professionalId}))`;
 }
 
 function newManageToken(): string {
@@ -108,7 +143,8 @@ export async function createAppointment(params: {
   const endsAt = new Date(params.startsAt.getTime() + service.durationMinutes * 60000);
 
   try {
-    const appointment = await db.$transaction(async (tx) => {
+    const appointment = await withConflictRetry(() => db.$transaction(async (tx) => {
+      await lockProfessionalAgenda(tx, professional.id);
       let customer;
       if ("id" in params.customer) {
         customer = await tx.customer.findFirst({
@@ -143,10 +179,11 @@ export async function createAppointment(params: {
       });
 
       return created;
-    });
+    }, TX_OPTIONS));
     return { ok: true, appointment };
   } catch (error) {
-    if (isOverlapError(error)) return SLOT_TAKEN;
+    // Si tras los reintentos sigue habiendo conflicto, otro pedido ganó el horario.
+    if (isOverlapError(error) || isTransientConflict(error)) return SLOT_TAKEN;
     if (error instanceof Error && error.message === "CUSTOMER_NOT_FOUND") {
       return fail("not_found", "No encontramos ese cliente.");
     }
@@ -194,7 +231,8 @@ export async function rescheduleAppointment(params: {
   }
 
   try {
-    const appointment = await db.$transaction(async (tx) => {
+    const appointment = await withConflictRetry(() => db.$transaction(async (tx) => {
+      await lockProfessionalAgenda(tx, current.professionalId);
       const updated = await tx.appointment.update({
         where: { id: current.id },
         data: {
@@ -210,10 +248,10 @@ export async function rescheduleAppointment(params: {
         settings: organization,
       });
       return updated;
-    });
+    }, TX_OPTIONS));
     return { ok: true, appointment };
   } catch (error) {
-    if (isOverlapError(error)) return SLOT_TAKEN;
+    if (isOverlapError(error) || isTransientConflict(error)) return SLOT_TAKEN;
     throw error;
   }
 }

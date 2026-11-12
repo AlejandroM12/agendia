@@ -58,7 +58,7 @@ export default async function TodayPage(props: PageProps<"/dashboard">) {
   return (
     <div className="space-y-8">
       <header>
-        <p className="text-sm font-medium text-muted-foreground capitalize">{formatDateLong(today)}</p>
+        <p className="text-sm font-medium text-muted-foreground first-letter:uppercase">{formatDateLong(today)}</p>
         <h1 className="font-display text-3xl font-semibold sm:text-4xl">
           {greeting}, {user.name.split(" ")[0]}
         </h1>

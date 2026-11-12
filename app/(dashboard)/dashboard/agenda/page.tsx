@@ -84,7 +84,7 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-highlight">{date === today ? "Hoy" : date === addDays(today, 1) ? "Mañana" : " "}</p>
-          <h1 className="font-display text-2xl font-semibold capitalize sm:text-3xl">{formatDateLong(date)}</h1>
+          <h1 className="font-display text-2xl font-semibold first-letter:uppercase sm:text-3xl">{formatDateLong(date)}</h1>
           <p className="mt-1 text-sm text-muted-foreground">{hoursLabel}</p>
         </div>
         <div className="flex items-center gap-2">

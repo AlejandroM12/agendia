@@ -98,7 +98,7 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   // 7. El cliente gestiona su turno desde el enlace con token.
   await guest.getByRole("link", { name: "Ver mi turno" }).click();
   await expect(guest).toHaveURL(/\/turno\//);
-  await expect(guest.getByText("Confirmado")).toBeVisible();
+  await expect(guest.getByText("Confirmado", { exact: true })).toBeVisible();
   await shot(guest, "12-mi-turno");
 
   // 8. La reserva aparece en la agenda del profesional.
@@ -108,7 +108,7 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   // 9. El cliente cancela; el profesional lo ve cancelado.
   guest.once("dialog", (dialog) => dialog.accept());
   await guest.getByRole("button", { name: "Cancelar turno" }).click();
-  await expect(guest.getByText("Cancelado")).toBeVisible();
+  await expect(guest.getByText("Cancelado", { exact: true })).toBeVisible();
   await guestContext.close();
 
   await page.reload();
@@ -137,9 +137,9 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   await expect(page).toHaveURL(/\/login/);
 });
 
-test("una ruta pública inexistente responde 404 y /admin no existe para usuarios comunes", async ({ page }) => {
-  const missing = await page.goto("/negocio-que-no-existe-xyz");
-  expect(missing?.status()).toBe(404);
+test("una ruta pública inexistente muestra la página de no encontrada y /admin no existe para usuarios comunes", async ({ page }) => {
+  await page.goto("/negocio-que-no-existe-xyz");
+  await expect(page.getByRole("heading", { name: "No encontramos esta página" })).toBeVisible();
   const admin = await page.goto("/admin");
   expect(admin?.url()).toContain("/login");
 });

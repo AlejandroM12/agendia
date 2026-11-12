@@ -47,7 +47,7 @@ export default async function AvailabilityPage() {
               {exceptions.map((exception) => (
                 <li key={exception.id} className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="min-w-0">
-                    <p className="font-medium capitalize">{formatDateLong(dbDateToDateStr(exception.date))}</p>
+                    <p className="font-medium first-letter:uppercase">{formatDateLong(dbDateToDateStr(exception.date))}</p>
                     <p className="text-sm text-muted-foreground">
                       {exception.startMinute === null || exception.endMinute === null
                         ? "Todo el día"

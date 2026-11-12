@@ -50,7 +50,7 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
       />
 
       <div className="rounded-2xl border border-border bg-card p-5">
-        <p className="font-display text-2xl font-semibold capitalize">{formatDateLong(dateStr)}</p>
+        <p className="font-display text-2xl font-semibold first-letter:uppercase">{formatDateLong(dateStr)}</p>
         <p className="mt-1 text-lg tabular-nums">
           {formatTime(appointment.startsAt, tz)} a {formatTime(appointment.endsAt, tz)}
         </p>

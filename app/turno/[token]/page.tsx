@@ -37,7 +37,7 @@ export default async function ManageAppointmentPage(props: PageProps<"/turno/[to
           <p className="text-sm text-muted-foreground">Turno de {appointment.customer.name}</p>
           <StatusBadge status={appointment.status} />
         </div>
-        <p className="mt-2 font-display text-2xl font-semibold capitalize">{formatDateLong(dateStr)}</p>
+        <p className="mt-2 font-display text-2xl font-semibold first-letter:uppercase">{formatDateLong(dateStr)}</p>
         <p className="mt-1 text-lg tabular-nums">{formatTime(appointment.startsAt, tz)} h</p>
         <p className="mt-3 text-muted-foreground">
           {appointment.service.name} · {formatDuration(duration)}
