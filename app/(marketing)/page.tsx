@@ -111,7 +111,7 @@ export default function LandingPage() {
           <div className="relative mx-auto w-full max-w-md lg:max-w-none">
             <div className="absolute -inset-6 -z-10 rounded-[3rem] bg-accent/70" aria-hidden="true" />
             <AgendaPreview className="lg:mr-16" />
-            <BookingPreview className="absolute -right-2 -bottom-10 hidden rotate-3 sm:block lg:-right-4" />
+            <BookingPreview className="absolute right-0 -bottom-10 hidden rotate-3 sm:block" />
             <p className="mt-3 text-center text-xs text-muted-foreground lg:mr-16">Vista ilustrativa con datos de ejemplo.</p>
           </div>
         </div>

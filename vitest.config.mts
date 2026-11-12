@@ -1,5 +1,9 @@
+import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vitest/config";
 import path from "node:path";
+
+// Los tests de integración usan la base de datos de .env.local.
+loadEnv({ path: ".env.local", quiet: true });
 
 export default defineConfig({
   test: {
