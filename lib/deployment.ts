@@ -12,12 +12,15 @@ export function deploymentMode(): DeploymentMode {
 
 export const isStandalone = () => deploymentMode() === "standalone";
 
-/** Emails con acceso al panel de plataforma (/admin), separados por coma. */
-export function isPlatformAdmin(email: string | null | undefined): boolean {
-  if (!email || isStandalone()) return false;
-  const admins = (process.env.PLATFORM_ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return admins.includes(email.toLowerCase());
+/**
+ * ¿Puede este usuario entrar al panel de plataforma (/admin)?
+ *
+ * El permiso es una marca en la base de datos (`users.isPlatformAdmin`) que
+ * solo se otorga desde el servidor con `npm run admin:grant <email>`. No se
+ * deriva del email: como el registro no verifica direcciones, una lista de
+ * emails en configuración permitiría que alguien se registre con el email
+ * de un administrador que todavía no tiene cuenta y herede el acceso.
+ */
+export function canAccessPlatformAdmin(user: { isPlatformAdmin: boolean }): boolean {
+  return user.isPlatformAdmin && !isStandalone();
 }

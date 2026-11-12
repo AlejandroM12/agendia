@@ -20,6 +20,7 @@ export type PublicDay = { dateStr: string; slots: Array<{ iso: string; label: st
 export type PublicAvailability = { ok: true; days: PublicDay[]; hasMore: boolean } | { ok: false; message: string };
 
 const WINDOW_DAYS = 14;
+const NOT_BOOKABLE = "Este negocio no está tomando reservas online en este momento. Comunicate directamente.";
 
 async function findBookableOrganization(slug: string): Promise<Organization | null> {
   const organization = await db.organization.findUnique({ where: { slug } });
@@ -159,6 +160,7 @@ export async function getRescheduleAvailabilityAction(token: string, fromDateStr
 
   const appointment = await findByToken(token);
   if (!appointment || appointment.status !== "confirmed") return { ok: false, message: "No encontramos ese turno." };
+  if (!canPerformWriteActions(appointment.organization)) return { ok: false, message: NOT_BOOKABLE };
 
   const duration = Math.round((appointment.endsAt.getTime() - appointment.startsAt.getTime()) / 60000);
   return availabilityFor(appointment.organization, duration, fromDateStr, appointment.id);
@@ -170,6 +172,9 @@ export async function rescheduleByTokenAction(token: string, slotIso: string): P
 
   const appointment = await findByToken(token);
   if (!appointment) return { ok: false, message: "No encontramos ese turno." };
+  // Cancelar siempre se puede; mover el turno a otro horario es una reserva
+  // nueva, y una cuenta en solo lectura no toma reservas.
+  if (!canPerformWriteActions(appointment.organization)) return { ok: false, message: NOT_BOOKABLE };
 
   const startsAt = new Date(String(slotIso));
   const result = await rescheduleAppointment({

@@ -15,8 +15,19 @@ const businessSchema = z.object({
   industry: z.string().refine((v) => industries.some((i) => i.id === v), "Elegí una actividad."),
 });
 
-export async function saveBusinessStep(_prev: ActionState, formData: FormData): Promise<ActionState> {
+/**
+ * Los pasos del onboarding solo valen mientras está pendiente. Una vez
+ * terminado, servicios y horarios se administran desde el panel: si no,
+ * reenviar el paso 2 reemplazaría toda la lista de servicios.
+ */
+async function requireOnboardingContext() {
   const access = await requireWriteContext();
+  if (access.ok && access.context.organization.onboardingCompletedAt) redirect("/dashboard");
+  return access;
+}
+
+export async function saveBusinessStep(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const access = await requireOnboardingContext();
   if (!access.ok) return { message: access.message };
   const { organization } = access.context;
 
@@ -42,7 +53,7 @@ export async function saveBusinessStep(_prev: ActionState, formData: FormData): 
 }
 
 export async function saveServicesStep(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireOnboardingContext();
   if (!access.ok) return { message: access.message };
   const { organization } = access.context;
 
@@ -70,7 +81,7 @@ export async function saveServicesStep(_prev: ActionState, formData: FormData): 
 }
 
 export async function saveHoursStep(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireOnboardingContext();
   if (!access.ok) return { message: access.message };
   const { organization } = access.context;
 

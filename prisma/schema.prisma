@@ -340,6 +340,9 @@ model User {
   name         String
   // Se incrementa al cambiar la contraseña: invalida las sesiones previas.
   sessionVersion Int    @default(0)
+  // Acceso al panel de plataforma (/admin). Solo se otorga desde el servidor
+  // con `npm run admin:grant` — nunca por configuración ni desde la app.
+  isPlatformAdmin Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

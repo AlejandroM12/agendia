@@ -20,7 +20,7 @@ import { canPerformWriteActions, getOrganizationWithSyncedStatus } from "@/lib/o
 export const getCurrentSession = cache(async () => auth());
 
 export type AppContext = {
-  user: { id: string; email: string; name: string };
+  user: { id: string; email: string; name: string; isPlatformAdmin: boolean };
   organization: Organization;
   role: "owner" | "admin";
   /** `false` con la prueba vencida o la cuenta suspendida: solo lectura. */
@@ -38,6 +38,7 @@ const loadContext = cache(async (): Promise<AppContext | "anonymous" | "stale"> 
       email: true,
       name: true,
       sessionVersion: true,
+      isPlatformAdmin: true,
       memberships: { orderBy: { createdAt: "asc" }, take: 1, select: { organizationId: true, role: true } },
     },
   });
@@ -49,7 +50,7 @@ const loadContext = cache(async (): Promise<AppContext | "anonymous" | "stale"> 
   if (!organization) return "stale";
 
   return {
-    user: { id: user.id, email: user.email, name: user.name },
+    user: { id: user.id, email: user.email, name: user.name, isPlatformAdmin: user.isPlatformAdmin },
     organization,
     role: membership.role,
     canWrite: canPerformWriteActions(organization),

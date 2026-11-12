@@ -51,6 +51,7 @@ export async function findOrCreateCustomer(
   tx: Tx,
   organizationId: string,
   input: { name: string; email: string | null; phone: string | null },
+  options: { completeMissingContact?: boolean } = {},
 ): Promise<Customer> {
   const email = input.email?.toLowerCase() ?? null;
   const phone = normalizePhone(input.phone);
@@ -64,7 +65,10 @@ export async function findOrCreateCustomer(
   }
 
   if (existing) {
-    // Completa datos de contacto faltantes, sin pisar los que ya tenía.
+    // Solo el profesional puede completar datos faltantes de una ficha (sin
+    // pisar los que ya tenía). Una reserva pública nunca modifica un cliente
+    // existente: cualquiera podría escribir el email de otra persona.
+    if (!options.completeMissingContact) return existing;
     const patch: Prisma.CustomerUpdateInput = {};
     if (!existing.email && email) patch.email = email;
     if (!existing.phone && phone) patch.phone = phone;

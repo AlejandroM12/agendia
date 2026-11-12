@@ -6,13 +6,13 @@ import type { OrganizationStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireContext } from "@/lib/dal";
 import { type ActionState } from "@/lib/action-state";
-import { isPlatformAdmin } from "@/lib/deployment";
+import { canAccessPlatformAdmin } from "@/lib/deployment";
 import { getMonthlyPlan } from "@/modules/billing/subscriptions";
 
 /** Toda acción del panel vuelve a verificar el permiso: el layout no alcanza. */
 async function requirePlatformAdmin() {
   const context = await requireContext();
-  if (!isPlatformAdmin(context.user.email)) notFound();
+  if (!canAccessPlatformAdmin(context.user)) notFound();
   return context;
 }
 

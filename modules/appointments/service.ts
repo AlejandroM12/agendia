@@ -152,7 +152,9 @@ export async function createAppointment(params: {
         });
         if (!customer) throw new Error("CUSTOMER_NOT_FOUND");
       } else {
-        customer = await findOrCreateCustomer(tx, organization.id, params.customer);
+        customer = await findOrCreateCustomer(tx, organization.id, params.customer, {
+          completeMissingContact: actor === "professional",
+        });
       }
 
       const created = await tx.appointment.create({
