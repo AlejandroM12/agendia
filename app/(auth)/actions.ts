@@ -12,6 +12,7 @@ import {
   resetPassword,
 } from "@/modules/auth/password-reset";
 import { clientIp, rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
+import { getRegistrationStatus } from "@/modules/auth/registration";
 
 export type ActionState = {
   ok?: boolean;
@@ -26,6 +27,12 @@ export async function registerAction(
   const ip = await clientIp();
   if (!(await rateLimit(`register:${ip}`, 8, 3600)).allowed) {
     return { message: TOO_MANY_ATTEMPTS };
+  }
+
+  // El formulario ya no se muestra con el registro cerrado; esto cubre el
+  // envío directo de la acción.
+  if (!(await getRegistrationStatus()).open) {
+    return { message: "El registro de cuentas nuevas no está disponible en este momento." };
   }
 
   const validated = registerOrganizationSchema.safeParse({

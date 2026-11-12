@@ -32,6 +32,9 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 300_000,
     env: {
+      // Las pruebas corren sin canal de email: se habilita el registro igual
+      // (en producción real queda cerrado hasta configurar Resend).
+      ALLOW_REGISTRATION_WITHOUT_EMAIL: "1",
       AUTH_URL: `http://localhost:${PORT}`,
       APP_URL: `http://localhost:${PORT}`,
     },
