@@ -26,7 +26,7 @@ const INCLUDED = [
 export default async function BillingPage(props: PageProps<"/dashboard/facturacion">) {
   if (isStandalone()) notFound();
 
-  const { organization } = await requireOrganization();
+  const { organization, user } = await requireOrganization();
   const [plan, subscription] = await Promise.all([
     getMonthlyPlan(),
     db.subscription.findUnique({ where: { organizationId: organization.id } }),
@@ -111,7 +111,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
               {subscriptionLive ? (
                 <CancelSubscriptionButton />
               ) : !canSubscribe ? null : paymentsReady ? (
-                <SubscribeButton label={`Suscribirme por ${price} al mes`} />
+                <SubscribeButton label={`Suscribirme por ${price} al mes`} defaultEmail={user.email} />
               ) : (
                 <div className="rounded-xl bg-secondary p-4 text-sm">
                   <p className="font-medium">El pago online todavía no está habilitado.</p>

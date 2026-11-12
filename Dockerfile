@@ -14,6 +14,13 @@ RUN npm ci
 FROM node:24-alpine AS builder
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 BUILD_STANDALONE=1
+# Datos públicos que las páginas estáticas (landing, sitemap) fijan al
+# construir. No son secretos. docker-compose.yml los toma de .env.production.
+ARG APP_URL=http://localhost:3000
+ARG CONTACT_EMAIL=
+ARG PRICE_MONTHLY=7900
+ARG PRICE_ONE_TIME=99000
+ENV APP_URL=$APP_URL CONTACT_EMAIL=$CONTACT_EMAIL PRICE_MONTHLY=$PRICE_MONTHLY PRICE_ONE_TIME=$PRICE_ONE_TIME
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # El build no se conecta a la base ni necesita secretos reales: estos

@@ -35,7 +35,13 @@ docker compose --env-file .env.production up -d --build
 
 Verificación: `docker compose --env-file .env.production ps` debe mostrar `web` y `postgres` como *healthy*, y `https://TU_DOMINIO/api/health` debe responder `{"status":"ok"}`.
 
-Para acceder al panel de plataforma (`/admin`), registrar una cuenta normal y agregar su email a `PLATFORM_ADMIN_EMAILS`.
+Para acceder al panel de plataforma (`/admin`), registrar una cuenta normal y otorgarle el permiso desde el servidor:
+
+```sh
+docker compose --env-file .env.production run --rm migrate node scripts/grant-admin.mjs tu@email.com
+```
+
+(`--revoke` al final lo quita. El permiso vive en la base de datos, no en la configuración.)
 
 ## 4. Variables y secretos
 

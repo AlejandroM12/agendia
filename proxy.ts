@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { isStandalone } from "@/lib/deployment";
 
 // A partir de Next.js 16, "Middleware" se llama "Proxy" (mismo mecanismo).
 // Ver node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md
@@ -24,6 +25,12 @@ export default auth((req) => {
     const loginUrl = new URL("/login", req.nextUrl.origin);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Una instalación independiente no es un sitio comercial: la raíz lleva
+  // directo a ingresar, sin landing ni precios del SaaS.
+  if (isStandalone() && (pathname === "/" || pathname === "/precios")) {
+    return NextResponse.redirect(new URL(isAuthenticated ? "/dashboard" : "/login", req.nextUrl.origin));
   }
 
   if (isAuthPage && isAuthenticated) {

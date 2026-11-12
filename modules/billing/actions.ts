@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireContext } from "@/lib/dal";
 import { type ActionState } from "@/lib/action-state";
@@ -15,7 +16,7 @@ import { applyPreapprovalState, getMonthlyPlan } from "./subscriptions";
  * al usuario a autorizarlo. La cuenta NO se activa acá: se activa cuando
  * Mercado Pago confirma la autorización (webhook o reconciliación).
  */
-export async function startSubscriptionAction(_prev: ActionState): Promise<ActionState> {
+export async function startSubscriptionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const { organization, user } = await requireContext();
   if (isStandalone()) return { message: "Esta instalación no usa suscripción." };
   if (!isMercadoPagoConfigured()) {
@@ -25,12 +26,17 @@ export async function startSubscriptionAction(_prev: ActionState): Promise<Actio
     return { message: "Tu cuenta está suspendida. Escribinos para resolverlo." };
   }
 
+  // Mercado Pago exige que el pagador ingrese con este mismo email: puede no
+  // ser el de la cuenta de Agendia.
+  const payerEmail = z.email().safeParse(String(formData.get("payerEmail") ?? user.email).trim().toLowerCase());
+  if (!payerEmail.success) return { message: "Ingresá el email de tu cuenta de Mercado Pago." };
+
   const plan = await getMonthlyPlan();
   let initPoint: string;
   try {
     const preapproval = await createPreapproval({
       organizationId: organization.id,
-      payerEmail: user.email,
+      payerEmail: payerEmail.data,
       reason: `${brand.name} — ${plan.name}`,
       amount: plan.price,
       currency: plan.currency,

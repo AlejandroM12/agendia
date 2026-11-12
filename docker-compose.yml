@@ -20,13 +20,20 @@ x-app-env: &app-env
   AUTH_SECRET: ${AUTH_SECRET:?definir AUTH_SECRET}
   CRON_SECRET: ${CRON_SECRET:?definir CRON_SECRET}
   CONTACT_EMAIL: ${CONTACT_EMAIL:-}
-  PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
   RESEND_API_KEY: ${RESEND_API_KEY:-}
   EMAIL_FROM: ${EMAIL_FROM:-}
   MERCADOPAGO_ACCESS_TOKEN: ${MERCADOPAGO_ACCESS_TOKEN:-}
   MERCADOPAGO_WEBHOOK_SECRET: ${MERCADOPAGO_WEBHOOK_SECRET:-}
   PRICE_MONTHLY: ${PRICE_MONTHLY:-7900}
   PRICE_ONE_TIME: ${PRICE_ONE_TIME:-99000}
+
+x-build: &build
+  context: .
+  args:
+    APP_URL: https://${DOMAIN}
+    CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+    PRICE_MONTHLY: ${PRICE_MONTHLY:-7900}
+    PRICE_ONE_TIME: ${PRICE_ONE_TIME:-99000}
 
 x-logging: &logging
   driver: json-file
@@ -53,7 +60,7 @@ services:
 
   migrate:
     build:
-      context: .
+      <<: *build
       target: builder
     command: ["npx", "prisma", "migrate", "deploy"]
     environment: *app-env
@@ -64,7 +71,7 @@ services:
     logging: *logging
 
   web:
-    build: .
+    build: *build
     restart: unless-stopped
     environment: *app-env
     depends_on:
@@ -75,7 +82,7 @@ services:
     logging: *logging
 
   worker:
-    build: .
+    build: *build
     restart: unless-stopped
     command: ["node", "scripts/worker.mjs"]
     environment:
