@@ -4,15 +4,18 @@ import { auth } from "@/auth";
 // A partir de Next.js 16, "Middleware" se llama "Proxy" (mismo mecanismo).
 // Ver node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md
 
-const PROTECTED_PREFIXES = ["/dashboard", "/admin"];
+const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/onboarding"];
 const AUTH_PAGES = ["/login", "/registro"];
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isAuthenticated = Boolean(req.auth?.user);
 
-  const isProtected = PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix));
-  const isAuthPage = AUTH_PAGES.some((prefix) => pathname.startsWith(prefix));
+  // Coincidencia por segmento: "/dashboard-x" es la página pública de un
+  // negocio, no una ruta privada.
+  const matches = (prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
+  const isProtected = PROTECTED_PREFIXES.some(matches);
+  const isAuthPage = AUTH_PAGES.some(matches);
 
   // Chequeo optimista basado solo en la cookie de sesión. La autorización
   // real (aislamiento por organización, roles, estado de la prueba) se

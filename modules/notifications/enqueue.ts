@@ -48,6 +48,9 @@ export async function enqueueAppointmentNotifications(
     data: { status: "canceled" },
   });
 
+  // Un turno cargado a posteriori (ya ocurrió) no genera avisos.
+  if (appointment.startsAt.getTime() < now.getTime()) return;
+
   const rows: Prisma.NotificationCreateManyInput[] = [];
   const push = (type: NotificationType, recipient: string, scheduledFor: Date) =>
     rows.push({

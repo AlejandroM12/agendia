@@ -3,6 +3,7 @@ import "server-only";
 import { OrganizationStatus, type Organization } from "@prisma/client";
 import { db } from "@/lib/db";
 import { trialPolicy } from "@/lib/brand";
+import { isStandalone } from "@/lib/deployment";
 
 /**
  * Política centralizada del ciclo de prueba gratuita / acceso.
@@ -45,6 +46,8 @@ function computeReadonlyUntil(trialEndsAt: Date): Date {
 export function canPerformWriteActions(
   org: Pick<Organization, "status" | "trialEndsAt" | "readonlyUntil">,
 ): boolean {
+  // Una instalación independiente no depende de prueba ni suscripción.
+  if (isStandalone()) return true;
   const effective = getEffectiveStatus(org);
   return (
     effective === OrganizationStatus.trial ||

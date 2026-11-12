@@ -1,57 +1,59 @@
-import Link from "next/link";
-import { getOptionalOrganization } from "@/lib/dal";
-import { brand } from "@/lib/brand";
-import { DashboardNav } from "@/components/dashboard/dashboard-nav";
-import { LogoutButton } from "@/components/dashboard/logout-button";
-import { TrialStatusBadge } from "@/components/dashboard/trial-status-badge";
+import { LogOut, Plus } from "lucide-react";
+import { logoutAction } from "@/app/(auth)/actions";
+import { Logo } from "@/components/brand/logo";
+import { ButtonLink } from "@/components/ui/button-link";
+import { AccountBanner } from "@/components/dashboard/account-banner";
+import { MobileTabBar, SidebarNav } from "@/components/dashboard/navigation";
+import { requireOrganization } from "@/lib/dal";
+import { isStandalone } from "@/lib/deployment";
 
-// Todo el dashboard es contenido por-sesión (requiere leer la cookie de
-// autenticación): no hay nada que ganar prerrenderizándolo de forma
-// estática. Se opta explícitamente por el modo dinámico/bloqueante en vez
-// de introducir límites de Suspense solo para satisfacer el prerenderizado
-// de Cache Components — ver la guía de autenticación con Cache Components
-// de Next.js (node_modules/next/dist/docs/.../authentication-with-cache-components.md,
-// sección "Migrating an existing app") y docs/DECISIONS.md.
+// Todo el panel depende de la sesión: se renderiza por request.
 export const instant = false;
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  // Solo dibuja la cáscara visual (sidebar, badge de prueba). La
-  // autorización real de cada pantalla se hace en la propia página — ver el
-  // comentario en lib/dal.ts sobre por qué no se exige la organización aquí.
-  const { session, organization } = await getOptionalOrganization();
+  // La cáscara usa el contexto para dibujarse; cada página y cada server
+  // action vuelve a exigirlo por su cuenta (lib/dal.ts).
+  const { organization, user, canWrite } = await requireOrganization();
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
-      <aside className="border-b border-border bg-secondary/30 p-4 lg:w-64 lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between lg:flex-col lg:items-start lg:gap-4">
-          <Link href="/" className="flex items-center gap-2 font-semibold text-foreground">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-              A
-            </span>
-            <span>{brand.name}</span>
-          </Link>
-          {organization && <TrialStatusBadge organization={organization} />}
+    <div className="flex min-h-dvh flex-col lg:flex-row">
+      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar p-4 lg:flex">
+        <Logo href="/dashboard" className="px-2 py-1" />
+        {canWrite && (
+          <ButtonLink
+            className="mt-6 w-full" href="/dashboard/turnos/nuevo">
+                <Plus aria-hidden="true" /> Nuevo turno
+              </ButtonLink>
+        )}
+        <div className="mt-6 flex-1 overflow-y-auto">
+          <SidebarNav showBilling={!isStandalone()} />
         </div>
-        <div className="mt-6 hidden lg:block">
-          <DashboardNav />
+        <div className="border-t border-sidebar-border pt-3">
+          <p className="truncate px-3 text-sm font-medium text-foreground">{organization.name}</p>
+          <p className="truncate px-3 text-xs text-muted-foreground">{user.email}</p>
+          <form action={logoutAction} className="mt-2">
+            <button
+              type="submit"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="size-4.5" aria-hidden="true" /> Cerrar sesión
+            </button>
+          </form>
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border px-4 py-3 lg:px-8">
-          <div className="text-sm text-muted-foreground">
-            {organization ? `${organization.name} · ` : ""}
-            {session.user.email}
-          </div>
-          <LogoutButton />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between border-b border-border bg-background px-4 py-3 lg:hidden">
+          <Logo href="/dashboard" />
+          <p className="max-w-[45%] truncate text-sm text-muted-foreground">{organization.name}</p>
         </header>
-
-        <div className="border-b border-border px-4 py-2 lg:hidden">
-          <DashboardNav />
-        </div>
-
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+        <AccountBanner organization={organization} />
+        <main className="mx-auto w-full max-w-4xl flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12">
+          {children}
+        </main>
       </div>
+
+      <MobileTabBar canWrite={canWrite} />
     </div>
   );
 }

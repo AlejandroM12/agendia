@@ -3,56 +3,43 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { requestPasswordResetAction } from "@/app/(auth)/actions";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field } from "@/components/form/field";
+import { FormMessage } from "@/components/form/form-message";
+import { SubmitButton } from "@/components/form/submit-button";
+import { AuthCard } from "./auth-card";
 
 export function ForgotPasswordForm() {
-  const [state, action, pending] = useActionState(requestPasswordResetAction, undefined);
+  const [state, action] = useActionState(requestPasswordResetAction, undefined);
 
   return (
-    <form action={action} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Recuperar contraseña</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Te enviamos un enlace para restablecerla.
-        </p>
-      </div>
-
-      {state?.message && (
-        <Alert>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      )}
-
-      {state?.devResetLink && (
-        <Alert variant="destructive">
-          <AlertDescription>
-            <strong>Placeholder de desarrollo:</strong> el envío por email todavía no está
-            implementado (llega en la Fase 4, con Resend). Por ahora, usá este enlace directamente:{" "}
-            <Link href={state.devResetLink} className="underline">
-              restablecer contraseña
-            </Link>
-            .
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
-      </div>
-
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Enviando…" : "Enviar enlace"}
-      </Button>
-
-      <p className="text-center text-sm text-muted-foreground">
-        <Link href="/login" className="text-primary hover:underline">
-          Volver a iniciar sesión
+    <AuthCard
+      title="Recuperar contraseña"
+      description="Ingresá tu email y te enviamos un enlace para elegir una nueva."
+      footer={
+        <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+          Volver a ingresar
         </Link>
-      </p>
-    </form>
+      }
+    >
+      <form action={action} className="space-y-4">
+        <FormMessage message={state?.message} tone="info" />
+        {state?.devResetLink && (
+          <p className="rounded-lg border border-dashed border-warning/50 bg-warning-soft px-3 py-2.5 text-sm text-warning">
+            Modo desarrollo: el envío de emails no está configurado, así que el enlace se muestra
+            acá.{" "}
+            <Link href={state.devResetLink} className="font-medium underline">
+              Abrir enlace
+            </Link>
+          </p>
+        )}
+        <Field label="Email" htmlFor="email">
+          <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
+        </Field>
+        <SubmitButton className="w-full" pendingLabel="Enviando…">
+          Enviar enlace
+        </SubmitButton>
+      </form>
+    </AuthCard>
   );
 }

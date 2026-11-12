@@ -3,65 +3,50 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { registerAction } from "@/app/(auth)/actions";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field } from "@/components/form/field";
+import { FormMessage } from "@/components/form/form-message";
+import { SubmitButton } from "@/components/form/submit-button";
+import { trialPolicy } from "@/lib/brand";
+import { AuthCard } from "./auth-card";
 
 export function RegisterForm() {
-  const [state, action, pending] = useActionState(registerAction, undefined);
+  const [state, action] = useActionState(registerAction, undefined);
+  const error = (field: string) => state?.errors?.[field]?.[0];
 
   return (
-    <form action={action} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Probá Agendia gratis</h1>
-        <p className="mt-1 text-sm text-muted-foreground">7 días sin tarjeta de crédito.</p>
-      </div>
-
-      {state?.message && (
-        <Alert variant="destructive">
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      )}
-
-      <div className="space-y-2">
-        <Label htmlFor="businessName">Nombre de tu negocio</Label>
-        <Input id="businessName" name="businessName" placeholder="Ej: Estudio Martina" required />
-        {state?.errors?.businessName && (
-          <p className="text-xs text-destructive">{state.errors.businessName[0]}</p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="name">Tu nombre</Label>
-        <Input id="name" name="name" autoComplete="name" required />
-        {state?.errors?.name && <p className="text-xs text-destructive">{state.errors.name[0]}</p>}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" autoComplete="email" required />
-        {state?.errors?.email && <p className="text-xs text-destructive">{state.errors.email[0]}</p>}
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="password">Contraseña</Label>
-        <Input id="password" name="password" type="password" autoComplete="new-password" required />
-        {state?.errors?.password && (
-          <p className="text-xs text-destructive">{state.errors.password[0]}</p>
-        )}
-      </div>
-
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? "Creando cuenta…" : "Comenzar gratis"}
-      </Button>
-
-      <p className="text-center text-sm text-muted-foreground">
-        ¿Ya tenés cuenta?{" "}
-        <Link href="/login" className="text-primary hover:underline">
-          Iniciar sesión
-        </Link>
-      </p>
-    </form>
+    <AuthCard
+      title="Creá tu cuenta"
+      description={`${trialPolicy.trialDays} días gratis. Sin tarjeta.`}
+      footer={
+        <>
+          ¿Ya tenés cuenta?{" "}
+          <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+            Ingresar
+          </Link>
+        </>
+      }
+    >
+      <form action={action} className="space-y-4">
+        <FormMessage message={state?.message} />
+        <Field label="Tu nombre" htmlFor="name" error={error("name")}>
+          <Input id="name" name="name" autoComplete="name" required />
+        </Field>
+        <Field label="Email" htmlFor="email" error={error("email")}>
+          <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
+        </Field>
+        <Field
+          label="Contraseña"
+          htmlFor="password"
+          error={error("password")}
+          hint="Al menos 8 caracteres, con letras y números."
+        >
+          <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+        </Field>
+        <SubmitButton className="w-full" pendingLabel="Creando tu cuenta…">
+          Empezar gratis
+        </SubmitButton>
+      </form>
+    </AuthCard>
   );
 }

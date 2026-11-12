@@ -105,18 +105,3 @@ export const industries: ReadonlyArray<{
   },
 ];
 
-/** Planes que muestra la landing (se rediseña junto con la nueva landing). */
-export const plans = [
-  {
-    id: "mensual",
-    name: "Suscripción mensual",
-    priceMonthly: pricing.monthly as number | null,
-    description: "Hosting, base de datos e infraestructura a nuestro cargo.",
-  },
-  {
-    id: "standalone",
-    name: "Compra única — instalación independiente",
-    priceMonthly: null as number | null,
-    description: "Licencia de uso del software, instalado en infraestructura propia.",
-  },
-] as const;

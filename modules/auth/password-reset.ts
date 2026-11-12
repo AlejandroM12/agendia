@@ -4,6 +4,9 @@ import { randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
+import { brand } from "@/lib/brand";
+import { isEmailConfigured, sendEmail } from "@/modules/notifications/email";
+import { renderEmail } from "@/modules/notifications/templates";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
 
@@ -20,16 +23,14 @@ export type RequestPasswordResetResult =
   | { requested: false };
 
 /**
- * Genera un token de recuperación de un solo uso.
+ * Genera un token de recuperación de un solo uso y lo envía por email.
  *
- * IMPORTANTE (placeholder explícito): el envío real por email vía Resend es
- * una funcionalidad de la Fase 4 (ver docs/ROADMAP.md). Hasta entonces, esta
- * función devuelve el enlace en texto plano para que la pantalla de "olvidé
- * mi contraseña" pueda mostrarlo directamente, en vez de simular un envío
- * que todavía no existe.
+ * Nunca revela si el email pertenece o no a una cuenta: la respuesta es la
+ * misma en ambos casos.
  *
- * Nunca revela si el email pertenece o no a una cuenta existente, para no
- * filtrar qué emails están registrados.
+ * `devResetLink` solo existe fuera de producción y cuando el canal de email
+ * no está configurado, para poder probar el flujo en desarrollo. En
+ * producción el enlace viaja únicamente por email.
  */
 export async function requestPasswordReset(
   rawInput: unknown,
@@ -38,10 +39,7 @@ export async function requestPasswordReset(
   if (!parsed.success) return { requested: false };
 
   const user = await db.user.findUnique({ where: { email: parsed.data.email } });
-  if (!user) {
-    // Respuesta idéntica al caso exitoso: no se filtra la existencia del email.
-    return { requested: true };
-  }
+  if (!user) return { requested: true };
 
   const rawToken = randomBytes(32).toString("base64url");
   const tokenHash = hashToken(rawToken);
@@ -51,10 +49,31 @@ export async function requestPasswordReset(
     data: { userId: user.id, tokenHash, expiresAt },
   });
 
-  return {
-    requested: true,
-    devResetLink: `/restablecer-contrasena/${rawToken}`,
-  };
+  const path = `/restablecer-contrasena/${rawToken}`;
+
+  if (isEmailConfigured()) {
+    const result = await sendEmail({
+      to: user.email,
+      subject: `Restablecé tu contraseña de ${brand.name}`,
+      ...renderEmail({
+        heading: "Restablecé tu contraseña",
+        paragraphs: [
+          `Hola ${user.name}, recibimos un pedido para cambiar la contraseña de tu cuenta.`,
+          "El enlace vence en una hora. Si no fuiste vos, podés ignorar este mensaje.",
+        ],
+        action: { label: "Elegir una contraseña nueva", url: `${brand.url}${path}` },
+      }),
+    });
+    if (!result.ok) console.error("[password-reset] no se pudo enviar el email:", result.error);
+    return { requested: true };
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return { requested: true, devResetLink: path };
+  }
+
+  console.error("[password-reset] canal de email sin configurar: no se envió el enlace de recuperación.");
+  return { requested: true };
 }
 
 export const resetPasswordSchema = z.object({
@@ -84,7 +103,11 @@ export async function resetPassword(rawInput: unknown): Promise<ResetPasswordRes
   const passwordHash = await hashPassword(parsed.data.password);
 
   await db.$transaction([
-    db.user.update({ where: { id: resetToken.userId }, data: { passwordHash } }),
+    // sessionVersion + 1 cierra cualquier sesión abierta con la contraseña anterior.
+    db.user.update({
+      where: { id: resetToken.userId },
+      data: { passwordHash, sessionVersion: { increment: 1 } },
+    }),
     db.passwordResetToken.update({
       where: { id: resetToken.id },
       data: { usedAt: new Date() },

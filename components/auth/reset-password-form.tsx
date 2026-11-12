@@ -1,43 +1,35 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
 import { resetPasswordAction } from "@/app/(auth)/actions";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button-link";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Field } from "@/components/form/field";
+import { FormMessage } from "@/components/form/form-message";
+import { SubmitButton } from "@/components/form/submit-button";
+import { AuthCard } from "./auth-card";
 
 export function ResetPasswordForm({ token }: { token: string }) {
-  const [state, action, pending] = useActionState(resetPasswordAction, undefined);
-  const succeeded = state?.message?.startsWith("Contraseña actualizada");
+  const [state, action] = useActionState(resetPasswordAction, undefined);
+
+  if (state?.ok) {
+    return (
+      <AuthCard title="Contraseña actualizada" description="Ya podés ingresar con tu contraseña nueva.">
+        <ButtonLink className="w-full" href="/login">Ingresar</ButtonLink>
+      </AuthCard>
+    );
+  }
 
   return (
-    <form action={action} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Elegí una nueva contraseña</h1>
-      </div>
-
-      {state?.message && (
-        <Alert variant={succeeded ? "default" : "destructive"}>
-          <AlertDescription>{state.message}</AlertDescription>
-        </Alert>
-      )}
-
-      {succeeded ? (
-        <Button className="w-full" nativeButton={false} render={<Link href="/login">Iniciar sesión</Link>} />
-      ) : (
-        <>
-          <input type="hidden" name="token" value={token} />
-          <div className="space-y-2">
-            <Label htmlFor="password">Nueva contraseña</Label>
-            <Input id="password" name="password" type="password" autoComplete="new-password" required />
-          </div>
-          <Button type="submit" className="w-full" disabled={pending}>
-            {pending ? "Guardando…" : "Guardar contraseña"}
-          </Button>
-        </>
-      )}
-    </form>
+    <AuthCard title="Elegí una contraseña nueva">
+      <form action={action} className="space-y-4">
+        <FormMessage message={state?.message} />
+        <input type="hidden" name="token" value={token} />
+        <Field label="Contraseña nueva" htmlFor="password" hint="Al menos 8 caracteres, con letras y números.">
+          <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
+        </Field>
+        <SubmitButton className="w-full">Guardar contraseña</SubmitButton>
+      </form>
+    </AuthCard>
   );
 }

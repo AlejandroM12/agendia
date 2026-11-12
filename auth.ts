@@ -13,7 +13,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Sesiones por JWT: no hay tabla de sesiones en base de datos todavía.
   // El proveedor Credentials de Auth.js solo admite esta estrategia.
   // Ver docs/ARCHITECTURE.md §3.
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
+  trustHost: true,
   pages: {
     signIn: "/login",
   },
@@ -46,6 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           organizationId: membership?.organizationId ?? null,
           role: membership?.role ?? null,
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -57,6 +59,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.organizationId = user.organizationId;
         token.role = user.role;
+        token.sessionVersion = user.sessionVersion;
       }
       return token;
     },
@@ -65,6 +68,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.sub as string;
         session.user.organizationId = token.organizationId as string | null;
         session.user.role = token.role as string | null;
+        session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 0;
       }
       return session;
     },
