@@ -49,3 +49,8 @@ next-env.d.ts
 
 # copias de seguridad locales
 /backups/
+
+# datos del servidor: instalaciones independientes y destino de la copia externa
+/instances/
+/deploy/sites/*.caddy
+/deploy/rclone.conf

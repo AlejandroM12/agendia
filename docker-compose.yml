@@ -6,6 +6,10 @@
 #   migrate  → aplica migraciones pendientes y termina (corre antes que web)
 #   postgres → base de datos, con volumen persistente
 #   backup   → copia diaria de la base, con rotación
+#   offsite  → (opcional, perfil "offsite") sube las copias a un almacenamiento externo
+#
+# El proxy también atiende a las instalaciones independientes alojadas en
+# este servidor (deploy/instance.sh), que se conectan a la red agendia-edge.
 #
 # Uso: copiar deploy/.env.production.example a .env.production, completarlo y
 #   docker compose --env-file .env.production up -d --build
@@ -61,6 +65,7 @@ services:
     logging: *logging
 
   migrate:
+    image: agendia-migrator:latest
     build:
       <<: *build
       target: migrator
@@ -72,6 +77,7 @@ services:
     logging: *logging
 
   web:
+    image: agendia-web:latest
     build: *build
     restart: unless-stopped
     environment: *app-env
@@ -83,7 +89,7 @@ services:
     logging: *logging
 
   worker:
-    build: *build
+    image: agendia-web:latest
     restart: unless-stopped
     command: ["node", "scripts/worker.mjs"]
     environment:
@@ -108,8 +114,12 @@ services:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/sites:/etc/caddy/sites:ro
       - caddy-data:/data
       - caddy-config:/config
+    networks:
+      - default
+      - edge
     depends_on:
       - web
     logging: *logging
@@ -131,7 +141,31 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Después de las migraciones: la primera copia no debe ser de una base vacía.
+      migrate:
+        condition: service_completed_successfully
     logging: *logging
+
+  # Copia externa de los backups (del SaaS y de las instalaciones
+  # independientes). Opcional: se activa con COMPOSE_PROFILES=offsite y un
+  # destino configurado en deploy/rclone.conf (ver docs/DEPLOYMENT.md).
+  offsite:
+    profiles: ["offsite"]
+    image: rclone/rclone:1.68
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/offsite.sh"]
+    environment:
+      OFFSITE_REMOTE: ${OFFSITE_REMOTE:-}
+    volumes:
+      - ./deploy/offsite.sh:/offsite.sh:ro
+      - ./deploy/rclone.conf:/config/rclone/rclone.conf:ro
+      - ${BACKUP_DIR:-./backups}:/data/saas:ro
+      - ./instances:/data/instances:ro
+    logging: *logging
+
+networks:
+  edge:
+    name: agendia-edge
 
 volumes:
   postgres-data:
