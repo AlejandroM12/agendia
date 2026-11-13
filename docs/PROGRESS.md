@@ -1,6 +1,7 @@
 # Progreso
 
-- **Última funcionalidad completada:** evaluación de producción (`docs/PRODUCTION_READINESS.md`): comparación de infraestructura y costos, auditoría multi-tenant con correcciones y tests de aislamiento, registro condicionado al email, scripts de soporte (admin, enlace de recuperación, email de prueba), checklist de sandbox de Mercado Pago y empaquetado de la instalación independiente sin código fuente.
-- **Validación:** lint, typecheck, build, 95 tests (Vitest) y E2E Playwright mobile + desktop en verde.
-- **Próxima funcionalidad:** verificación de email al registrarse; envío por SMTP para instalaciones independientes; páginas legales cuando esté el texto.
-- **Bloqueos reales (requieren al dueño):** contratar VPS + dominio; cuenta de Resend con dominio verificado (hasta entonces el registro queda cerrado en producción); credenciales de Mercado Pago y checklist de sandbox; términos y privacidad; destino de la copia externa de backups.
+- **Última funcionalidad completada:** preparación para el lanzamiento: precios definitivos (Plan Profesional ARS 14.000/mes, Licencia independiente ARS 199.000), verificación de email obligatoria, compra de la licencia por Mercado Pago, instalaciones independientes alojadas en el mismo servidor (`deploy/instance.sh`), copia externa de backups y guía de despliegue actualizada.
+- **Validación:** lint, typecheck, build, tests (Vitest) y E2E Playwright mobile + desktop en verde. Stack de producción completo probado en Docker local (HTTPS de prueba, backup y restauración, instalación independiente de punta a punta).
+- **Estado:** **no desplegada.** No hay servidor, dominio ni cuentas externas contratadas; no hay cobros habilitados.
+- **Bloqueos reales (requieren al dueño):** VPS + dominio; cuenta de Resend con dominio verificado; credenciales de prueba de Mercado Pago (checklist de 20 casos en `docs/PRODUCTION_READINESS.md` §6) y, después, autorización para las productivas; destino de la copia externa; valor de la renovación anual de la licencia; términos, privacidad y texto de la licencia.
+- **Siguiente paso:** primer despliegue siguiendo `docs/DEPLOYMENT.md` §3.

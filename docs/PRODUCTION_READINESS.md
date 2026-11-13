@@ -8,21 +8,27 @@ Evaluación técnica y económica previa al primer despliegue real. Fecha: novie
 
 - **Arquitectura recomendada para el MVP:** un VPS de 2 vCPU / 4 GB con el `docker-compose.yml` que ya está en el repositorio (probado en local y en CI). No requiere cambios de código.
 - **Costo mensual estimado de mantenerla funcionando:** entre **US$ 15 y US$ 47** (≈ ARS 24.000 a 74.000) según cantidad de negocios, más la comisión de Mercado Pago por cada cobro y los impuestos.
+- **Precios definitivos:** Plan Profesional ARS 14.000 por mes; Licencia independiente ARS 199.000, pago único (DECISIONS D-32).
 - **Bloqueos para abrir al público** (ninguno es de código): contratar servidor y dominio, cuenta de Resend con dominio verificado, credenciales de Mercado Pago validadas en sandbox, y textos legales.
 - **Mientras Resend no esté configurado, el registro permanece cerrado en producción**: sin email no hay recuperación de contraseña.
 
 ## 2. Bloqueos
 
+Estado al cierre de la preparación para el lanzamiento. Lo que queda depende de cuentas y decisiones del dueño; el código y el empaquetado están listos y probados en local (ver `docs/DEPLOYMENT.md`).
+
 | # | Bloqueo | Quién | Efecto si falta |
 |---|---|---|---|
 | B1 | Servidor (VPS) y dominio | Dueño | No hay dónde desplegar. |
-| B2 | Cuenta de Resend + dominio verificado (`RESEND_API_KEY`, `EMAIL_FROM`) | Dueño | Registro cerrado; no salen confirmaciones, recordatorios ni recuperación de contraseña. |
-| B3 | Credenciales de Mercado Pago + checklist de sandbox (§6) completo | Dueño + desarrollo | "Mi plan" muestra contacto en lugar de pago; los planes se activan a mano desde `/admin`. |
-| B4 | Términos de servicio y política de privacidad | Dueño (texto legal) | No se deberían aceptar pagos ni datos de terceros sin ellos. |
-| B5 | Copia externa de los backups (§8) | Dueño (elige destino) | Si se pierde el servidor, se pierden también las copias. |
-| B6 | Definir la política de retención para cuentas pausadas (DECISIONS D-11) | Dueño | Los datos se conservan indefinidamente (comportamiento actual, seguro pero sin política escrita). |
+| B2 | Cuenta de Resend + dominio verificado (`RESEND_API_KEY`, `EMAIL_FROM`) | Dueño | Registro cerrado; no salen verificación de email, confirmaciones, recordatorios ni recuperación de contraseña. |
+| B3 | Credenciales de **prueba** de Mercado Pago + checklist de sandbox (§6) | Dueño + desarrollo | "Mi plan" y `/licencia` muestran contacto en lugar de pago; los planes se activan a mano desde `/admin`. |
+| B4 | Términos de servicio, política de privacidad y texto de la licencia de uso | Dueño (texto legal) | No se deberían aceptar pagos ni datos de terceros sin ellos. |
+| B5 | Destino de la copia externa de los backups (`deploy/rclone.conf`) | Dueño (elige destino) | Si se pierde el servidor, se pierden también las copias. |
+| B6 | Valor de la renovación anual de la licencia (`PRICE_LICENSE_RENEWAL`) y qué pasa si el cliente no renueva | Dueño | El sitio dice que el valor se informa por escrito antes de comprar. |
+| B7 | Credenciales **productivas** de Mercado Pago | Dueño (autorización explícita) | No hay cobros reales. |
 
-Se puede lanzar una **beta cerrada** con B1 + B2 resueltos y activando planes a mano; B3 hace falta para cobrar online.
+Resueltos en el código desde la evaluación inicial: verificación de email al registrarse, compra de la licencia por Mercado Pago, instalaciones independientes alojadas en el mismo servidor, copia externa de backups y precios definitivos.
+
+Se puede abrir a la **primera profesional** con B1 + B2 resueltos, activando su plan a mano desde `/admin`; B3 y B7 hacen falta para cobrar online.
 
 ## 3. Infraestructura: comparación
 
@@ -59,7 +65,8 @@ La aplicación necesita cuatro cosas: un proceso web (Next.js), un proceso worke
 2. **El `docker-compose.yml` del repositorio tal cual**: Caddy (HTTPS automático), web, worker, migraciones, PostgreSQL y backup diario.
 3. **Resend** para email (plan gratuito para la beta; Pro al superar ~10 negocios activos).
 4. **Monitor de uptime externo gratuito** sobre `https://DOMINIO/api/health`.
-5. **Copia externa de `backups/`** a un object storage (centavos de dólar por mes).
+5. **Copia externa de los backups** a un object storage (servicio `offsite`, centavos de dólar por mes).
+6. **Las licencias independientes, en el mismo servidor**, cada una como un proyecto de Compose aparte (DECISIONS D-34).
 
 Por qué no una plataforma administrada desde el inicio: cuesta entre 2 y 3 veces más para la misma carga, no sirve para la licencia de pago único y el empaquetado en Docker ya está hecho y probado. Por qué sí podría convenir: si no querés ocuparte de actualizar un servidor. Migrar a Railway más adelante es posible sin cambios de código (los mismos tres procesos); **no se migra nada sin tu aprobación**.
 
@@ -81,29 +88,41 @@ Cuándo revisar esta decisión: al pasar ~100 negocios, o al primer incidente de
 
 Supuestos: ~100–150 turnos por negocio por mes y ~2,5 emails por turno (confirmación, recordatorio y aviso al profesional). Con 10 negocios el plan gratuito de Resend alcanza en volumen mensual pero su tope de **100 emails por día** puede cortarse en un día cargado: conviene pasar a Pro apenas haya clientes pagos.
 
-### Ingresos y margen (plan mensual de ARS 7.900)
+### Ingresos y margen (Plan Profesional, ARS 14.000 por mes)
 
 Comisión de Mercado Pago con tarjeta de crédito, según plazo de acreditación (cifras de prensa de 2026, **verificar en el simulador de costos de tu cuenta**; no encontré la tarifa específica de suscripciones): ≈ 2,2 % a 35 días, ≈ 5,2 % a 10 días, ≈ 7,9 % en el momento (todas con IVA incluido).
 
 | | 10 negocios | 50 negocios | 100 negocios |
 |---|---|---|---|
-| Facturación mensual | ARS 79.000 | ARS 395.000 | ARS 790.000 |
-| Comisión MP (2,2 %–7,9 %) | 1.700–6.200 | 8.600–31.000 | 17.100–62.000 |
+| Facturación mensual | ARS 140.000 | ARS 700.000 | ARS 1.400.000 |
+| Comisión MP (2,2 %–7,9 %) | 3.100–11.100 | 15.400–55.300 | 30.800–110.600 |
 | Infraestructura | 24.000–74.000 | ≈ 74.000 | ≈ 74.000 |
-| **Margen antes de impuestos** | **≈ −1.000 a 53.000** | **≈ 290.000–312.000** | **≈ 654.000–699.000** |
+| **Margen antes de impuestos** | **≈ 55.000 a 113.000** | **≈ 571.000–611.000** | **≈ 1.215.000–1.295.000** |
 
-- **Costo marginal por negocio:** ≈ ARS 350–800 por mes (comisión de cobro + emails). El cómputo adicional es despreciable. El margen por cada negocio extra es superior al 90 %.
-- **Punto de equilibrio de infraestructura:** 4 negocios con la configuración mínima; 8 con Resend Pro.
-- **Impuestos (no incluidos arriba):** dependen de tu situación fiscal. Como referencia, la cuota de Monotributo categoría A informada para el segundo semestre de 2026 ronda los ARS 49.500 por mes, con tope de facturación anual de ≈ ARS 12.000.000 (≈ 127 negocios a este precio). Si esta fuera tu única actividad, con 10 negocios la cuota se lleva casi todo el margen. Consultalo con tu contador; Ingresos Brutos varía por provincia.
+- **ARS 14.000 equivale a ≈ US$ 9.** El costo marginal por negocio es de ≈ ARS 500–1.300 por mes (comisión de cobro + emails): el margen por cada negocio extra supera el 90 %.
+- **Punto de equilibrio de infraestructura:** 2 negocios con la configuración mínima; 6 con Resend Pro.
+- **Impuestos (no incluidos arriba):** dependen de tu situación fiscal. Como referencia, la cuota de Monotributo categoría A informada para el segundo semestre de 2026 ronda los ARS 49.500 por mes, con tope de facturación anual de ≈ ARS 12.000.000 (≈ 71 negocios a este precio, sin contar licencias). Consultalo con tu contador; Ingresos Brutos varía por provincia.
+- Los costos principales están en dólares y el precio en pesos: conviene revisarlo periódicamente. El precio que se cobra se edita en `/admin`; el que muestra la landing, con `PRICE_MONTHLY` (tienen que coincidir).
 
-### Evaluación de los precios actuales
+### Licencia independiente (ARS 199.000, pago único)
 
-- **ARS 7.900/mes equivale a ≈ US$ 5.** Cubre holgadamente el costo variable, pero el negocio recién deja margen relevante a partir de unas pocas decenas de clientes. Los costos principales (servidor, email, dominio) están en dólares y el precio en pesos: **conviene revisar el precio periódicamente** (por ejemplo, cada trimestre) para que no lo erosione la inflación. El precio es editable desde `/admin` sin tocar código.
-- **ARS 99.000 por la licencia equivale a ≈ US$ 63, una sola vez** — lo mismo que 12,5 meses de un plan mensual, sin ingreso recurrente. Entregarla exige trabajo tuyo (instalación, configuración de dominio y email, verificación: estimá de 1 a 3 horas) y genera consultas de soporte. Además, **para el cliente es más cara que el SaaS**: tiene que pagar su propio servidor (≈ US$ 12–24/mes ≈ ARS 19.000–38.000, más del doble de la cuota mensual). Recomendación: mantenerla como opción para quien necesita infraestructura propia, pero cobrando **por separado la instalación y un mantenimiento anual** (actualizaciones y verificación de backups), o subir el precio de la licencia. Es una decisión comercial tuya; el producto ya describe hosting, soporte y actualizaciones como ítems aparte.
+ARS 199.000 ≈ US$ 127, e incluye instalación, configuración y 12 meses de hosting, dominio y soporte. Como el hosting corre por tu cuenta, cada instalación se aloja en el mismo servidor que el SaaS (DECISIONS D-34), no en un servidor propio.
+
+| Costo del primer año, por licencia | Estimación |
+|---|---|
+| Hosting: ≈ 350–450 MB de RAM en el VPS compartido (un servidor de 4 GB aloja el SaaS y unas 6 instalaciones) | ≈ US$ 3–4 por mes → US$ 36–48 |
+| Dominio: subdominio propio (US$ 0) o dominio registrado para el cliente | US$ 0–15 (confirmar el arancel vigente si es `.com.ar`) |
+| Emails por Resend | Dentro del plan que ya paga la plataforma |
+| Comisión de Mercado Pago (2,2 %–7,9 %) | ARS 4.400–15.700 |
+| **Total** | **≈ ARS 61.000–115.000** |
+
+- **Margen del primer año:** ≈ ARS 84.000–138.000 por licencia, antes de impuestos y sin contar tu tiempo (instalación y carga inicial: 1 a 2 horas con `deploy/instance.sh`; soporte durante el año).
+- **Desde el segundo año** la licencia solo deja margen si la renovación anual de hosting, dominio y soporte cubre su costo (≈ ARS 57.000–99.000 por año a los valores de hoy). **Ese valor todavía no está definido (B6).** Como referencia, el Plan Profesional cuesta ARS 168.000 por año.
+- **Capacidad:** al pasar de ~6 instalaciones hay que subir el servidor de plan (≈ US$ 24 más por mes por cada 8 GB adicionales, según proveedor) o sumar un segundo servidor.
 
 ## 6. Mercado Pago: estado y checklist de sandbox
 
-**Qué está implementado** (`modules/billing/`, `app/api/webhooks/mercadopago/`): alta de suscripción sin plan asociado (`POST /preapproval`, estado `pending`, redirección al `init_point`), webhook con validación de firma `x-signature` (HMAC-SHA256, tolerancia de 10 minutos), registro idempotente de eventos (`payment_events`), estado tomado siempre de la API y nunca del cuerpo del webhook, cancelación (`PUT /preapproval/{id}`), y reconciliación periódica desde el worker. Está cubierto por tests con respuestas simuladas; **nunca se ejecutó contra Mercado Pago real**.
+**Qué está implementado** (`modules/billing/`, `app/api/webhooks/mercadopago/`): compra de la licencia con un pago único de Checkout Pro (`POST /checkout/preferences`, orden en `license_orders`, confirmación por webhook `payment`, por el retorno del checkout o por reconciliación; ver casos 14 a 20), y alta de suscripción sin plan asociado (`POST /preapproval`, estado `pending`, redirección al `init_point`), webhook con validación de firma `x-signature` (HMAC-SHA256, tolerancia de 10 minutos), registro idempotente de eventos (`payment_events`), estado tomado siempre de la API y nunca del cuerpo del webhook, cancelación (`PUT /preapproval/{id}`), y reconciliación periódica desde el worker. Está cubierto por tests con respuestas simuladas; **nunca se ejecutó contra Mercado Pago real**.
 
 **Configuración necesaria:**
 1. Crear una aplicación en el panel de desarrolladores de Mercado Pago.
@@ -129,38 +148,43 @@ Comisión de Mercado Pago con tarjeta de crédito, según plazo de acreditación
 | 12 | Reactivación | Volver a suscribirse con una cuenta cancelada o con la prueba vencida | Vuelve a "Plan activo" con todos sus datos. |
 | 13 | Cuenta suspendida | Suspender desde `/admin` una cuenta con suscripción y recibir un pago | La cuenta **sigue suspendida** (la suspensión manual tiene prioridad). |
 
-**Puntos a confirmar durante el sandbox** (supuestos del código que solo se validan contra la API real): que `GET /preapproval/{id}` devuelve `status`, `external_reference` y `next_payment_date` como se espera; el formato exacto de `subscription_authorized_payment` y de `GET /authorized_payments/{id}`; y el valor de `data.id` que firma Mercado Pago en cada tipo de evento. Si alguno difiere, el ajuste está acotado a `modules/billing/`.
+| 14 | Compra de licencia aprobada | En `/licencia`, completar el formulario, aceptar las condiciones y pagar con una tarjeta de prueba aprobada | Vuelve a `/licencia/orden/…` con "Recibimos tu pago". En `/admin` la orden figura "Pagada". Llegan dos emails: al comprador y al email de contacto. |
+| 15 | Compra de licencia rechazada | Pagar con una tarjeta de prueba rechazada | La orden queda "Pago rechazado"; no se envía ningún email de compra. Reintentar con una tarjeta aprobada desde el mismo checkout la deja "Pagada". |
+| 16 | Compra abandonada | Llegar al checkout y cerrar la pestaña | La orden queda "Sin pago confirmado" y no genera ningún aviso. |
+| 17 | Pago en efectivo o pendiente | Elegir un medio de pago offline | La página de la orden muestra "Estamos esperando la confirmación"; pasa a "Pagada" cuando Mercado Pago acredita. |
+| 18 | Webhook de pago duplicado | Reenviar la notificación `payment` desde el simulador | Responde 200 con `duplicate`; no se repiten emails ni cambia la orden. |
+| 19 | Webhook de pago perdido | Detener `web` durante el pago y volver a levantarlo | Al abrir la página de la orden, o en la siguiente reconciliación (hasta 30 minutos), queda "Pagada". |
+| 20 | Devolución | Devolver el pago desde la cuenta del vendedor de prueba | La orden pasa a "Devuelta". |
+
+**Puntos a confirmar durante el sandbox** (supuestos del código que solo se validan contra la API real): que `GET /preapproval/{id}` devuelve `status`, `external_reference` y `next_payment_date` como se espera; el formato exacto de `subscription_authorized_payment` y de `GET /authorized_payments/{id}`; el valor de `data.id` que firma Mercado Pago en cada tipo de evento; y, para la licencia, que la notificación `payment` llega al webhook configurado en el panel (la preferencia no define `notification_url`) y que `GET /v1/payments/search?external_reference=…` devuelve los pagos de la orden. Si alguno difiere, el ajuste está acotado a `modules/billing/`.
 
 **No pasar a credenciales productivas sin tu autorización explícita.**
 
-## 7. Licencia de pago único (instalación independiente)
+## 7. Licencia independiente
 
-**Qué se instala en la infraestructura del cliente** (todo, es una copia completa y aislada):
+**Qué compra el cliente** (DECISIONS D-32): licencia de uso permanente, instalación y configuración, y 12 meses de hosting, dominio y soporte. Sin entrega del código fuente.
+
+**Cómo se vende:** `/licencia` → formulario con aceptación de las condiciones → pago único en Mercado Pago → la orden aparece como "Pagada" en `/admin` y llegan los avisos por email. Sin credenciales de Mercado Pago la página muestra el contacto en lugar del formulario.
+
+**Cómo se entrega:** una instalación por cliente, creada con `deploy/instance.sh create <nombre> <dominio>` en el mismo servidor del SaaS (paso a paso en `docs/DEPLOYMENT.md` §9). Cada instalación tiene:
 
 | Componente | Detalle |
 |---|---|
-| Servidor | VPS propio del cliente (2 vCPU / 2–4 GB), con Docker. |
-| Dominio y DNS | Del cliente, apuntando a su servidor. HTTPS automático con Caddy. |
-| Aplicación y worker | Imágenes de Docker ya construidas (`runner`), con `DEPLOYMENT_MODE=standalone`. |
-| Base de datos | PostgreSQL propio, en el mismo servidor, con volumen persistente. |
-| Migraciones y scripts | Imagen `migrator` (no contiene el código fuente de la app). |
-| Backups | Servicio `backup` diario; la copia externa la define el cliente. |
-| Email | Cuenta de Resend y dominio de envío **del cliente** (o no hay emails ni recuperación de contraseña). |
+| Aplicación y worker | Contenedores propios, con las mismas imágenes del SaaS y `DEPLOYMENT_MODE=standalone`. |
+| Base de datos | PostgreSQL propio, con volumen propio. No comparte base con el SaaS ni con otras instalaciones. |
+| Secretos | `AUTH_SECRET`, `CRON_SECRET` y contraseña de la base generados para esa instalación. |
+| Dominio y HTTPS | El dominio del cliente (o un subdominio), con certificado automático en el proxy compartido. |
+| Backups | Copia diaria propia en `instances/<nombre>/backups`, incluida en la copia externa. |
+| Email | La cuenta de Resend de la plataforma; el remitente se puede personalizar por instalación. |
 
-**Cómo se entrega sin transferir el código fuente:** se usa `deploy/docker-compose.standalone.yml`, que referencia imágenes en lugar de construir desde el repositorio. Las imágenes se generan con `docker build -t agendia:VERSION .` y `docker build --target migrator -t agendia-migrator:VERSION .`, y se entregan con `docker save`/`docker load` o desde un registro privado. **No clonar el repositorio en el servidor del cliente.**
+**Qué cambia en modo standalone:** sin prueba gratuita ni restricciones por estado comercial, sin "Mi plan", sin `/admin`, sin landing, precios ni venta de licencias (la raíz lleva al ingreso), y el registro acepta **una sola cuenta** (la primera, que verifica su email).
 
-**Qué cambia en modo standalone** (ya implementado): sin prueba gratuita ni restricciones por estado comercial, sin "Mi plan", sin `/admin`, sin landing ni precios (la raíz lleva al ingreso), y el registro acepta **una sola cuenta** (la primera).
+**Sin entrega del código:** el cliente no tiene acceso al servidor. Si alguna vez una instalación se muda a un servidor del cliente, se usa `docker-compose.standalone.yml` con el perfil `proxy` y las imágenes exportadas (`docker save`); el repositorio no se clona ahí.
 
-**Qué necesita soporte y mantenimiento** (a presupuestar aparte, como ya dice la oferta):
-- Instalación inicial: servidor, DNS, `.env.production`, verificación de email y de backups.
-- Actualizaciones: entregar imágenes nuevas y correr `up -d` (las migraciones se aplican solas). Sin contrato de mantenimiento, el cliente queda en la versión instalada.
-- Sistema operativo y seguridad del servidor: responsabilidad del cliente, salvo que lo contrate.
-- Recuperación de acceso y restauración de backups: requieren acceso al servidor.
-
-**Lo que todavía no existe:**
-- **Verificación técnica de licencia.** El diseño con firma Ed25519 (DECISIONS D-06) no está implementado: hoy la licencia es contractual. Nada impide técnicamente reutilizar las imágenes. Decidí si alcanza con el contrato o si se implementa antes de vender la primera.
-- **Envío por SMTP.** Hoy el único canal es Resend; un cliente que quiera usar su propio servidor de correo no puede.
-- **Texto de la licencia de uso** (alcance, cantidad de instalaciones, actualizaciones, soporte): es un documento legal a redactar.
+**Lo que no existe y hay que decidir:**
+- **Qué pasa al mes 13 si el cliente no renueva** (B6): la licencia de uso es permanente, pero el hosting es un servicio anual. No hay un corte automático: suspender una instalación es una acción manual (`docker compose -p agendia-<nombre> stop`), y entregarle sus datos, también (`instance.sh backup`).
+- **Verificación técnica de licencia** (firma Ed25519, DECISIONS D-06): no implementada. Mientras las instalaciones estén alojadas por la plataforma no hace falta; solo importaría al entregar imágenes a un tercero.
+- **Texto de la licencia de uso** (B4).
 
 ## 8. Seguridad multi-tenant: auditoría
 
@@ -181,7 +205,7 @@ Se revisaron todos los puntos de entrada: 10 archivos de server actions, 5 route
 **Tests agregados:** `test/tenant-isolation.test.ts` ejecuta las server actions reales con la sesión de un negocio y los identificadores de otro (servicios, clientes, turnos, bloqueos, búsqueda, disponibilidad, panel de plataforma, modo solo lectura y onboarding). `test/registration.test.ts` cubre la apertura del registro y la protección de fichas de clientes.
 
 **Riesgos que quedan (aceptados o pendientes):**
-- **El registro no verifica el email.** Alguien puede crear una cuenta con un email ajeno; no accede a datos de nadie, pero ocupa ese email. Mitigación futura: verificación por email al registrarse (requiere Resend).
+- **Verificación de email: resuelto.** Una cuenta nueva no puede usar la aplicación hasta confirmar su email (§9). Una cuenta sin confirmar con un email ajeno no bloquea a su dueño real: al usar «Olvidé mi contraseña» recupera esa cuenta y cierra cualquier sesión abierta.
 - **Sin segunda capa en la base (RLS)**: el aislamiento depende del código y de los tests (DECISIONS D-24).
 - **Rate limiting por IP**: confía en la cabecera que pone Caddy. Es correcto mientras `web` no se exponga directamente a Internet (el compose no publica su puerto).
 - **Sin doble factor** para el panel de plataforma: usar una contraseña única y larga en esa cuenta.
@@ -193,6 +217,7 @@ Se revisaron todos los puntos de entrada: 10 archivos de server actions, 5 route
 - Sin email, `/olvide-contrasena` deriva a soporte en lugar de prometer un envío.
 - **Respaldo de soporte:** `scripts/create-reset-link.mjs <email>` genera un enlace de un solo uso desde el servidor (queda auditado). Usarlo solo tras verificar la identidad del titular por otro medio.
 - Cambiar o restablecer la contraseña cierra todas las sesiones abiertas.
+- **Verificación de email:** al registrarse, la cuenta recibe un enlace (un uso, 48 horas) y no puede usar la aplicación hasta abrirlo; desde la pantalla de espera se puede pedir otro. Restablecer la contraseña desde el email también confirma la casilla. `admin:grant` solo acepta cuentas verificadas.
 
 ## 10. Configuración de Resend
 
@@ -216,9 +241,9 @@ Ambas variables están documentadas en `.env.example` y `deploy/.env.production.
 4. **Configurar** `.env.production` a partir de `deploy/.env.production.example` (`chmod 600`): dominio, contraseña de la base, `AUTH_SECRET`, `CRON_SECRET`, contacto.
 5. **Levantar:** `docker compose --env-file .env.production up -d --build`. Verificar `https://DOMINIO/api/health`.
 6. **Email:** completar §10 y verificar con el script de prueba.
-7. **Tu cuenta:** registrarte, completar el onboarding y otorgarte el panel: `docker compose --env-file .env.production run --rm migrate node scripts/grant-admin.mjs tu@email.com`.
+7. **Tu cuenta:** registrarte, confirmar el email, completar el onboarding y otorgarte el panel: `docker compose --env-file .env.production run --rm migrate node scripts/grant-admin.mjs tu@email.com`.
 8. **Monitoreo:** alta de un monitor de uptime sobre `/api/health` con aviso por email.
-9. **Backups:** confirmar que aparece `backups/daily/…`, correr el simulacro `./deploy/restore.sh <archivo>` y programar la copia externa.
+9. **Backups:** confirmar que aparece `backups/daily/…`, correr el simulacro `./deploy/restore.sh <archivo>` y activar la copia externa (`docs/DEPLOYMENT.md` §7).
 10. **Prueba de humo en producción:** crear un turno, reservar desde la página pública con otro email, verificar que llegan confirmación y aviso, cancelar desde el enlace.
 11. **Publicar** términos y privacidad (B4) antes de invitar negocios.
 12. **Mercado Pago:** completar §6 en staging; recién después, con tu autorización, cargar credenciales productivas.

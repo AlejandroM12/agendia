@@ -57,7 +57,7 @@
 **Motivo:** con solo la constraint, ráfagas de reservas simultáneas terminaban en deadlocks lentos; el lock las pone en fila y la respuesta "horario ocupado" es inmediata.
 
 ### D-30 · Precios de referencia y alta manual
-**Estado:** CONFIRMADO.
+**Estado:** REEMPLAZADO por D-32 en cuanto a los valores; la activación manual desde `/admin` sigue vigente.
 **Decisión:** plan mensual ARS 7.900 (editable desde `/admin`, tabla `plans`) y licencia de pago único ARS 99.000 (por consulta). Mientras Mercado Pago no tenga credenciales, el plan se activa manualmente desde `/admin`.
 **Motivo:** permite vender desde el primer día sin depender de la integración de pagos.
 
@@ -65,6 +65,26 @@
 **Estado:** CONFIRMADO (reemplaza la paleta celeste de D-01; el nombre y el eslogan no cambian).
 **Decisión:** "papel y tinta": fondo de papel cálido, verde pino como color de acción, terracota como único acento, títulos en Fraunces e interfaz en Geist. Tokens en `app/globals.css`, tipografías en `app/layout.tsx`, textos y precios en `lib/brand.ts`.
 **Motivo:** una identidad propia y reconocible, lejos de la plantilla de panel administrativo.
+
+### D-32 · Precios definitivos y condiciones de la licencia
+**Estado:** CONFIRMADO.
+**Decisión:** dos modalidades con el mismo peso comercial. **Plan Profesional:** ARS 14.000 por mes, 7 días de prueba, hosting y soporte incluidos. **Licencia independiente:** ARS 199.000, pago único, licencia de uso permanente, instalación y configuración incluidas, hosting, dominio y soporte incluidos durante 12 meses, instalación independiente y sin entrega del código fuente. Las condiciones de renovación de los servicios anuales se muestran antes de comprar (landing, `/precios`, `/licencia` y casilla de aceptación en el formulario); el valor de la renovación se publica con `PRICE_LICENSE_RENEWAL`. Las cards comerciales no mencionan actualizaciones.
+**Motivo:** decisión comercial del dueño.
+
+### D-33 · Compra de la licencia por Mercado Pago
+**Estado:** CONFIRMADO.
+**Decisión:** la licencia se compra en `/licencia` con un pago único de Checkout Pro. La orden (`license_orders`) solo pasa a pagada con un pago aprobado consultado a la API (webhook `payment`, retorno del checkout o reconciliación), por el importe y la moneda de la orden. La instalación se crea después, a mano, con `deploy/instance.sh`.
+**Motivo:** mismo criterio que las suscripciones: nunca confiar en el navegador ni en el cuerpo del webhook.
+
+### D-34 · Las licencias se alojan en el servidor de la plataforma
+**Estado:** CONFIRMADO (revisable si una instalación necesita recursos propios).
+**Decisión:** como la licencia incluye 12 meses de hosting, cada instalación independiente corre en el mismo VPS que el SaaS como un proyecto de Docker Compose aparte: base de datos, secretos, contenedores y copias propios, detrás del proxy HTTPS compartido. `deploy/docker-compose.standalone.yml` también sirve para un servidor separado (perfil `proxy`).
+**Motivo:** un servidor por licencia costaría más que lo que deja la licencia; el aislamiento de datos se mantiene porque no se comparte ni la base ni el proceso.
+
+### D-35 · Verificación de email obligatoria
+**Estado:** CONFIRMADO.
+**Decisión:** una cuenta nueva no puede usar la aplicación hasta abrir el enlace de verificación (token de un uso, 48 horas, guardado como hash). Restablecer la contraseña desde el email también confirma la casilla. Sin canal de email (desarrollo, pruebas) la cuenta nace verificada. `admin:grant` exige una cuenta verificada.
+**Motivo:** impide registrar cuentas con el email de otra persona y garantiza que la recuperación de contraseña llegue a su dueño.
 
 ### D-01 · Identidad comercial (nombre + identidad visual)
 **Estado:** CONFIRMADO. Identidad visual inicial aprobada.
