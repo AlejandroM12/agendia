@@ -1,0 +1,17 @@
+# Se suma a docker-compose.standalone.yml cuando la instalación independiente
+# vive en el servidor de Agendia: en vez de levantar su propio proxy, publica
+# la aplicación en la red del proxy que ya está corriendo (docker-compose.yml),
+# con un nombre único. Lo usa deploy/instance.sh.
+
+services:
+  app:
+    networks:
+      default:
+      edge:
+        aliases:
+          - ${INSTANCE:?definir INSTANCE}-app
+
+networks:
+  edge:
+    name: agendia-edge
+    external: true

@@ -27,6 +27,15 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
+  // robots.txt y sitemap.xml se generan al construir la imagen, con el
+  // dominio del SaaS. Una instalación independiente usa la misma imagen con
+  // otro dominio: responde los suyos acá.
+  if (isStandalone() && pathname === "/sitemap.xml") return new NextResponse(null, { status: 404 });
+  if (isStandalone() && pathname === "/robots.txt") {
+    const rules = ["User-agent: *", "Allow: /", "Disallow: /dashboard", "Disallow: /onboarding", "Disallow: /api", "Disallow: /turno"];
+    return new NextResponse(`${rules.join("\n")}\n`, { headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
+
   // Una instalación independiente no es un sitio comercial: la raíz lleva
   // directo a ingresar, sin landing ni precios del SaaS.
   if (isStandalone() && (pathname === "/" || pathname === "/precios" || matches("/licencia"))) {

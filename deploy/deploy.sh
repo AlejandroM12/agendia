@@ -43,3 +43,9 @@ done
 
 docker image prune -f > /dev/null
 echo "Listo: $(git rev-parse --short HEAD) en producción."
+
+# Las instalaciones independientes siguen con la imagen anterior hasta que
+# se actualizan (cada una hace antes su propia copia de seguridad).
+if ls instances/*/.env > /dev/null 2>&1; then
+  echo "Hay instalaciones independientes: actualizalas con ./deploy/instance.sh update-all"
+fi

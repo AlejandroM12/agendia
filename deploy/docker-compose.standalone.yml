@@ -1,14 +1,24 @@
 # Agendia — instalación independiente (licencia de pago único).
 #
-# Igual que docker-compose.yml, pero con imágenes ya construidas en lugar del
-# código fuente: la licencia es de uso y no incluye el código. En el servidor
-# del cliente solo hacen falta este archivo, Caddyfile, backup.sh y un
-# .env.production (ver docs/PRODUCTION_READINESS.md §7).
+# Usa imágenes ya construidas en lugar del código fuente: la licencia es de
+# uso y no incluye el código. Cada instalación tiene su propia base de datos,
+# sus propios contenedores y sus propias copias de seguridad.
 #
-#   docker compose -f docker-compose.standalone.yml --env-file .env.production up -d
+# Dos formas de usarlo:
 #
-# AGENDIA_IMAGE / AGENDIA_MIGRATOR_IMAGE apuntan a las imágenes entregadas
-# (cargadas con `docker load` o desde un registro privado).
+# 1. Alojada en el servidor de Agendia, detrás del proxy que ya está
+#    corriendo (lo habitual: hosting incluido en la licencia). No se ejecuta
+#    a mano: lo hace deploy/instance.sh, que suma
+#    docker-compose.shared-proxy.yml.
+#
+# 2. En un servidor aparte, con su propio proxy HTTPS (perfil `proxy`):
+#      docker compose -f docker-compose.standalone.yml --profile proxy \
+#        --env-file .env.production up -d
+#    En ese servidor hacen falta este archivo, Caddyfile, backup.sh y las
+#    imágenes (cargadas con `docker load` o desde un registro privado).
+#
+# La aplicación se llama `app` (y no `web`, como en docker-compose.yml) para
+# que el proxy compartido nunca la confunda con la del SaaS.
 
 x-app-env: &app-env
   NODE_ENV: production
@@ -46,7 +56,7 @@ services:
     logging: *logging
 
   migrate:
-    image: ${AGENDIA_MIGRATOR_IMAGE:?definir AGENDIA_MIGRATOR_IMAGE}
+    image: ${AGENDIA_MIGRATOR_IMAGE:-agendia-migrator:latest}
     environment: *app-env
     depends_on:
       postgres:
@@ -54,8 +64,8 @@ services:
     restart: "no"
     logging: *logging
 
-  web:
-    image: ${AGENDIA_IMAGE:?definir AGENDIA_IMAGE}
+  app:
+    image: ${AGENDIA_IMAGE:-agendia-web:latest}
     restart: unless-stopped
     environment: *app-env
     depends_on:
@@ -66,20 +76,21 @@ services:
     logging: *logging
 
   worker:
-    image: ${AGENDIA_IMAGE}
+    image: ${AGENDIA_IMAGE:-agendia-web:latest}
     restart: unless-stopped
     command: ["node", "scripts/worker.mjs"]
     environment:
       CRON_SECRET: ${CRON_SECRET}
-      WORKER_TARGET_URL: http://web:3000
+      WORKER_TARGET_URL: http://app:3000
     healthcheck:
       disable: true
     depends_on:
-      web:
+      app:
         condition: service_healthy
     logging: *logging
 
   caddy:
+    profiles: ["proxy"]
     image: caddy:2-alpine
     restart: unless-stopped
     ports:
@@ -88,12 +99,13 @@ services:
       - "443:443/udp"
     environment:
       DOMAIN: ${DOMAIN}
+      UPSTREAM: app:3000
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
-      - web
+      - app
     logging: *logging
 
   backup:
@@ -113,6 +125,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      # Después de las migraciones: la primera copia no debe ser de una base vacía.
+      migrate:
+        condition: service_completed_successfully
     logging: *logging
 
 volumes:

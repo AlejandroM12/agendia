@@ -1,15 +1,17 @@
-# Proxy inverso con HTTPS automático. Caddy obtiene y renueva solo el
-# certificado de Let's Encrypt para {$DOMAIN}; el DNS del dominio debe
-# apuntar a este servidor y los puertos 80 y 443 estar abiertos.
+# Proxy inverso con HTTPS automático. Caddy obtiene y renueva solo los
+# certificados de Let's Encrypt; el DNS de cada dominio debe apuntar a este
+# servidor y los puertos 80 y 443 estar abiertos.
 
-{$DOMAIN} {
+# Configuración común de un sitio de Agendia. Argumento: el contenedor de la
+# aplicación (host:puerto).
+(agendia) {
 	encode zstd gzip
 
 	# El punto de entrada del worker es interno: nunca se expone a Internet.
 	@internal path /api/internal/*
 	respond @internal 404
 
-	reverse_proxy web:3000 {
+	reverse_proxy {args[0]} {
 		health_uri /api/health
 		health_interval 30s
 	}
@@ -19,3 +21,11 @@
 		format console
 	}
 }
+
+{$DOMAIN} {
+	import agendia {$UPSTREAM:web:3000}
+}
+
+# Instalaciones independientes alojadas en este mismo servidor: un archivo
+# por instalación, creado por deploy/instance.sh.
+import sites/*.caddy
