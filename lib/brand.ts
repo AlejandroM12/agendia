@@ -31,9 +31,35 @@ export const trialPolicy = {
  */
 export const pricing = {
   currency: "ARS",
-  monthly: Number(process.env.PRICE_MONTHLY ?? 7900),
-  oneTime: Number(process.env.PRICE_ONE_TIME ?? 99000),
+  monthly: Number(process.env.PRICE_MONTHLY ?? 14000),
+  oneTime: Number(process.env.PRICE_ONE_TIME ?? 199000),
 } as const;
+
+/** Nombres comerciales de las dos modalidades. */
+export const offers = {
+  monthly: "Plan Profesional",
+  license: "Licencia independiente",
+} as const;
+
+/**
+ * Condiciones de la licencia independiente. La licencia de uso es
+ * permanente; hosting, dominio y soporte están incluidos el primer año y
+ * después se renuevan por año. El valor de esa renovación se publica con
+ * PRICE_LICENSE_RENEWAL; sin ese dato se informa por escrito antes de la compra.
+ */
+const renewalPrice = Number(process.env.PRICE_LICENSE_RENEWAL ?? 0);
+export const licenseTerms = {
+  includedServiceMonths: 12,
+  renewalPrice: Number.isFinite(renewalPrice) && renewalPrice > 0 ? renewalPrice : null,
+} as const;
+
+export function licenseRenewalText(): string {
+  const months = licenseTerms.includedServiceMonths;
+  const value = licenseTerms.renewalPrice
+    ? `tiene un valor de ${formatMoney(licenseTerms.renewalPrice)} por año`
+    : "se hace al valor vigente en ese momento, que te informamos por escrito antes de que compres";
+  return `La licencia de uso no vence. Hosting, dominio y soporte están incluidos durante los primeros ${months} meses; a partir del mes ${months + 1} su renovación es anual y ${value}.`;
+}
 
 export function formatMoney(amount: number, currency: string = pricing.currency): string {
   return new Intl.NumberFormat("es-AR", {

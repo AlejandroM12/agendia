@@ -2,7 +2,7 @@ import { BellRing, CalendarDays, Clock, Link2, MessageCircle, Repeat, ShieldChec
 import { PricingCards } from "@/components/marketing/pricing-cards";
 import { AgendaPreview, BookingPreview, ReminderPreview } from "@/components/marketing/product-preview";
 import { ButtonLink } from "@/components/ui/button-link";
-import { brand, trialPolicy } from "@/lib/brand";
+import { brand, licenseRenewalText, offers, trialPolicy } from "@/lib/brand";
 
 const AUDIENCES = [
   "Peluquerías y barberías", "Manicuras", "Estética", "Psicología", "Nutrición", "Kinesiología",
@@ -30,7 +30,7 @@ const FAQS = [
   { q: "¿Mis clientes tienen que registrarse o instalar algo?", a: "No. Entran a tu enlace, eligen servicio, día y horario, dejan su nombre y un contacto, y listo." },
   { q: "¿Cómo me entero de una reserva nueva?", a: "Aparece al instante en tu agenda y, si querés, también te avisamos por email." },
   { q: "¿Sirve para mi rubro?", a: "Si trabajás con turnos, sí. Vos definís tus propios servicios, duraciones y horarios: no está atada a ninguna actividad en particular." },
-  { q: "¿Qué diferencia hay entre el plan mensual y el pago único?", a: `Con el plan mensual usás ${brand.name} online y nosotros nos ocupamos del servidor, las copias de seguridad y las actualizaciones. El pago único es una licencia de uso para instalar ${brand.name} en tu propia infraestructura, con tu propia base de datos; el hosting, el soporte y las actualizaciones se cotizan aparte y no incluye el código fuente.` },
+  { q: `¿Qué diferencia hay entre el ${offers.monthly} y la ${offers.license}?`, a: `Con el ${offers.monthly} pagás por mes y usás ${brand.name} online, con hosting y soporte incluidos mientras dure la suscripción. La ${offers.license} es un pago único por una licencia de uso permanente: una instalación independiente, con base de datos propia, que instalamos y configuramos por vos. No incluye el código fuente. ${licenseRenewalText()}` },
   { q: "¿Puedo cancelar cuando quiera?", a: "Sí. No hay permanencia mínima y tus datos siguen siendo tuyos." },
 ];
 
@@ -208,7 +208,7 @@ export default function LandingPage() {
 
       {/* Precios */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <SectionHeading eyebrow="Precios" title="Un precio claro, sin sorpresas" text="Probala gratis y decidí después." />
+        <SectionHeading eyebrow="Precios" title="Dos formas de tenerla" text="Por mes o con un pago único. Las mismas funciones en las dos." />
         <PricingCards className="mt-12" />
       </section>
 
@@ -237,7 +237,10 @@ export default function LandingPage() {
           <p className="mx-auto mt-3 max-w-xl text-lg text-accent-foreground/80">
             Creá tu cuenta, cargá tus servicios y compartí tu enlace. Te lleva menos que un café.
           </p>
-          <ButtonLink size="lg" className="mt-7" href="/registro">Empezar gratis</ButtonLink>
+          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
+            <ButtonLink size="lg" href="/registro">Empezar gratis</ButtonLink>
+            <ButtonLink size="lg" variant="outline" href="/licencia">Ver la {offers.license.toLowerCase()}</ButtonLink>
+          </div>
         </div>
       </section>
     </>

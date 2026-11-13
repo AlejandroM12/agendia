@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check } from "lucide-react";
 import { CancelSubscriptionButton, SubscribeButton } from "@/components/billing/billing-actions";
@@ -6,7 +7,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
-import { brand, formatMoney, pricing, trialPolicy } from "@/lib/brand";
+import { brand, formatMoney, licenseTerms, offers, pricing, trialPolicy } from "@/lib/brand";
 import { isStandalone } from "@/lib/deployment";
 import { daysRemainingInTrial, getEffectiveStatus } from "@/lib/organization-access";
 import { formatDateLong, toZoned } from "@/lib/time";
@@ -20,7 +21,7 @@ const INCLUDED = [
   "Página de reservas online propia",
   "Clientes e historial",
   "Confirmaciones y recordatorios por email",
-  "Actualizaciones y soporte",
+  "Hosting y soporte incluidos",
 ];
 
 export default async function BillingPage(props: PageProps<"/dashboard/facturacion">) {
@@ -93,7 +94,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
       </div>
 
       <div className="mt-10 space-y-10">
-        <Section title="Plan mensual">
+        <Section title={offers.monthly}>
           <div className="rounded-2xl border border-border bg-card p-5">
             <p>
               <span className="font-display text-4xl font-semibold">{price}</span>
@@ -128,14 +129,15 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
           </div>
         </Section>
 
-        <Section title="¿Preferís un pago único?">
+        <Section title={offers.license}>
           <p className="max-w-prose text-sm text-muted-foreground">
-            También ofrecemos una licencia de uso con instalación independiente por{" "}
-            <span className="font-medium text-foreground">{formatMoney(pricing.oneTime)}</span> (pago único): {brand.name}{" "}
-            instalado en tu propia infraestructura, con tu base de datos. Consultanos a{" "}
-            <a href={`mailto:${brand.contactEmail}`} className="font-medium text-primary underline underline-offset-4">
-              {brand.contactEmail}
-            </a>
+            También podés tener {brand.name} con una licencia de uso permanente por{" "}
+            <span className="font-medium text-foreground">{formatMoney(pricing.oneTime)}</span> (pago único): instalación
+            independiente, con instalación, configuración y {licenseTerms.includedServiceMonths} meses de hosting, dominio
+            y soporte incluidos.{" "}
+            <Link href="/licencia" className="font-medium text-primary underline underline-offset-4">
+              Ver condiciones
+            </Link>
             .
           </p>
         </Section>

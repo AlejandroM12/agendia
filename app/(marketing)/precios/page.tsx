@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { PricingCards } from "@/components/marketing/pricing-cards";
-import { brand, trialPolicy } from "@/lib/brand";
+import { brand, licenseRenewalText, offers, trialPolicy } from "@/lib/brand";
 
 export const metadata: Metadata = {
   title: "Precios",
-  description: `Planes de ${brand.name}: ${trialPolicy.trialDays} días de prueba gratis, plan mensual o licencia de pago único con instalación independiente.`,
+  description: `Planes de ${brand.name}: ${trialPolicy.trialDays} días de prueba gratis, ${offers.monthly} mensual o ${offers.license} de pago único.`,
 };
 
 export default function PricingPage() {
@@ -13,7 +13,8 @@ export default function PricingPage() {
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="font-display text-4xl font-semibold sm:text-5xl">Precios</h1>
         <p className="mt-4 text-lg text-muted-foreground">
-          Empezá con {trialPolicy.trialDays} días gratis, sin tarjeta. Si te sirve, seguís; si no, no pagás nada.
+          Dos formas de tener {brand.name}: por mes, con {trialPolicy.trialDays} días de prueba gratis, o con una
+          licencia de pago único.
         </p>
       </div>
 
@@ -21,9 +22,13 @@ export default function PricingPage() {
 
       <div className="mx-auto mt-12 max-w-2xl rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
         <p>
-          <strong className="text-foreground">¿Qué pasa al terminar la prueba?</strong> Tu cuenta queda en solo lectura
+          <strong className="text-foreground">¿Qué pasa al terminar la prueba del {offers.monthly}?</strong> Tu cuenta queda en solo lectura
           durante {trialPolicy.readonlyGraceDays} días: seguís viendo tus datos, pero no podés crear turnos ni recibir
           reservas hasta activar el plan. Nunca eliminamos datos automáticamente.
+        </p>
+        <p className="mt-3">
+          <strong className="text-foreground">¿Cómo se renueva la {offers.license.toLowerCase()}?</strong>{" "}
+          {licenseRenewalText()}
         </p>
         <p className="mt-3">
           ¿Dudas? Escribinos a{" "}
