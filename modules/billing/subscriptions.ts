@@ -2,9 +2,11 @@ import "server-only";
 
 import type { OrganizationStatus, Plan, SubscriptionStatus } from "@prisma/client";
 import { db } from "@/lib/db";
-import { pricing } from "@/lib/brand";
+import { offers, pricing } from "@/lib/brand";
+import { applyLicensePayment, reconcileLicenseOrders } from "./licenses";
 import {
   getAuthorizedPayment,
+  getPayment,
   getPreapproval,
   isMercadoPagoConfigured,
   type Preapproval,
@@ -15,7 +17,7 @@ export async function getMonthlyPlan(): Promise<Plan> {
   return db.plan.upsert({
     where: { code: "mensual" },
     update: {},
-    create: { code: "mensual", name: "Plan mensual", price: pricing.monthly, currency: pricing.currency },
+    create: { code: "mensual", name: offers.monthly, price: pricing.monthly, currency: pricing.currency },
   });
 }
 
@@ -125,7 +127,13 @@ export async function processPaymentEvent(event: { type: string; resourceId: str
       ]);
     }
   }
-  // Otros tipos de evento no afectan suscripciones: se registran y nada más.
+
+  // Pagos únicos: solo interesan los de una licencia (los cobros de una
+  // suscripción también llegan como "payment", y se ignoran acá).
+  if (event.type === "payment") {
+    await applyLicensePayment(await getPayment(event.resourceId));
+  }
+  // Otros tipos de evento se registran y nada más.
 }
 
 /**
@@ -168,5 +176,9 @@ export async function reconcileSubscriptions(limit = 20): Promise<{ checked: num
       console.error("[billing] no se pudo reconciliar la suscripción", subscription.id, error);
     }
   }
+
+  const licenses = await reconcileLicenseOrders();
+  result.checked += licenses.checked;
+  result.errors += licenses.errors;
   return result;
 }

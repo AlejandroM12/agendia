@@ -3,8 +3,9 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * Cliente mínimo de Mercado Pago (suscripciones / "preapproval"), sobre su
- * API HTTP. Sin credenciales (MERCADOPAGO_ACCESS_TOKEN y
+ * Cliente mínimo de Mercado Pago sobre su API HTTP: suscripciones
+ * ("preapproval") para el plan mensual y pagos únicos (Checkout Pro) para
+ * la licencia independiente. Sin credenciales (MERCADOPAGO_ACCESS_TOKEN y
  * MERCADOPAGO_WEBHOOK_SECRET) la integración se considera apagada y la
  * aplicación no ofrece el pago online.
  */
@@ -79,6 +80,46 @@ export const cancelPreapproval = (id: string) =>
 
 export const getAuthorizedPayment = (id: string) =>
   request<AuthorizedPayment>("GET", `/authorized_payments/${encodeURIComponent(id)}`);
+
+export type Payment = {
+  id: number | string;
+  status: "approved" | "rejected" | "pending" | "in_process" | "cancelled" | "refunded" | "charged_back" | string;
+  external_reference?: string | null;
+  transaction_amount?: number | null;
+  currency_id?: string | null;
+  date_approved?: string | null;
+};
+
+export type Preference = { id: string; init_point?: string | null };
+
+/** Pago único (Checkout Pro). Se usa para la compra de la licencia independiente. */
+export function createPreference(params: {
+  externalReference: string;
+  title: string;
+  amount: number;
+  currency: string;
+  payer: { email: string; name: string };
+  returnUrl: string;
+}): Promise<Preference> {
+  return request<Preference>("POST", "/checkout/preferences", {
+    items: [
+      { id: "licencia", title: params.title, quantity: 1, unit_price: params.amount, currency_id: params.currency },
+    ],
+    payer: { email: params.payer.email, name: params.payer.name },
+    external_reference: params.externalReference,
+    back_urls: { success: params.returnUrl, pending: params.returnUrl, failure: params.returnUrl },
+    // Mercado Pago solo acepta el retorno automático hacia URLs https.
+    ...(params.returnUrl.startsWith("https://") ? { auto_return: "approved" } : {}),
+  });
+}
+
+export const getPayment = (id: string) => request<Payment>("GET", `/v1/payments/${encodeURIComponent(id)}`);
+
+export async function searchPaymentsByReference(externalReference: string): Promise<Payment[]> {
+  const query = new URLSearchParams({ external_reference: externalReference, sort: "date_created", criteria: "desc" });
+  const result = await request<{ results?: Payment[] }>("GET", `/v1/payments/search?${query}`);
+  return result.results ?? [];
+}
 
 /**
  * Valida la firma de un webhook (header `x-signature: ts=…,v1=…`).

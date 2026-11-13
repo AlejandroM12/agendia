@@ -29,7 +29,7 @@ export default auth((req) => {
 
   // Una instalación independiente no es un sitio comercial: la raíz lleva
   // directo a ingresar, sin landing ni precios del SaaS.
-  if (isStandalone() && (pathname === "/" || pathname === "/precios")) {
+  if (isStandalone() && (pathname === "/" || pathname === "/precios" || matches("/licencia"))) {
     return NextResponse.redirect(new URL(isAuthenticated ? "/dashboard" : "/login", req.nextUrl.origin));
   }
 

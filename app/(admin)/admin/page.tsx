@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { OrganizationStatus } from "@prisma/client";
+import { connection } from "next/server";
+import type { LicenseOrderStatus, OrganizationStatus } from "@prisma/client";
 import { PlanPriceForm } from "@/components/admin/plan-price-form";
 import { Logo } from "@/components/brand/logo";
 import { Section } from "@/components/dashboard/section";
 import { Input } from "@/components/ui/input";
 import { db } from "@/lib/db";
 import { getEffectiveStatus } from "@/lib/organization-access";
+import { formatMoney, offers, pricing } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { type AccountOperation, accountOperationAction } from "@/modules/admin/actions";
 import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
@@ -23,6 +25,13 @@ const STATUS_LABEL: Record<OrganizationStatus, string> = {
   past_due: "Pago pendiente",
   canceled: "Cancelada",
   suspended: "Suspendida",
+};
+
+const LICENSE_STATUS_LABEL: Record<LicenseOrderStatus, string> = {
+  pending: "Sin pago confirmado",
+  paid: "Pagada",
+  rejected: "Pago rechazado",
+  refunded: "Devuelta",
 };
 
 const OPERATIONS: Record<AccountOperation, string> = {
@@ -42,12 +51,14 @@ function operationsFor(status: OrganizationStatus): AccountOperation[] {
 const shortDate = (date: Date) => date.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" });
 
 export default async function AdminPage(props: PageProps<"/admin">) {
+  // Siempre con datos del momento: nada de esta página se prerenderiza.
+  await connection();
   const params = await props.searchParams;
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 80) : "";
 
-  const [organizations, grouped, plan, failedNotifications, failedEvents, audit] = await Promise.all([
+  const [organizations, grouped, plan, failedNotifications, failedEvents, audit, licenseOrders] = await Promise.all([
     db.organization.findMany({
       where: q
         ? {
@@ -71,6 +82,7 @@ export default async function AdminPage(props: PageProps<"/admin">) {
     db.notification.count({ where: { status: "failed", createdAt: { gte: weekAgo } } }),
     db.paymentEvent.count({ where: { processedAt: null } }),
     db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 15 }),
+    db.licenseOrder.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
 
   const total = grouped.reduce((sum, g) => sum + g._count, 0);
@@ -172,8 +184,60 @@ export default async function AdminPage(props: PageProps<"/admin">) {
         </div>
       </Section>
 
-      <Section title="Precio del plan mensual" description="Se usa para las suscripciones que se inicien a partir de ahora.">
+      <Section
+        title={`Precio del ${offers.monthly}`}
+        description="Es lo que se cobra en las suscripciones que se inicien a partir de ahora. El precio que muestra la landing se define con PRICE_MONTHLY en .env.production y se aplica en el próximo despliegue: mantenelos iguales."
+      >
         <PlanPriceForm price={plan.price} currency={plan.currency} />
+      </Section>
+
+      <Section
+        title={offers.license}
+        description={`Precio publicado: ${formatMoney(pricing.oneTime)} (PRICE_ONE_TIME en .env.production). Una orden pasa a «Pagada» solo cuando Mercado Pago confirma el pago; después hay que crear la instalación (docs/DEPLOYMENT.md).`}
+      >
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-border text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">Negocio</th>
+                <th className="px-4 py-3 font-medium">Contacto</th>
+                <th className="px-4 py-3 font-medium">Estado</th>
+                <th className="px-4 py-3 font-medium">Fecha</th>
+                <th className="px-4 py-3 text-right font-medium">Importe</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {licenseOrders.map((order) => (
+                <tr key={order.id}>
+                  <td className="px-4 py-3">
+                    <p className="font-medium">{order.businessName}</p>
+                    <p className="text-xs text-muted-foreground">orden {order.id.slice(0, 8)}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p>{order.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {order.email}
+                      {order.phone && ` · ${order.phone}`}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                        order.status === "paid" ? "bg-success-soft text-success" : "bg-warning-soft text-warning",
+                      )}
+                    >
+                      {LICENSE_STATUS_LABEL[order.status]}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 tabular-nums">{shortDate(order.paidAt ?? order.createdAt)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{formatMoney(order.amount, order.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {licenseOrders.length === 0 && <p className="px-4 py-6 text-sm text-muted-foreground">Todavía no hay compras de licencia.</p>}
+        </div>
       </Section>
 
       <Section title="Últimas operaciones registradas">
