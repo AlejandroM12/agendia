@@ -18,10 +18,17 @@ export const registerOrganizationSchema = z.object({
     .regex(/[0-9]/, "Debe contener al menos un número."),
 });
 
-export type RegisterOrganizationInput = z.infer<typeof registerOrganizationSchema>;
+export type RegisterOrganizationInput = z.infer<typeof registerOrganizationSchema> & {
+  /**
+   * `true` crea la cuenta con el email ya verificado. Solo corresponde
+   * cuando no hay canal para enviar el enlace de verificación (ver
+   * modules/auth/email-verification.ts).
+   */
+  emailVerified?: boolean;
+};
 
 export type RegisterOrganizationResult =
-  | { success: true; userId: string }
+  | { success: true; userId: string; email: string; name: string }
   | { success: false; error: string };
 
 /**
@@ -62,6 +69,7 @@ export async function registerOrganization(
         email: input.email,
         name: input.name,
         passwordHash,
+        emailVerifiedAt: input.emailVerified ? now : null,
       },
     });
 
@@ -81,5 +89,5 @@ export async function registerOrganization(
     return createdUser;
   });
 
-  return { success: true, userId: user.id };
+  return { success: true, userId: user.id, email: user.email, name: user.name };
 }

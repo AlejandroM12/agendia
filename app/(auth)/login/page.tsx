@@ -2,7 +2,17 @@ import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/login-form";
 
 export const metadata: Metadata = { title: "Iniciar sesión" };
+export const instant = false;
 
-export default function LoginPage() {
-  return <LoginForm />;
+const NOTICES: Record<string, { message: string; tone: "success" | "error" }> = {
+  confirmado: { message: "Tu email quedó confirmado. Ingresá para continuar.", tone: "success" },
+  "enlace-invalido": {
+    message: "Ese enlace no es válido o ya venció. Ingresá y te enviamos uno nuevo.",
+    tone: "error",
+  },
+};
+
+export default async function LoginPage(props: PageProps<"/login">) {
+  const email = (await props.searchParams).email;
+  return <LoginForm notice={typeof email === "string" ? NOTICES[email] : undefined} />;
 }

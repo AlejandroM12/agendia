@@ -343,11 +343,15 @@ model User {
   // Acceso al panel de plataforma (/admin). Solo se otorga desde el servidor
   // con `npm run admin:grant` — nunca por configuración ni desde la app.
   isPlatformAdmin Boolean @default(false)
+  // Momento en que la persona demostró que controla la casilla. Sin esto no
+  // se puede usar la cuenta (ver lib/dal.ts).
+  emailVerifiedAt DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships         Membership[]
-  passwordResetTokens PasswordResetToken[]
+  memberships             Membership[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
 
   @@map("users")
 }
@@ -379,4 +383,46 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("password_reset_tokens")
+}
+
+// Igual que PasswordResetToken: solo se guarda el hash del token.
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+enum LicenseOrderStatus {
+  pending // creada, sin pago confirmado
+  paid
+  rejected
+  refunded
+}
+
+// Compra de una licencia independiente (pago único). No pertenece a ninguna
+// organización: la instalación se crea aparte, después del pago.
+model LicenseOrder {
+  id                   String             @id @default(uuid())
+  name                 String
+  email                String
+  phone                String?
+  businessName         String
+  amount               Int
+  currency             String
+  status               LicenseOrderStatus @default(pending)
+  providerPreferenceId String?
+  providerPaymentId    String?            @unique
+  paidAt               DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([status, createdAt])
+  @@map("license_orders")
 }

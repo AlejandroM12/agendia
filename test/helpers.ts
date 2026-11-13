@@ -37,6 +37,7 @@ export async function createSchedulableOrganization() {
     name: "Owner Test",
     email: `agenda-${suffix}@example.com`,
     password: "Contrasena123",
+    emailVerified: true,
   });
   if (!result.success) throw new Error("No se pudo crear la organización de prueba");
 

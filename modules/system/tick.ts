@@ -44,6 +44,7 @@ export async function runTick() {
   // 4. Limpieza de datos efímeros.
   await db.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(Date.now() - 24 * 3600000) } } });
   await db.passwordResetToken.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600000) } } });
+  await db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600000) } } });
 
   return { notifications, expiredTrials, lockedAccounts, subscriptions, durationMs: Date.now() - startedAt };
 }

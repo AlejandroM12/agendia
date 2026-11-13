@@ -13,6 +13,8 @@ import {
 } from "@/modules/auth/password-reset";
 import { clientIp, rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
 import { getRegistrationStatus } from "@/modules/auth/registration";
+import { isEmailVerificationRequired, issueEmailVerification } from "@/modules/auth/email-verification";
+import { requireSignedInUser } from "@/lib/dal";
 
 export type ActionState = {
   ok?: boolean;
@@ -45,17 +47,22 @@ export async function registerAction(
     return { errors: z.flattenError(validated.error).fieldErrors };
   }
 
-  const result = await registerOrganization(validated.data);
+  const mustVerify = isEmailVerificationRequired();
+  const result = await registerOrganization({ ...validated.data, emailVerified: !mustVerify });
 
   if (!result.success) {
     return { message: result.error };
+  }
+
+  if (mustVerify) {
+    await issueEmailVerification({ id: result.userId, email: result.email, name: result.name });
   }
 
   try {
     await signIn("credentials", {
       email: validated.data.email,
       password: validated.data.password,
-      redirectTo: "/onboarding",
+      redirectTo: mustVerify ? "/verificar-email" : "/onboarding",
     });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -135,4 +142,22 @@ export async function resetPasswordAction(
   }
 
   return { ok: true };
+}
+
+export async function resendVerificationAction(): Promise<ActionState & { devVerificationLink?: string }> {
+  const { user, emailVerified } = await requireSignedInUser();
+  if (emailVerified) return { ok: true, message: "Tu email ya está confirmado." };
+
+  if (!(await rateLimit(`verify-email:${user.id}`, 5, 3600)).allowed) {
+    return { message: TOO_MANY_ATTEMPTS };
+  }
+
+  const result = await issueEmailVerification(user);
+  if (result.devVerificationLink) {
+    return { ok: true, devVerificationLink: result.devVerificationLink };
+  }
+  if (!result.sent) {
+    return { message: "No pudimos enviar el email. Probá de nuevo en unos minutos." };
+  }
+  return { ok: true, message: `Te enviamos un enlace nuevo a ${user.email}.` };
 }

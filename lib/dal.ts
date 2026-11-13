@@ -14,8 +14,9 @@ import { canPerformWriteActions, getOrganizationWithSyncedStatus } from "@/lib/o
  *
  * En cada request se revalida contra la base de datos que:
  * - el usuario sigue existiendo y su sesión no fue invalidada (cambio de
- *   contraseña → `sessionVersion`), y
- * - sigue siendo miembro de la organización que dice su sesión.
+ *   contraseña → `sessionVersion`),
+ * - sigue siendo miembro de la organización que dice su sesión, y
+ * - confirmó su email.
  */
 export const getCurrentSession = cache(async () => auth());
 
@@ -27,7 +28,9 @@ export type AppContext = {
   canWrite: boolean;
 };
 
-const loadContext = cache(async (): Promise<AppContext | "anonymous" | "stale"> => {
+type LoadedContext = AppContext & { emailVerified: boolean };
+
+const loadContext = cache(async (): Promise<LoadedContext | "anonymous" | "stale"> => {
   const session = await getCurrentSession();
   if (!session?.user?.id) return "anonymous";
 
@@ -39,6 +42,7 @@ const loadContext = cache(async (): Promise<AppContext | "anonymous" | "stale"> 
       name: true,
       sessionVersion: true,
       isPlatformAdmin: true,
+      emailVerifiedAt: true,
       memberships: { orderBy: { createdAt: "asc" }, take: 1, select: { organizationId: true, role: true } },
     },
   });
@@ -54,16 +58,30 @@ const loadContext = cache(async (): Promise<AppContext | "anonymous" | "stale"> 
     organization,
     role: membership.role,
     canWrite: canPerformWriteActions(organization),
+    emailVerified: user.emailVerifiedAt !== null,
   };
 });
 
-/** Exige usuario + organización válidos. Redirige a /login si no los hay. */
-export async function requireContext(): Promise<AppContext> {
+/**
+ * Sesión válida, con o sin el email verificado. Solo para la pantalla de
+ * verificación: el resto de la app usa `requireContext`.
+ */
+export async function requireSignedInUser(): Promise<LoadedContext> {
   const context = await loadContext();
   if (context === "anonymous") redirect("/login");
   // Sesión que ya no es válida: /logout borra la cookie (un Server
   // Component no puede hacerlo) y vuelve a /login.
   if (context === "stale") redirect("/logout");
+  return context;
+}
+
+/**
+ * Exige usuario + organización válidos y el email verificado. Redirige a
+ * /login si no hay sesión, y a /verificar-email si falta confirmar el email.
+ */
+export async function requireContext(): Promise<AppContext> {
+  const context = await requireSignedInUser();
+  if (!context.emailVerified) redirect("/verificar-email");
   return context;
 }
 

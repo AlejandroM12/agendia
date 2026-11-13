@@ -108,6 +108,11 @@ export async function resetPassword(rawInput: unknown): Promise<ResetPasswordRes
       where: { id: resetToken.userId },
       data: { passwordHash, sessionVersion: { increment: 1 } },
     }),
+    // Llegar hasta acá prueba que la persona controla la casilla.
+    db.user.updateMany({
+      where: { id: resetToken.userId, emailVerifiedAt: null },
+      data: { emailVerifiedAt: new Date() },
+    }),
     db.passwordResetToken.update({
       where: { id: resetToken.id },
       data: { usedAt: new Date() },

@@ -20,7 +20,7 @@ export function slugify(value: string): string {
 export const RESERVED_SLUGS = new Set([
   "admin", "api", "app", "agenda", "ayuda", "blog", "cancelar", "clientes", "configuracion",
   "contacto", "dashboard", "docs", "facturacion", "favicon.ico", "health", "inicio", "legal",
-  "login", "logout", "olvide-contrasena", "onboarding", "pagos", "planes", "precios",
+  "licencia", "licencias", "verificar-email", "login", "logout", "olvide-contrasena", "onboarding", "pagos", "planes", "precios",
   "privacidad", "registro", "reprogramar", "reservar", "restablecer-contrasena", "robots.txt",
   "servicios", "sitemap.xml", "soporte", "static", "terminos", "turno", "turnos", "_next",
 ]);

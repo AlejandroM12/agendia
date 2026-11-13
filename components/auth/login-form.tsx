@@ -9,7 +9,7 @@ import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
 import { AuthCard } from "./auth-card";
 
-export function LoginForm() {
+export function LoginForm({ notice }: { notice?: { message: string; tone: "success" | "error" } }) {
   const [state, action] = useActionState(loginAction, undefined);
 
   return (
@@ -26,6 +26,7 @@ export function LoginForm() {
       }
     >
       <form action={action} className="space-y-4">
+        {!state?.message && <FormMessage message={notice?.message} tone={notice?.tone} />}
         <FormMessage message={state?.message} />
         <Field label="Email" htmlFor="email">
           <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />

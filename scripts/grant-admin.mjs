@@ -30,6 +30,15 @@ if (!email || email.startsWith("--") || !process.env.DATABASE_URL) {
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 try {
+  // Solo cuentas con el email confirmado: una cuenta sin verificar pudo
+  // haberla creado cualquiera con esa dirección.
+  const account = await client.query('SELECT "emailVerifiedAt" FROM "users" WHERE "email" = $1', [email]);
+  if (!revoke && account.rowCount === 1 && !account.rows[0].emailVerifiedAt) {
+    console.error(`La cuenta ${email} todavía no confirmó su email. Abrí el enlace de verificación y volvé a intentar.`);
+    await client.end();
+    process.exit(1);
+  }
+
   // sessionVersion + 1: el cambio de permisos cierra las sesiones abiertas.
   const result = await client.query(
     'UPDATE "users" SET "isPlatformAdmin" = $2, "sessionVersion" = "sessionVersion" + 1, "updatedAt" = now() WHERE "email" = $1 RETURNING "id"',
