@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { resetRateLimits } from "./helpers";
 
 const shot = (page: Page, name: string) =>
   page.screenshot({ path: `e2e/.artifacts/${test.info().project.name}-${name}.png`, fullPage: true });
@@ -7,6 +8,8 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   const suffix = `${test.info().project.name}-${Date.now()}`;
   const email = `e2e-${suffix}@example.com`;
   const business = `Estudio E2E ${suffix}`;
+
+  await resetRateLimits();
 
   // 1. Landing: presenta el producto y lleva al registro.
   await page.goto("/");
