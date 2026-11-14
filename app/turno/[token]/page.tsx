@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ManageAppointment } from "@/components/booking/manage-appointment";
 import { PublicShell } from "@/components/booking/public-shell";
@@ -6,8 +7,15 @@ import { StatusBadge } from "@/components/appointments/status";
 import { ButtonLink } from "@/components/ui/button-link";
 import { db } from "@/lib/db";
 import { formatDateLong, formatDuration, formatTime, toZoned } from "@/lib/time";
+import { getOrganizationImages } from "@/modules/public-page/images";
+import { toPublicProfile } from "@/modules/public-page/settings";
 
-export const metadata: Metadata = { title: "Tu turno", robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+  title: "Tu turno",
+  robots: { index: false, follow: false },
+  // El enlace es la credencial del turno: no debe viajar como referente.
+  referrer: "no-referrer",
+};
 export const instant = false;
 
 export default async function ManageAppointmentPage(props: PageProps<"/turno/[token]">) {
@@ -22,6 +30,7 @@ export default async function ManageAppointmentPage(props: PageProps<"/turno/[to
   if (!appointment) notFound();
 
   const { organization } = appointment;
+  const images = await getOrganizationImages(organization.id);
   const tz = organization.timezone;
   const dateStr = toZoned(appointment.startsAt, tz).dateStr;
   const duration = Math.round((appointment.endsAt.getTime() - appointment.startsAt.getTime()) / 60000);
@@ -31,7 +40,7 @@ export default async function ManageAppointmentPage(props: PageProps<"/turno/[to
     appointment.startsAt.getTime() - now.getTime() >= organization.cancellationNoticeHours * 3600000;
 
   return (
-    <PublicShell organization={organization}>
+    <PublicShell profile={toPublicProfile(organization)} images={images}>
       <div className="rounded-2xl border border-border bg-card p-5">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-muted-foreground">Turno de {appointment.customer.name}</p>
@@ -56,6 +65,12 @@ export default async function ManageAppointmentPage(props: PageProps<"/turno/[to
           <ButtonLink href={`/${organization.slug}`}>Reservar otro turno</ButtonLink>
         )}
       </div>
+
+      <p className="mt-8 text-center text-sm">
+        <Link href={`/${organization.slug}/mis-turnos`} className="font-medium text-brand-text underline-offset-4 hover:underline">
+          Consultá todos tus turnos
+        </Link>
+      </p>
     </PublicShell>
   );
 }

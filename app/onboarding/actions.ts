@@ -7,6 +7,7 @@ import { requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { industries } from "@/lib/brand";
 import { generateUniqueOrganizationSlug } from "@/lib/slug";
+import { presetForIndustry } from "@/lib/theme";
 import { parseJsonField, weeklyRulesSchema } from "@/modules/availability/rules";
 import { serviceListSchema } from "@/modules/services/schema";
 
@@ -44,9 +45,18 @@ export async function saveBusinessStep(_prev: ActionState, formData: FormData): 
       ? organization.slug
       : await generateUniqueOrganizationSlug(parsed.data.name);
 
+  const preset = presetForIndustry(parsed.data.industry);
   await db.organization.update({
     where: { id: organization.id },
-    data: { name: parsed.data.name, industry: parsed.data.industry, slug },
+    data: {
+      name: parsed.data.name,
+      industry: parsed.data.industry,
+      slug,
+      // Punto de partida visual según el rubro; se cambia en «Mi página pública».
+      themePrimary: preset.primary,
+      themeSecondary: preset.secondary,
+      themeFont: preset.font,
+    },
   });
 
   redirect("/onboarding?paso=2");

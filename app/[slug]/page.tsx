@@ -1,38 +1,54 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { BookingFlow } from "@/components/booking/booking-flow";
-import { PublicShell } from "@/components/booking/public-shell";
+import { PublicPage } from "@/components/booking/public-page";
 import { db } from "@/lib/db";
-import { brand } from "@/lib/brand";
 import { canPerformWriteActions } from "@/lib/organization-access";
-import { isValidSlugFormat } from "@/lib/slug";
+import { findPublicOrganization, loadPublicOrganization } from "@/modules/public-page/load";
 
 // Disponibilidad en tiempo real: siempre se renderiza por request.
 export const instant = false;
 
-async function loadOrganization(slug: string) {
-  if (!isValidSlugFormat(slug)) return null;
-  const organization = await db.organization.findUnique({ where: { slug } });
-  return organization?.onboardingCompletedAt ? organization : null;
-}
-
+/**
+ * Metadata propia de cada negocio: al compartir el enlace por WhatsApp o
+ * redes, la vista previa muestra su nombre, su descripción y su imagen, no
+ * la marca de la plataforma.
+ */
 export async function generateMetadata(props: PageProps<"/[slug]">): Promise<Metadata> {
   const { slug } = await props.params;
-  const organization = await loadOrganization(slug);
-  if (!organization) return { title: "Página no encontrada" };
+  const found = await findPublicOrganization(slug);
+  if (!found) return { title: "Página no encontrada", robots: { index: false } };
+
+  const { organization, profile, images } = found;
+  const title = profile.specialty ? `${profile.name} · ${profile.specialty}` : profile.name;
+  const description =
+    profile.description ?? `Reservá tu turno online en ${profile.name}: elegí servicio, día y horario en un minuto.`;
+  // La imagen cambia cuando cambia la configuración: la versión evita que
+  // WhatsApp y las redes sigan mostrando una vista previa vieja.
+  const version = `${organization.updatedAt.getTime().toString(36)}${images.logoId?.slice(0, 4) ?? ""}${images.coverId?.slice(0, 4) ?? ""}`;
+
   return {
-    title: { absolute: `Reservá tu turno en ${organization.name}` },
-    description: organization.description ?? `Elegí servicio, día y horario, y reservá online en ${organization.name}.`,
-    openGraph: { title: `Reservá tu turno en ${organization.name}`, siteName: brand.name },
+    title: { absolute: `${title} — Reservá tu turno` },
+    description,
+    alternates: { canonical: `/${profile.slug}` },
+    ...(images.logoUrl ? { icons: { icon: images.logoUrl, apple: images.logoUrl } } : {}),
+    openGraph: {
+      type: "website",
+      locale: "es_AR",
+      url: `/${profile.slug}`,
+      siteName: profile.name,
+      title: `${title} — Reservá tu turno`,
+      description,
+      images: [{ url: `/${profile.slug}/og?v=${version}`, width: 1200, height: 630, alt: profile.name }],
+    },
+    twitter: { card: "summary_large_image", title: `${title} — Reservá tu turno`, description },
   };
 }
 
 export default async function PublicBookingPage(props: PageProps<"/[slug]">) {
   const { slug } = await props.params;
-  const organization = await loadOrganization(slug);
-  if (!organization) notFound();
+  const { organization, profile, images } = await loadPublicOrganization(slug);
 
-  const services = canPerformWriteActions(organization)
+  const bookable = canPerformWriteActions(organization);
+  const services = bookable
     ? await db.service.findMany({
         where: { organizationId: organization.id, active: true },
         orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -40,19 +56,5 @@ export default async function PublicBookingPage(props: PageProps<"/[slug]">) {
       })
     : [];
 
-  return (
-    <PublicShell organization={organization}>
-      {services.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-input bg-card/60 px-6 py-10 text-center">
-          <p className="font-display text-lg font-semibold">Reservas online no disponibles</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">
-            {organization.name} no está tomando reservas online en este momento.
-            {organization.phone ? " Podés comunicarte por teléfono." : ""}
-          </p>
-        </div>
-      ) : (
-        <BookingFlow slug={organization.slug} businessName={organization.name} services={services} />
-      )}
-    </PublicShell>
-  );
+  return <PublicPage profile={profile} images={images} services={services} bookable={bookable} />;
 }

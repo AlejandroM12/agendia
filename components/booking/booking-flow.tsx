@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useRef, useState } from "react";
-import { CalendarCheck, Check, ChevronLeft } from "lucide-react";
+import { CalendarCheck, Check, ChevronRight, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
@@ -13,14 +14,33 @@ import { cn } from "@/lib/utils";
 import { bookAppointmentAction, getPublicAvailabilityAction } from "@/modules/booking/actions";
 import { DaySlotPicker, type PickedSlot } from "./day-slot-picker";
 
-type Service = { id: string; name: string; description: string | null; durationMinutes: number; price: number | null };
+/** `price` llega en `null` cuando el servicio no tiene precio o el negocio eligió no mostrarlos. */
+export type BookableService = {
+  id: string;
+  name: string;
+  description: string | null;
+  durationMinutes: number;
+  price: number | null;
+};
 
-export function BookingFlow({ slug, businessName, services }: { slug: string; businessName: string; services: Service[] }) {
-  const [service, setService] = useState<Service | null>(services.length === 1 ? services[0] : null);
+export function BookingFlow({
+  slug,
+  businessName,
+  services,
+  preview = false,
+}: {
+  slug: string;
+  businessName: string;
+  services: BookableService[];
+  /** Vista previa del panel: se puede recorrer, pero no reserva. */
+  preview?: boolean;
+}) {
+  const [service, setService] = useState<BookableService | null>(services.length === 1 ? services[0] : null);
   const [slot, setSlot] = useState<PickedSlot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [state, action] = useActionState(bookAppointmentAction, undefined);
-  const detailsRef = useRef<HTMLDivElement>(null);
+  const scheduleRef = useRef<HTMLElement>(null);
+  const detailsRef = useRef<HTMLElement>(null);
   const handled = useRef<typeof state>(undefined);
 
   const load = useCallback(
@@ -42,9 +62,16 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
     if (slot) detailsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [slot]);
 
+  function chooseService(item: BookableService) {
+    setService(item);
+    setSlot(null);
+    // En el celular la lista de servicios puede ser larga: se lleva la vista al paso siguiente.
+    requestAnimationFrame(() => scheduleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   if (state?.ok) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-6 text-center">
+      <div className="rounded-3xl border border-border bg-card p-6 text-center sm:p-8" role="status">
         <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-success-soft text-success">
           <CalendarCheck className="size-7" aria-hidden="true" />
         </span>
@@ -58,50 +85,55 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
             </span>
           </p>
         )}
-        <p className="mt-4 text-sm text-muted-foreground">
-          Guardá este enlace: desde ahí podés ver, reprogramar o cancelar tu turno.
+        <p className="mx-auto mt-4 max-w-sm text-sm text-muted-foreground">
+          Guardá este enlace: desde ahí podés ver, reprogramar o cancelar tu turno. Si dejaste tu email, también te lo
+          enviamos.
         </p>
-        <ButtonLink
-          className="mt-4"
-          variant="outline" href={`/turno/${state.manageToken}`}>Ver mi turno</ButtonLink>
+        <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+          <ButtonLink size="lg" href={`/turno/${state.manageToken}`}>Ver mi turno</ButtonLink>
+          {/* Recarga completa: vuelve a empezar con la disponibilidad actualizada. */}
+          {/* eslint-disable-next-line @next/next/no-location-assign-relative-destination */}
+          <Button size="lg" variant="outline" onClick={() => window.location.assign(`/${slug}`)}>
+            Reservar otro turno
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-9">
       <section aria-labelledby="paso-servicio">
         <StepTitle id="paso-servicio" number={1} done={Boolean(service)}>
           {service ? "Servicio" : "Elegí un servicio"}
         </StepTitle>
-        {service && services.length > 1 ? (
-          <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3">
+        {service ? (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-brand-border bg-accent/50 px-4 py-3.5">
             <ServiceSummary service={service} />
-            <button
-              type="button"
-              className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary hover:underline"
-              onClick={() => {
-                setService(null);
-                setSlot(null);
-              }}
-            >
-              <ChevronLeft className="size-4" aria-hidden="true" /> Cambiar
-            </button>
-          </div>
-        ) : service ? (
-          <div className="rounded-xl border border-border bg-card px-4 py-3">
-            <ServiceSummary service={service} />
+            {services.length > 1 && (
+              <button
+                type="button"
+                className="shrink-0 text-sm font-medium text-brand-text underline-offset-4 hover:underline"
+                onClick={() => {
+                  setService(null);
+                  setSlot(null);
+                }}
+              >
+                Cambiar
+              </button>
+            )}
           </div>
         ) : (
-          <ul className="space-y-2">
+          <ul className="grid gap-2.5 sm:grid-cols-2">
             {services.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
-                  onClick={() => setService(item)}
-                  className="w-full rounded-xl border border-input bg-card px-4 py-3.5 text-left transition-colors hover:border-primary hover:bg-accent/40"
+                  onClick={() => chooseService(item)}
+                  className="group flex h-full w-full items-center justify-between gap-3 rounded-2xl border border-input bg-card px-4 py-3.5 text-left transition-colors hover:border-brand-border hover:bg-accent/40"
                 >
                   <ServiceSummary service={item} />
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-brand-text" aria-hidden="true" />
                 </button>
               </li>
             ))}
@@ -110,7 +142,7 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
       </section>
 
       {service && (
-        <section aria-labelledby="paso-horario">
+        <section aria-labelledby="paso-horario" ref={scheduleRef} className="scroll-mt-4">
           <StepTitle id="paso-horario" number={2} done={Boolean(slot)}>
             Elegí día y horario
           </StepTitle>
@@ -123,7 +155,7 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
           <StepTitle id="paso-datos" number={3} done={false}>
             Tus datos
           </StepTitle>
-          <form action={action} className="space-y-4">
+          <form action={preview ? undefined : action} className="space-y-4">
             <input type="hidden" name="slug" value={slug} />
             <input type="hidden" name="serviceId" value={service.id} />
             <input type="hidden" name="slot" value={slot.iso} />
@@ -138,22 +170,33 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
             <Field label="Nombre y apellido" htmlFor="name">
               <Input id="name" name="name" autoComplete="name" maxLength={120} required />
             </Field>
-            <Field label="Email" htmlFor="email" hint="Te enviamos la confirmación y un recordatorio.">
-              <Input id="email" name="email" type="email" inputMode="email" autoComplete="email" />
-            </Field>
-            <Field label="Teléfono" htmlFor="phone" optional>
-              <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" />
-            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Email" htmlFor="email" hint="Te enviamos la confirmación y un recordatorio.">
+                <Input id="email" name="email" type="email" inputMode="email" autoComplete="email" />
+              </Field>
+              <Field label="Teléfono" htmlFor="phone" optional>
+                <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" />
+              </Field>
+            </div>
 
             <FormMessage message={state && !state.ok ? state.message : null} />
 
-            <div className="rounded-xl bg-secondary px-4 py-3 text-sm">
-              <span className="font-medium">{service.name}</span> ·{" "}
-              {formatDateLong(slot.dateStr)}, {slot.label} h
+            <div className="rounded-2xl bg-secondary px-4 py-3 text-sm">
+              <p className="font-medium">{service.name}</p>
+              <p className="text-muted-foreground first-letter:uppercase">
+                {formatDateLong(slot.dateStr)}, {slot.label} h · {formatDuration(service.durationMinutes)}
+                {service.price !== null && ` · ${formatMoney(service.price)}`}
+              </p>
             </div>
-            <SubmitButton size="lg" className="w-full" pendingLabel="Reservando…">
-              Confirmar reserva
-            </SubmitButton>
+            {preview ? (
+              <p className="rounded-xl border border-dashed border-input px-4 py-3 text-center text-sm text-muted-foreground">
+                Vista previa: desde acá no se crean reservas.
+              </p>
+            ) : (
+              <SubmitButton size="lg" className="w-full" pendingLabel="Reservando…">
+                Confirmar reserva
+              </SubmitButton>
+            )}
             <p className="text-center text-xs text-muted-foreground">
               Tus datos se usan únicamente para gestionar este turno con {businessName}.
             </p>
@@ -166,28 +209,32 @@ export function BookingFlow({ slug, businessName, services }: { slug: string; bu
 
 function StepTitle({ id, number, done, children }: { id: string; number: number; done: boolean; children: React.ReactNode }) {
   return (
-    <h2 id={id} className="mb-3 flex items-center gap-2.5 text-lg font-semibold">
+    <h2 id={id} className="mb-3.5 flex items-center gap-2.5 font-display text-xl font-semibold">
       <span
         className={cn(
-          "flex size-6 items-center justify-center rounded-full text-xs font-bold",
+          "flex size-7 items-center justify-center rounded-full font-sans text-xs font-bold",
           done ? "bg-primary text-primary-foreground" : "bg-accent text-accent-foreground",
         )}
       >
-        {done ? <Check className="size-3.5" aria-hidden="true" /> : number}
+        {done ? <Check className="size-4" aria-hidden="true" /> : number}
       </span>
       {children}
     </h2>
   );
 }
 
-function ServiceSummary({ service }: { service: Service }) {
+function ServiceSummary({ service }: { service: BookableService }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="font-medium">{service.name}</p>
-        {service.price !== null && <p className="shrink-0 font-medium tabular-nums">{formatMoney(service.price)}</p>}
-      </div>
-      <p className="text-sm text-muted-foreground">{formatDuration(service.durationMinutes)}</p>
+      <p className="font-medium">{service.name}</p>
+      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+        <span className="inline-flex items-center gap-1">
+          <Clock className="size-3.5" aria-hidden="true" /> {formatDuration(service.durationMinutes)}
+        </span>
+        {service.price !== null && (
+          <span className="font-medium text-foreground tabular-nums">{formatMoney(service.price)}</span>
+        )}
+      </p>
       {service.description && <p className="mt-1 text-sm text-muted-foreground">{service.description}</p>}
     </div>
   );

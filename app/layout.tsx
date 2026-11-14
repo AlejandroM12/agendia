@@ -16,6 +16,9 @@ export const metadata: Metadata = {
     template: `%s · ${brand.name}`,
   },
   description: brand.description,
+  // Declarado acá (y no como app/icon.svg) para que la página pública de
+  // cada negocio pueda reemplazarlo por su propio logo.
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }] },
   openGraph: {
     title: `${brand.name} — ${brand.tagline}`,
     description: brand.description,
