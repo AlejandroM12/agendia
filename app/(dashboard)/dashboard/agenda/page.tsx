@@ -20,6 +20,7 @@ import {
   zonedTimeToUtc,
 } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { schedulingProfessionalIds } from "@/modules/team/eligibility";
 import { workingWindows } from "@/modules/availability/slots";
 
 export const metadata: Metadata = { title: "Agenda" };
@@ -38,6 +39,7 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
   const weekStart = zonedTimeToUtc(monday, 0, tz);
   const weekEnd = zonedTimeToUtc(addDays(monday, 7), 0, tz);
 
+  const scheduleIds = await schedulingProfessionalIds(db, organization);
   const [weekAppointments, rules, exceptions] = await Promise.all([
     db.appointment.findMany({
       where: { organizationId: organization.id, startsAt: { gte: weekStart, lt: weekEnd } },
@@ -52,7 +54,7 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
       },
     }),
     db.availabilityRule.findMany({
-      where: { organizationId: organization.id },
+      where: { organizationId: organization.id, professionalId: { in: scheduleIds } },
       select: { weekday: true, startMinute: true, endMinute: true },
     }),
     db.availabilityException.findMany({

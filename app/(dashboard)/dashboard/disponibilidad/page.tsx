@@ -1,3 +1,4 @@
+import { primaryProfessionalId } from "@/modules/team/eligibility";
 import type { Metadata } from "next";
 import { X } from "lucide-react";
 import {
@@ -18,9 +19,11 @@ export default async function AvailabilityPage() {
   const { organization, canWrite } = await requireOrganization();
   const today = todayInTz(organization.timezone);
 
+  // Esta pantalla edita el horario del profesional «de siempre»; los bloqueos son generales.
+  const primaryId = await primaryProfessionalId(db, organization.id);
   const [rules, exceptions] = await Promise.all([
     db.availabilityRule.findMany({
-      where: { organizationId: organization.id },
+      where: { organizationId: organization.id, professionalId: primaryId },
       select: { weekday: true, startMinute: true, endMinute: true },
     }),
     db.availabilityException.findMany({

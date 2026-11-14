@@ -1,3 +1,4 @@
+import { primaryProfessionalId } from "@/modules/team/eligibility";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
@@ -21,6 +22,7 @@ export default async function OnboardingPage(props: PageProps<"/onboarding">) {
   const { organization } = await requireContext();
   if (organization.onboardingCompletedAt) redirect("/dashboard");
 
+  const primaryId = await primaryProfessionalId(db, organization.id);
   const [services, rules] = await Promise.all([
     db.service.findMany({
       where: { organizationId: organization.id },
@@ -28,7 +30,7 @@ export default async function OnboardingPage(props: PageProps<"/onboarding">) {
       select: { name: true, durationMinutes: true, price: true },
     }),
     db.availabilityRule.findMany({
-      where: { organizationId: organization.id },
+      where: { organizationId: organization.id, professionalId: primaryId },
       select: { weekday: true, startMinute: true, endMinute: true },
     }),
   ]);

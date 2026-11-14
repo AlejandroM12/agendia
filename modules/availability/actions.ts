@@ -6,22 +6,24 @@ import { db } from "@/lib/db";
 import { requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { dateStrToDbDate, isValidDateStr, labelToMinutes, todayInTz } from "@/lib/time";
+import { getOrCreatePrimaryProfessional } from "@/modules/team/eligibility";
+import { createAvailabilityException, saveProfessionalHours } from "@/modules/team/professionals";
 import { parseJsonField, weeklyRulesSchema } from "./rules";
 
 export async function saveWeeklyHoursAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const access = await requireWriteContext();
   if (!access.ok) return { message: access.message };
-  const organizationId = access.context.organization.id;
-
   const parsed = parseJsonField(weeklyRulesSchema, formData.get("rules"));
   if (!parsed.success) {
     return { message: parsed.error.issues[0]?.message ?? "Revisá los horarios ingresados." };
   }
 
-  await db.$transaction([
-    db.availabilityRule.deleteMany({ where: { organizationId } }),
-    db.availabilityRule.createMany({ data: parsed.data.map((rule) => ({ organizationId, ...rule })) }),
-  ]);
+  // Hoy esta pantalla edita la agenda del profesional «de siempre»: guardar no
+  // debe tocar los horarios de ningún otro profesional del equipo.
+  const primary = await getOrCreatePrimaryProfessional(db, access.context.organization);
+  if (!primary) return { message: "No encontramos a un profesional activo para guardar los horarios." };
+  const saved = await saveProfessionalHours(access.context.organization, primary.id, parsed.data);
+  if (!saved.ok) return { message: saved.message };
 
   revalidatePath("/dashboard/disponibilidad");
   return { ok: true, message: "Horarios guardados." };
@@ -70,9 +72,15 @@ export async function addExceptionAction(_prev: ActionState, formData: FormData)
 
   const reason = String(formData.get("reason") ?? "").trim().slice(0, 120) || null;
 
-  await db.availabilityException.create({
-    data: { organizationId: organization.id, date: dateStrToDbDate(date), startMinute, endMinute, reason },
+  // Bloqueo general del negocio (sin profesional): afecta a todos, como siempre.
+  const created = await createAvailabilityException(organization, {
+    professionalId: null,
+    date: dateStrToDbDate(date),
+    startMinute,
+    endMinute,
+    reason,
   });
+  if (!created.ok) return { message: created.message };
 
   revalidatePath("/dashboard/disponibilidad");
   return { ok: true, message: "Bloqueo agregado." };

@@ -8,6 +8,8 @@ import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { industries } from "@/lib/brand";
 import { generateUniqueOrganizationSlug } from "@/lib/slug";
 import { presetForIndustry } from "@/lib/theme";
+import { getOrCreatePrimaryProfessional } from "@/modules/team/eligibility";
+import { saveProfessionalHours } from "@/modules/team/professionals";
 import { parseJsonField, weeklyRulesSchema } from "@/modules/availability/rules";
 import { serviceListSchema } from "@/modules/services/schema";
 
@@ -106,16 +108,15 @@ export async function saveHoursStep(_prev: ActionState, formData: FormData): Pro
   const serviceCount = await db.service.count({ where: { organizationId: organization.id } });
   if (serviceCount === 0) redirect("/onboarding?paso=2");
 
-  await db.$transaction([
-    db.availabilityRule.deleteMany({ where: { organizationId: organization.id } }),
-    db.availabilityRule.createMany({
-      data: parsed.data.map((rule) => ({ organizationId: organization.id, ...rule })),
-    }),
+  const primary = await getOrCreatePrimaryProfessional(db, organization);
+  if (!primary) return { message: "No pudimos guardar tus horarios. Escribinos para resolverlo." };
+  const saved = await saveProfessionalHours(organization, primary.id, parsed.data, [
     db.organization.update({
       where: { id: organization.id },
       data: { onboardingCompletedAt: new Date() },
     }),
   ]);
+  if (!saved.ok) return { message: saved.message };
 
   redirect("/dashboard?bienvenida=1");
 }
