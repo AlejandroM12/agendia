@@ -1,5 +1,6 @@
 import type { NotificationType } from "@prisma/client";
 import { brand } from "@/lib/brand";
+import { resolveTheme } from "@/lib/theme";
 import { formatDateTime, formatDuration } from "@/lib/time";
 
 export type AppointmentEmailContext = {
@@ -13,6 +14,8 @@ export type AppointmentEmailContext = {
   startsAt: Date;
   manageUrl: string;
   dashboardUrl: string;
+  /** Color principal de la página pública del negocio (hexadecimal validado). */
+  organizationColor?: string;
 };
 
 type Rendered = { subject: string; html: string; text: string };
@@ -25,17 +28,28 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Estructura común: texto plano + HTML sobrio que funciona en cualquier cliente. */
+/**
+ * Estructura común: texto plano + HTML sobrio que funciona en cualquier cliente.
+ *
+ * Con `business`, el mensaje lleva el nombre del negocio como encabezado y
+ * su color en el botón. Es lo único personalizable: el color pasa por
+ * `resolveTheme` (solo hexadecimales, con texto legible calculado) y el
+ * nombre se escapa como cualquier otro texto. No se admite HTML del negocio.
+ */
 export function renderEmail(params: {
+  business?: { name: string; primary: string };
   heading: string;
   paragraphs: string[];
   details?: Array<[label: string, value: string]>;
   action?: { label: string; url: string };
   footer?: string;
 }): { html: string; text: string } {
-  const { heading, paragraphs, details = [], action, footer } = params;
+  const { business, heading, paragraphs, details = [], action, footer } = params;
+  const theme = business ? resolveTheme({ primary: business.primary }) : null;
+  const button = theme ? { bg: theme.primary, fg: theme.primaryForeground } : { bg: "#1f4d3f", fg: "#fbf9f5" };
 
   const text = [
+    ...(business ? [business.name, ""] : []),
     heading,
     "",
     ...paragraphs,
@@ -56,10 +70,11 @@ export function renderEmail(params: {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;padding:32px 16px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e3dbcd;border-radius:14px;padding:28px">
 <tr><td>
+${business && theme ? `<p style="margin:0 0 18px;padding:0 0 14px;border-bottom:3px solid ${theme.primary};font-size:16px;font-weight:700;letter-spacing:.01em;color:#1d1b18">${escapeHtml(business.name)}</p>` : ""}
 <h1 style="margin:0 0 14px;font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:1.3;color:#1d1b18">${escapeHtml(heading)}</h1>
 ${paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.55;color:#1d1b18">${escapeHtml(p)}</p>`).join("")}
 ${detailRows ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:10px 0 6px;border-top:1px solid #e3dbcd;padding-top:10px;width:100%">${detailRows}</table>` : ""}
-${action ? `<p style="margin:22px 0 4px"><a href="${escapeHtml(action.url)}" style="display:inline-block;background:#1f4d3f;color:#fbf9f5;text-decoration:none;font-size:15px;font-weight:600;padding:12px 20px;border-radius:10px">${escapeHtml(action.label)}</a></p>` : ""}
+${action ? `<p style="margin:22px 0 4px"><a href="${escapeHtml(action.url)}" style="display:inline-block;background:${button.bg};color:${button.fg};text-decoration:none;font-size:15px;font-weight:600;padding:12px 20px;border-radius:10px">${escapeHtml(action.label)}</a></p>` : ""}
 </td></tr></table>
 <p style="margin:16px 0 0;font-size:12px;color:#6b645a">${escapeHtml(footer ?? `Enviado con ${brand.name}.`)}</p>
 </td></tr></table></body></html>`;
@@ -82,6 +97,7 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
     ["Cuándo", when],
   ];
 
+  const business = { name: ctx.organizationName, primary: ctx.organizationColor ?? "#1f4d3f" };
   const customerFooter = `Recibís este mensaje porque tenés un turno en ${ctx.organizationName}. Enviado con ${brand.name}.`;
   const manage = { label: "Ver, reprogramar o cancelar", url: ctx.manageUrl };
 
@@ -90,6 +106,7 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
       return {
         subject: `Turno confirmado en ${ctx.organizationName} — ${when}`,
         ...renderEmail({
+          business,
           heading: "Tu turno está confirmado",
           paragraphs: [`Hola ${ctx.customerName}, te esperamos en ${ctx.organizationName}.`],
           details,
@@ -101,6 +118,7 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
       return {
         subject: `Recordatorio: tu turno en ${ctx.organizationName} — ${when}`,
         ...renderEmail({
+          business,
           heading: "Te recordamos tu turno",
           paragraphs: [`Hola ${ctx.customerName}, este es un recordatorio de tu turno en ${ctx.organizationName}.`],
           details,
@@ -112,6 +130,7 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
       return {
         subject: `Tu turno en ${ctx.organizationName} cambió de horario — ${when}`,
         ...renderEmail({
+          business,
           heading: "Tu turno fue reprogramado",
           paragraphs: [`Hola ${ctx.customerName}, este es el nuevo horario de tu turno en ${ctx.organizationName}.`],
           details,
@@ -123,6 +142,7 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
       return {
         subject: `Turno cancelado en ${ctx.organizationName}`,
         ...renderEmail({
+          business,
           heading: "Tu turno fue cancelado",
           paragraphs: [
             `Hola ${ctx.customerName}, el siguiente turno en ${ctx.organizationName} quedó cancelado.`,

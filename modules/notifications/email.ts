@@ -5,6 +5,11 @@ export type EmailMessage = {
   subject: string;
   html: string;
   text: string;
+  /**
+   * Nombre visible del remitente (el del negocio, en los avisos a sus
+   * clientes). La dirección es siempre la de EMAIL_FROM.
+   */
+  fromName?: string;
 };
 
 export type EmailResult = { ok: true } | { ok: false; error: string };
@@ -18,6 +23,18 @@ export type EmailResult = { ok: true } | { ok: false; error: string };
  */
 export function isEmailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+}
+
+/**
+ * Remitente con el nombre del negocio y la dirección configurada:
+ * `"Estudio Luna" <turnos@dominio>`. El nombre se limpia de todo lo que
+ * pueda alterar la cabecera.
+ */
+export function senderFor(from: string, fromName: string | undefined): string {
+  const name = fromName?.replace(/[\r\n"<>\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 70);
+  if (!name) return from;
+  const address = from.match(/<([^<>]+)>/)?.[1] ?? from.trim();
+  return `"${name}" <${address}>`;
 }
 
 export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
@@ -35,7 +52,7 @@ export async function sendEmail(message: EmailMessage): Promise<EmailResult> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from,
+        from: senderFor(from, message.fromName),
         to: [message.to],
         subject: message.subject,
         html: message.html,

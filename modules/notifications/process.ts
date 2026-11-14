@@ -94,9 +94,16 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
       startsAt: appointment.startsAt,
       manageUrl: `${brand.url}/turno/${appointment.manageToken}`,
       dashboardUrl: `${brand.url}/dashboard/turnos/${appointment.id}`,
+      organizationColor: organization.themePrimary,
     });
 
-    const result = await sendEmail({ to: notification.recipient, ...rendered });
+    // Los avisos al cliente salen con el nombre del negocio como remitente.
+    const toCustomer = !notification.type.endsWith("_owner");
+    const result = await sendEmail({
+      to: notification.recipient,
+      ...rendered,
+      fromName: toCustomer ? organization.name : undefined,
+    });
 
     if (result.ok) {
       await db.notification.update({
