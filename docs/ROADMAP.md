@@ -16,9 +16,9 @@ Definir identidad comercial (nombre + identidad visual) — ver `DECISIONS.md`, 
 ## Fase 2 — Landing, onboarding y ciclo de prueba gratuita
 - Landing comercial completa con la identidad visual ya definida.
 - Registro, login, onboarding guiado (negocio, rubro, servicios, duración, horarios, slug público).
-- **Activación y vencimiento de la prueba gratuita de 7 días**, cálculo y validación en servidor, aviso de días restantes en el dashboard, transición a `trial_readonly` a los 7 días (sin integración de cobro todavía — eso es Fase 5).
+- **Activación y vencimiento de la prueba gratuita de 14 días**, cálculo y validación en servidor, aviso de días restantes en el dashboard, transición a `trial_readonly` a los 14 días (sin integración de cobro todavía — eso es Fase 5).
 
-**Aceptación:** un visitante nuevo completa registro + onboarding en menos de 5 minutos y llega a un dashboard con su slug público generado y su prueba activa contada desde el servidor; al simular el vencimiento de los 7 días, la cuenta pasa a solo lectura automáticamente sin intervención manual.
+**Aceptación:** un visitante nuevo completa registro + onboarding en menos de 5 minutos y llega a un dashboard con su slug público generado y su prueba activa contada desde el servidor; al simular el vencimiento de los 14 días, la cuenta pasa a solo lectura automáticamente sin intervención manual.
 
 ## Fase 3 — Agenda y reservas
 - Servicios (alta/edición/activo-inactivo).

@@ -8,7 +8,7 @@ Evaluación técnica y económica previa al primer despliegue real. Fecha: novie
 
 - **Arquitectura recomendada para el MVP:** un VPS de 2 vCPU / 4 GB con el `docker-compose.yml` que ya está en el repositorio (probado en local y en CI). No requiere cambios de código.
 - **Costo mensual estimado de mantenerla funcionando:** entre **US$ 15 y US$ 47** (≈ ARS 24.000 a 74.000) según cantidad de negocios, más la comisión de Mercado Pago por cada cobro y los impuestos.
-- **Precios definitivos:** Plan Profesional ARS 14.000 por mes; Licencia independiente ARS 199.000, pago único (DECISIONS D-32).
+- **Precios vigentes:** Plan Profesional ARS 9.900 por mes (14 días de prueba); Licencia independiente ARS 149.000, pago único (DECISIONS D-47). **El análisis de márgenes de más abajo se hizo con los importes anteriores (ARS 14.000 y 199.000) y hay que recalcularlo: con el nuevo precio el costo marginal pesa más.**
 - **Bloqueos para abrir al público** (ninguno es de código): contratar servidor y dominio, cuenta de Resend con dominio verificado, credenciales de Mercado Pago validadas en sandbox, y textos legales.
 - **Mientras Resend no esté configurado, el registro permanece cerrado en producción**: sin email no hay recuperación de contraseña.
 

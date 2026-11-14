@@ -1,6 +1,6 @@
 # Equipos con varios profesionales
 
-Estado: **etapa 1 implementada** (modelo de datos y motor de disponibilidad). Las etapas 2 a 5 están diseñadas en la sección 12 y **no** están implementadas. La funcionalidad está **apagada por defecto**: ningún negocio existente cambia de comportamiento hasta que se la enciende a propósito (sección 7).
+Estado: **etapas 1 y 2 implementadas** (modelo de datos, motor de disponibilidad, pantalla «Equipo», horarios por profesional, agenda del equipo, reasignación; ver sección 14). Las etapas 3 a 5 están diseñadas en la sección 12 y **no** están implementadas. La funcionalidad está **apagada por defecto**: ningún negocio existente cambia de comportamiento hasta que se la enciende a propósito (sección 7).
 
 ## 1. Qué cambió y qué no
 
@@ -219,7 +219,7 @@ Por eso **no** se habilitó ningún acceso de profesionales: no hay invitaciones
 
 ### Etapa 5 — Integración comercial
 
-Landing y precios (Plan Profesional hasta 2 profesionales, ARS 14.000; Plan Equipo hasta 5, ARS 24.900), onboarding, cupos visibles, cambio de plan y reducción de plan, adaptación de Mercado Pago (plan nuevo, renovaciones, vencimientos), condiciones del modo independiente, documentación, capturas y piezas publicitarias. **No se cobra ni se promociona hasta que las etapas 2 a 4 estén completas y verificadas.**
+Landing y precios (Plan Profesional hasta 2 profesionales, ARS 9.900; Plan Equipo hasta 5, ARS 19.900; Licencia Profesional ARS 149.000 y Licencia Equipo ARS 249.000; importes definidos en `futurePricing`, sin publicar), onboarding, cupos visibles, cambio de plan y reducción de plan, adaptación de Mercado Pago (plan nuevo, renovaciones, vencimientos), condiciones del modo independiente, documentación, capturas y piezas publicitarias. **No se cobra ni se promociona hasta que las etapas 2 a 4 estén completas y verificadas.**
 
 ## 13. Procedimiento de despliegue de la etapa 1
 
@@ -233,3 +233,43 @@ No se desplegó ni se migró producción. Cuando se autorice:
 6. Instalaciones independientes: `./deploy/instance.sh update-all` (cada una hace su copia previa).
 
 Rollback: ver la tabla de la sección 8. Con el modo equipo apagado en todos los negocios (el estado de salida), `./deploy/deploy.sh <commit anterior>` es suficiente y no toca la base.
+
+## 14. Etapa 2: gestión del equipo y agenda administrativa (implementada)
+
+Sigue **apagada por defecto**: todo lo de esta sección solo aparece con el modo equipo encendido (sección 7). Con el modo apagado, o con un solo profesional activo, las pantallas son las de siempre.
+
+### Qué se puede hacer
+
+- **Equipo** (`/dashboard/equipo`): alta sin cuenta de usuario (la administra el propietario), nombre, descripción, color, orden (subir/bajar), reservas online sí/no, «Soy yo» (identifica al propietario que también atiende), foto (JPG/PNG/WebP, hasta 8 MB, mínimo 160 × 160, recorte cuadrado de 512 px en WebP, mismo procesamiento seguro que el logo), servicios que realiza, activar y desactivar. Muestra cupos usados y disponibles, y avisa si hay exceso de cupo (sin borrar ni cancelar nada).
+- **Horarios por profesional** (`/dashboard/disponibilidad?profesional=`): selector, horario semanal con varias franjas por día (los descansos son el hueco entre franjas), «copiar horarios de…», vacaciones y ausencias (un día, un rato o varios días seguidos), y cierres generales del negocio en una sección aparte. Las franjas superpuestas se rechazan en el servidor.
+- **Agenda del equipo**: selector «Todo el equipo / profesional» (también en celular), columnas por profesional en escritorio, lista con quién atiende y color en celular, bloqueos y horarios del día por profesional, alta manual eligiendo profesional o «cualquiera disponible», reprogramar con los horarios del propio profesional.
+- **Reasignar** un turno futuro desde su detalle (solo ofrece a quienes tienen ese horario libre y realizan el servicio) y **resolver los turnos antes de desactivar** (pasarlos o cancelarlos, de a uno o todos; los que no se puedan pasar quedan pendientes y se informan). El cliente recibe un correo de «cambió el profesional».
+- **WhatsApp manual** desde el turno: ver `docs/WHATSAPP_AUTOMATION.md`.
+
+### Seguridad
+
+- Permisos por rol en el servidor (`lib/permissions.ts`; D-48) en todas las acciones nuevas y en las de turnos, servicios, clientes y horarios.
+- Todo identificador (profesional, servicio, turno, bloqueo, imagen) se valida contra la organización de la sesión; los bloqueos individuales y generales no se borran desde la pantalla equivocada. Pruebas con identificadores manipulados en `test/team-actions.test.ts` y `test/team-admin.test.ts`.
+- Se corrigió un problema real de la etapa 1: reprogramar desde la agenda interna ofrecía horarios libres de **cualquier** profesional aunque el turno se conserva con el suyo; ahora ofrece los de su profesional.
+- Riesgos que **siguen** (sección 10) y que impiden habilitar cuentas de profesionales: una membresía por usuario, avisos internos a todas las membresías, consultas sin alcance por profesional. Resueltos en esta etapa: roles sin verificación y acciones que validaban solo escritura.
+
+### Migraciones nuevas (aditivas)
+
+1. `20261116000000_professional_photos`: valor `professional` en `OrganizationImageKind`; la unicidad `(organizationId, kind)` pasa a un índice parcial solo para logo y portada, de modo que cada profesional puede tener su foto. Los logos y portadas existentes no cambian.
+2. `20261116000100_professional_change_notification`: valor `professional_change` en `NotificationType`.
+
+Ambas son seguras con el esquema anterior mientras no existan filas con esos valores nuevos. **El rollback de la aplicación deja de ser seguro cuando existe una foto de profesional (el código anterior lee todas las imágenes del negocio y fallaría con el valor desconocido) o un aviso `professional_change` pendiente.** Antes de volver atrás: quitar las fotos de profesionales (`DELETE FROM organization_images WHERE kind = 'professional'`; el campo `photoImageId` pasa a nulo solo) y esperar o anular los avisos pendientes de ese tipo. Los valores de enum no se pueden quitar, pero quedan sin uso. Probadas sobre la base local y con la prueba de migración existente.
+**No se aplicó la migración de cierre** de `availability_rules.professionalId` (D-51).
+
+### Costos e infraestructura
+
+Sin servicios, dependencias ni tareas programadas nuevas. Las fotos (~30–60 KB cada una, WebP) viven en PostgreSQL como el logo: cinco profesionales ≈ 300 KB por negocio. La agenda del equipo hace una consulta de turnos, una de horarios y una de bloqueos por pantalla, más la de profesionales; la disponibilidad para reasignar se calcula agrupada por día y duración. WhatsApp manual no hace ninguna solicitud desde el servidor. Cada reasignación genera, como máximo, un correo (más el recordatorio reprogramado) por turno afectado.
+
+### Exceso de cupo tras una baja de plan
+
+No se borra ni se desactiva nada. La pantalla Equipo muestra el exceso; no se puede agregar ni reactivar a nadie hasta quedar dentro del límite; el administrador decide a quién desactivar y debe resolver antes los turnos futuros de esa persona. Los profesionales de más siguen atendiendo hasta que se los desactive: qué hacer si el administrador no actúa es una decisión comercial pendiente.
+
+### Qué no cubre esta etapa
+
+Reserva pública con elección de profesional y correos con el profesional en todos los casos (etapa 3); cuentas, invitaciones y roles de profesional (etapa 4); integración comercial (etapa 5). La etapa 3 puede empezar sin cambios de backend: ya acepta `professionalId`, `"any"` y `idempotencyKey`.
+

@@ -20,7 +20,7 @@
 | timezone | string (IANA) | default `America/Argentina/Buenos_Aires` |
 | deploymentMode | enum: `saas` \| `standalone` | informativo; el comportamiento real lo define la env var de la app |
 | trialStartedAt | datetime | |
-| trialEndsAt | datetime | calculado en servidor al registrarse (+7 días) |
+| trialEndsAt | datetime | calculado en servidor al registrarse (+14 días) |
 | status | enum: `trial` \| `trial_readonly` \| `locked` \| `active` \| `past_due` \| `canceled` \| `suspended` | ver sección 4 |
 | readonlyUntil | datetime, nullable | fin del período de 30 días de solo lectura tras `trial` |
 | createdAt | datetime | |
@@ -200,7 +200,7 @@ Organization 1──1 License (modo standalone)
 ## 4. Estados de `Organization.status` (ciclo comercial)
 
 ```
-trial ──(7 días)──► trial_readonly ──(30 días, solo lectura)──► locked
+trial ──(14 días)──► trial_readonly ──(30 días, solo lectura)──► locked
   │                                                                │
   └─────────────────► active (al contratar suscripción) ◄─────────┘
 active ──► past_due ──► canceled / regularización ──► active

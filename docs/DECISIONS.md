@@ -68,7 +68,7 @@
 
 ### D-32 · Precios definitivos y condiciones de la licencia
 **Estado:** CONFIRMADO.
-**Decisión:** dos modalidades con el mismo peso comercial. **Plan Profesional:** ARS 14.000 por mes, 7 días de prueba, hosting y soporte incluidos. **Licencia independiente:** ARS 199.000, pago único, licencia de uso permanente, instalación y configuración incluidas, hosting, dominio y soporte incluidos durante 12 meses, instalación independiente y sin entrega del código fuente. Las condiciones de renovación de los servicios anuales se muestran antes de comprar (landing, `/precios`, `/licencia` y casilla de aceptación en el formulario); el valor de la renovación se publica con `PRICE_LICENSE_RENEWAL`. Las cards comerciales no mencionan actualizaciones.
+**Decisión:** dos modalidades con el mismo peso comercial. **Plan Profesional:** ARS 9.900 por mes, 14 días de prueba, hosting y soporte incluidos. **Licencia independiente:** ARS 149.000, pago único, licencia de uso permanente, instalación y configuración incluidas, hosting, dominio y soporte incluidos durante 12 meses, instalación independiente y sin entrega del código fuente. Las condiciones de renovación de los servicios anuales se muestran antes de comprar (landing, `/precios`, `/licencia` y casilla de aceptación en el formulario); el valor de la renovación se publica con `PRICE_LICENSE_RENEWAL`. Las cards comerciales no mencionan actualizaciones.
 **Motivo:** decisión comercial del dueño.
 
 ### D-33 · Compra de la licencia por Mercado Pago
@@ -113,7 +113,7 @@
 
 ### D-41 · No comunicar «sin tarjeta»
 **Estado:** CONFIRMADO.
-**Decisión:** los textos visibles no mencionan tarjetas para describir la prueba; se comunica «7 días gratis». La lógica de la prueba y de los pagos no cambia.
+**Decisión:** los textos visibles no mencionan tarjetas para describir la prueba; se comunica «14 días gratis». La lógica de la prueba y de los pagos no cambia.
 **Motivo:** decisión comercial del dueño.
 
 ### D-01 · Identidad comercial (nombre + identidad visual)
@@ -188,7 +188,7 @@
 
 ### D-07 · Período de acceso tras vencimiento de la prueba gratuita
 **Estado:** CONFIRMADO (provisional — "provisional" referido a que el número de días puede ajustarse comercialmente, no a la mecánica).
-**Decisión:** 30 días de acceso de **solo lectura** tras el vencimiento de los 7 días de prueba (estado `trial_readonly`). Sin creación/modificación de turnos ni nuevas reservas públicas durante ese período. Sin eliminación automática de datos en ningún momento, ni en `trial_readonly` ni en el estado `locked` posterior.
+**Decisión:** 30 días de acceso de **solo lectura** tras el vencimiento de los 14 días de prueba (estado `trial_readonly`). Sin creación/modificación de turnos ni nuevas reservas públicas durante ese período. Sin eliminación automática de datos en ningún momento, ni en `trial_readonly` ni en el estado `locked` posterior.
 **Motivo:** balance entre presión comercial para convertir y buena fe con el usuario (no perder acceso a sus datos de golpe).
 
 ### D-08 · Precios
@@ -235,4 +235,25 @@
 **Estado:** CONFIRMADO.
 **Decisión:** el consumo por negocio (profesionales activos, turnos, correos por estado, tipo y reintentos) se calcula con `notifications`, `appointments` y `professionals`, y se muestra en `/admin`. Sin analítica externa ni infraestructura nueva.
 **Motivo:** los correos son el único costo variable y hay que verlo antes de definir planes.
+
+### D-47 · Oferta comercial vigente: ARS 9.900 mensual, licencia ARS 149.000, prueba de 14 días
+**Estado:** CONFIRMADO. Reemplaza los importes y la prueba de D-32 (ARS 14.000 / 199.000 / 7 días).
+**Decisión:** Plan Profesional ARS 9.900 por mes con 14 días de prueba, sin permanencia, configuración inicial asistida, hosting y soporte. Licencia independiente ARS 149.000 de pago único: uso permanente, instalación y configuración, base de datos propia, sin código fuente, y hosting, dominio y soporte durante los primeros 12 meses; desde el segundo año se renuevan por separado y **el precio de esa renovación no está definido** (no se publica). Sin suscripción anual ni descuentos. Todo vive en `lib/brand.ts` (`pricing`, `trialPolicy`, `licenseTerms`). Las pruebas ya iniciadas y las suscripciones activas no se tocan: el vencimiento de la prueba se calcula al registrarse y cada suscripción guarda su propio importe.
+**Oferta futura (definida, no publicada):** Equipo mensual ARS 19.900 (hasta 5 profesionales), Licencia Profesional ARS 149.000 (hasta 2), Licencia Equipo ARS 249.000 (hasta 5); en `futurePricing`, sin uso en ninguna página. La prueba admitirá hasta 2 profesionales activos.
+
+### D-48 · Permisos centralizados en el servidor
+**Estado:** CONFIRMADO.
+**Decisión:** `lib/permissions.ts` define qué puede hacer cada rol y `requireWriteContext(permiso)` / `requirePermission(permiso)` (lib/dal.ts) lo exige en cada acción de equipo, horarios, turnos, servicios y clientes, leyendo el rol de la base. Un rol desconocido no puede nada. Hoy `owner` y `admin` pueden todo; las cuentas de profesionales siguen sin habilitarse (etapa 4).
+
+### D-49 · Reasignación explícita y desactivación con turnos resueltos
+**Estado:** CONFIRMADO.
+**Decisión:** un profesional con turnos futuros no se desactiva hasta que el administrador los pase a otro profesional (validado: activo, realiza el servicio, horario libre) o los cancele, uno por uno o todos juntos. Nada se reasigna ni se cancela solo; el historial se conserva; el cliente recibe un correo propio de «cambió el profesional» (`professional_change`).
+
+### D-50 · WhatsApp manual gratuito con wa.me; el automático queda como diseño
+**Estado:** CONFIRMADO (manual implementado; automático solo documentado en `docs/WHATSAPP_AUTOMATION.md`).
+**Decisión:** mensajes preparados que el negocio revisa y envía desde su propio WhatsApp; Agendia no envía, no registra envíos ni muestra estados de entrega, y no usa proveedores. Mensajes sin datos sensibles y con versión discreta.
+
+### D-51 · La migración de cierre de `availability_rules.professionalId` NO se aplica todavía
+**Estado:** CONFIRMADO.
+**Decisión:** producción corre una versión anterior que inserta horarios sin profesional; el trigger de compatibilidad y la columna opcional son lo que permite volver atrás. Se aplicará (columna obligatoria, sin trigger) solo cuando la versión con equipos esté en producción, estable y sin necesidad de rollback.
 

@@ -18,7 +18,7 @@ Se comercializa en dos modalidades sobre el mismo código base:
 - Landing comercial completa en `/`, obligatoria desde el día uno (ver sección 6).
 - Registro con email + contraseña, recuperación de contraseña, sesiones seguras.
 - Onboarding guiado: negocio, rubro, servicios, duración, horarios, slug público.
-- Activación y vencimiento de la prueba gratuita de 7 días, controlados desde servidor, **implementados junto con registro/onboarding** (la integración de cobro real queda para una fase posterior — ver `ROADMAP.md`).
+- Activación y vencimiento de la prueba gratuita de 14 días, controlados desde servidor, **implementados junto con registro/onboarding** (la integración de cobro real queda para una fase posterior — ver `ROADMAP.md`).
 - Servicios (alta, edición, activo/inactivo).
 - Disponibilidad: reglas semanales recurrentes + excepciones puntuales (bloqueos, días no laborables).
 - Agenda manual completa (crear, editar, reprogramar, cancelar, completar, marcar ausente, notas internas).
@@ -37,7 +37,7 @@ Se comercializa en dos modalidades sobre el mismo código base:
 
 ## 3. Modelo comercial
 
-### A. Prueba gratuita (7 días)
+### A. Prueba gratuita (14 días)
 - Se activa automáticamente al completar el registro.
 - No requiere tarjeta.
 - Inicio y vencimiento calculados y validados en servidor (nunca confiados al cliente).
@@ -66,13 +66,13 @@ Configurables mediante un modelo de planes en base de datos. No se definen cifra
 Es la página de entrada del dominio principal — nunca un login directo — y parte obligatoria del MVP, orientada a convertir visitantes en usuarios.
 
 **Secciones:**
-1. **Header:** logo, funcionalidades, cómo funciona, precios, iniciar sesión, CTA destacado "Probar gratis 7 días".
+1. **Header:** logo, funcionalidades, cómo funciona, precios, iniciar sesión, CTA destacado "Probar gratis 14 días".
 2. **Hero:** propuesta de valor directa (ej. "Tus turnos organizados. Tus clientes siempre informados."), subtítulo explicativo, CTA principal "Comenzar gratis" y secundario "Ver cómo funciona", vista previa visual del dashboard y de la experiencia de reserva.
 3. **Beneficios:** menos tiempo organizando turnos, reservas 24hs, agenda centralizada, recordatorios automáticos, menos tareas administrativas, mejor experiencia para los clientes. Sin promesas cuantificadas sin evidencia (ej. no afirmar reducción de ausencias).
 4. **Funcionalidades:** agenda inteligente, reservas online, gestión de clientes, servicios personalizados, horarios configurables, recordatorios automáticos, reprogramación y cancelaciones.
 5. **Cómo funciona (3 pasos):** crear cuenta y configurar servicios → compartir enlace de reservas → administrar turnos desde cualquier dispositivo.
 6. **Para quién es:** variedad de rubros, sin limitar el producto a ninguno.
-7. **Precios:** prueba gratuita 7 días, suscripción mensual, compra única con instalación independiente — valores configurables, sin cifras definitivas todavía.
+7. **Precios:** prueba gratuita 14 días, suscripción mensual, compra única con instalación independiente — valores configurables, sin cifras definitivas todavía.
 8. **FAQ:** funcionamiento de la prueba, si requiere tarjeta, cómo reciben turnos los profesionales, cómo reservan los clientes, qué pasa al vencer la prueba (acceso de solo lectura de 30 días), diferencia entre suscripción y compra única, qué incluye la instalación independiente.
 9. **CTA final:** invitación a iniciar la prueba gratuita.
 10. **Footer:** navegación, contacto, información comercial, enlaces legales configurables.
@@ -103,7 +103,7 @@ Los enlaces de cancelación/reprogramación usan un token opaco por turno, no el
 2. **Reserva pública:** cliente abre `/reservar/[slug]` → ve servicios activos → elige servicio → ve horarios disponibles calculados en servidor → completa nombre y contacto → confirma → recibe email de confirmación con enlaces de cancelación/reprogramación.
 3. **Gestión manual de turno:** el profesional crea/edita un turno desde el dashboard usando las mismas reglas de disponibilidad y solapamiento que la reserva pública (un único camino de validación, no dos lógicas distintas).
 4. **Recordatorio automático:** al confirmarse un turno se programa un recordatorio 24h antes; si el turno se cancela o reprograma, el recordatorio pendiente se recalcula o se cancela — nunca se envía un recordatorio de un turno cancelado.
-5. **Vencimiento de prueba:** a los 7 días la cuenta pasa a solo lectura (30 días) según una política centralizada de acceso, no validaciones dispersas; el profesional puede contratar una suscripción para recuperar el acceso completo sin perder datos.
+5. **Vencimiento de prueba:** a los 14 días la cuenta pasa a solo lectura (30 días) según una política centralizada de acceso, no validaciones dispersas; el profesional puede contratar una suscripción para recuperar el acceso completo sin perder datos.
 
 ## 7. Para quién es
 
