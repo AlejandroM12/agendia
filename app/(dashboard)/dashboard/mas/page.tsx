@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bell, ChevronRight, Clock, CreditCard, LogOut, Scissors, Search, Settings, type LucideIcon } from "lucide-react";
+import { Bell, ChevronRight, Clock, CreditCard, Globe, LogOut, Scissors, Search, Settings, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { requireOrganization } from "@/lib/dal";
 import { isStandalone } from "@/lib/deployment";
@@ -11,11 +11,12 @@ export default async function MorePage() {
   const { organization, user } = await requireOrganization();
 
   const items: Array<{ href: string; label: string; description: string; icon: LucideIcon }> = [
+    { href: "/dashboard/pagina", label: "Mi página pública", description: "Tu marca, tu enlace y tu código QR", icon: Globe },
     { href: "/dashboard/servicios", label: "Servicios", description: "Qué ofrecés, duración y precios", icon: Scissors },
     { href: "/dashboard/disponibilidad", label: "Horarios", description: "Días de atención y bloqueos", icon: Clock },
     { href: "/dashboard/recordatorios", label: "Recordatorios", description: "Avisos automáticos a tus clientes", icon: Bell },
     { href: "/dashboard/turnos", label: "Buscar turnos", description: "Por cliente, fecha o estado", icon: Search },
-    { href: "/dashboard/configuracion", label: "Configuración", description: "Tu negocio, tu enlace y tu cuenta", icon: Settings },
+    { href: "/dashboard/configuracion", label: "Configuración", description: "Actividad, zona horaria y tu cuenta", icon: Settings },
     ...(isStandalone()
       ? []
       : [{ href: "/dashboard/facturacion", label: "Mi plan", description: "Prueba gratuita y suscripción", icon: CreditCard }]),

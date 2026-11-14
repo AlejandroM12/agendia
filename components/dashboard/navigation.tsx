@@ -8,6 +8,7 @@ import {
   Clock,
   CreditCard,
   Ellipsis,
+  Globe,
   Plus,
   Scissors,
   Settings,
@@ -26,6 +27,7 @@ const PRIMARY: Item[] = [
 ];
 
 const SETUP: Item[] = [
+  { href: "/dashboard/pagina", label: "Mi página pública", icon: Globe },
   { href: "/dashboard/servicios", label: "Servicios", icon: Scissors },
   { href: "/dashboard/disponibilidad", label: "Horarios", icon: Clock },
   { href: "/dashboard/recordatorios", label: "Recordatorios", icon: Bell },
@@ -91,7 +93,7 @@ export function MobileTabBar({ canWrite }: { canWrite: boolean }) {
       label: "Más",
       icon: Ellipsis,
       match: (p) =>
-        ["/dashboard/mas", "/dashboard/servicios", "/dashboard/disponibilidad", "/dashboard/recordatorios", "/dashboard/configuracion", "/dashboard/facturacion"].some(
+        ["/dashboard/mas", "/dashboard/pagina", "/dashboard/servicios", "/dashboard/disponibilidad", "/dashboard/recordatorios", "/dashboard/configuracion", "/dashboard/facturacion"].some(
           (prefix) => p.startsWith(prefix),
         ),
     },

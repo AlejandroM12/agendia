@@ -5,7 +5,7 @@ import { isStandalone } from "@/lib/deployment";
 // A partir de Next.js 16, "Middleware" se llama "Proxy" (mismo mecanismo).
 // Ver node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md
 
-const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/onboarding"];
+const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/onboarding", "/vista-previa"];
 const AUTH_PAGES = ["/login", "/registro"];
 
 export default auth((req) => {
@@ -32,7 +32,7 @@ export default auth((req) => {
   // otro dominio: responde los suyos acá.
   if (isStandalone() && pathname === "/sitemap.xml") return new NextResponse(null, { status: 404 });
   if (isStandalone() && pathname === "/robots.txt") {
-    const rules = ["User-agent: *", "Allow: /", "Disallow: /dashboard", "Disallow: /onboarding", "Disallow: /api", "Disallow: /turno"];
+    const rules = ["User-agent: *", "Allow: /", "Disallow: /dashboard", "Disallow: /onboarding", "Disallow: /api/internal", "Disallow: /api/auth", "Disallow: /turno", "Disallow: /vista-previa", "Disallow: /*/mis-turnos"];
     return new NextResponse(`${rules.join("\n")}\n`, { headers: { "content-type": "text/plain; charset=utf-8" } });
   }
 

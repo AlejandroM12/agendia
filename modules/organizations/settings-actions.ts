@@ -7,7 +7,6 @@ import { requireContext, requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { industries } from "@/lib/brand";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { isValidSlugFormat, slugify } from "@/lib/slug";
 
 function isValidTimeZone(value: string): boolean {
   try {
@@ -18,41 +17,23 @@ function isValidTimeZone(value: string): boolean {
   }
 }
 
-const optional = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .transform((v) => (v === "" ? null : v));
-
 const businessSchema = z.object({
-  name: z.string().trim().min(2, "Ingresá el nombre de tu negocio.").max(80),
   industry: z.string().refine((v) => industries.some((i) => i.id === v), "Elegí una actividad."),
-  description: optional(160),
-  phone: optional(40),
-  address: optional(160),
   timezone: z.string().refine(isValidTimeZone, "Zona horaria inválida."),
-  slug: z
-    .string()
-    .trim()
-    .transform((v) => slugify(v))
-    .refine(isValidSlugFormat, "Usá entre 3 y 50 letras, números o guiones. Algunos nombres están reservados."),
 });
 
+/**
+ * Datos operativos del negocio. Nombre, descripción, contacto y enlace son
+ * parte de «Mi página pública» (modules/public-page/actions.ts).
+ */
 export async function updateBusinessAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const access = await requireWriteContext();
   if (!access.ok) return { message: access.message };
-  const { organization } = access.context;
 
-  const parsed = businessSchema.safeParse(Object.fromEntries(formData));
+  const parsed = businessSchema.safeParse({ industry: formData.get("industry"), timezone: formData.get("timezone") });
   if (!parsed.success) return { errors: fieldErrors(parsed.error) };
 
-  if (parsed.data.slug !== organization.slug) {
-    const taken = await db.organization.findUnique({ where: { slug: parsed.data.slug }, select: { id: true } });
-    if (taken) return { errors: { slug: ["Ese enlace ya está en uso. Probá con otro."] } };
-  }
-
-  await db.organization.update({ where: { id: organization.id }, data: parsed.data });
+  await db.organization.update({ where: { id: access.context.organization.id }, data: parsed.data });
 
   revalidatePath("/dashboard", "layout");
   return { ok: true, message: "Cambios guardados." };

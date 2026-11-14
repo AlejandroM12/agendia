@@ -47,7 +47,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <p className="max-w-[45%] truncate text-sm text-muted-foreground">{organization.name}</p>
         </header>
         <AccountBanner organization={organization} />
-        <main className="mx-auto w-full max-w-4xl flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12">
+        <main className="mx-auto w-full max-w-4xl flex-1 px-4 pt-6 pb-28 has-[[data-wide-page]]:max-w-7xl sm:px-6 lg:px-10 lg:pt-10 lg:pb-12">
           {children}
         </main>
       </div>

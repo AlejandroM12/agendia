@@ -27,19 +27,9 @@ const TIMEZONES: Array<[string, string]> = [
 
 export function BusinessForm({
   organization,
-  baseUrl,
   disabled,
 }: {
-  organization: {
-    name: string;
-    industry: string | null;
-    description: string | null;
-    phone: string | null;
-    address: string | null;
-    timezone: string;
-    slug: string;
-  };
-  baseUrl: string;
+  organization: { industry: string | null; timezone: string };
   disabled: boolean;
 }) {
   const [state, action] = useActionState(updateBusinessAction, undefined);
@@ -50,9 +40,6 @@ export function BusinessForm({
   return (
     <form action={action}>
       <fieldset disabled={disabled} className="max-w-lg space-y-5">
-        <Field label="Nombre del negocio" htmlFor="name" error={firstError(state, "name")}>
-          <Input id="name" name="name" defaultValue={organization.name} maxLength={80} required />
-        </Field>
         <Field label="Actividad" htmlFor="industry" error={firstError(state, "industry")}>
           <select id="industry" name="industry" className="field" defaultValue={organization.industry ?? "otro"}>
             {industries.map((item) => (
@@ -63,43 +50,11 @@ export function BusinessForm({
           </select>
         </Field>
         <Field
-          label="Descripción breve"
-          htmlFor="description"
-          optional
-          hint="Aparece debajo del nombre en tu página de reservas."
-          error={firstError(state, "description")}
+          label="Zona horaria"
+          htmlFor="timezone"
+          hint="Define a qué hora se ofrecen y se muestran los turnos."
+          error={firstError(state, "timezone")}
         >
-          <Input id="description" name="description" defaultValue={organization.description ?? ""} maxLength={160} />
-        </Field>
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Teléfono de contacto" htmlFor="phone" optional>
-            <Input id="phone" name="phone" type="tel" inputMode="tel" defaultValue={organization.phone ?? ""} maxLength={40} />
-          </Field>
-          <Field label="Dirección" htmlFor="address" optional>
-            <Input id="address" name="address" defaultValue={organization.address ?? ""} maxLength={160} />
-          </Field>
-        </div>
-        <Field
-          label="Enlace de reservas"
-          htmlFor="slug"
-          hint="Si lo cambiás, el enlace anterior deja de funcionar."
-          error={firstError(state, "slug")}
-        >
-          <div className="flex items-center rounded-lg border border-input bg-card focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/25">
-            <span className="shrink-0 pl-3 text-sm text-muted-foreground">{baseUrl.replace(/^https?:\/\//, "")}/</span>
-            <input
-              id="slug"
-              name="slug"
-              defaultValue={organization.slug}
-              className="h-10 min-w-0 flex-1 bg-transparent pr-3 outline-none"
-              autoCapitalize="none"
-              spellCheck={false}
-              maxLength={50}
-              required
-            />
-          </div>
-        </Field>
-        <Field label="Zona horaria" htmlFor="timezone" error={firstError(state, "timezone")}>
           <select id="timezone" name="timezone" className="field" defaultValue={organization.timezone}>
             {timezones.map(([value, label]) => (
               <option key={value} value={value}>
