@@ -11,6 +11,8 @@ export type AppointmentListItem = {
   status: AppointmentStatus;
   customer: { name: string };
   service: { name: string };
+  /** Solo cuando el negocio trabaja con varios profesionales. */
+  professional?: { displayName: string; color: string } | null;
 };
 
 /** Lista de turnos: hora a la izquierda, quién y qué a la derecha. */
@@ -55,13 +57,17 @@ export function AppointmentList({
               <div
                 className={cn(
                   "w-1 self-stretch rounded-full",
-                  inProgress ? "bg-highlight" : inactive ? "bg-border" : past ? "bg-input" : "bg-primary",
+                  inProgress ? "bg-highlight" : inactive ? "bg-border" : past ? "bg-input" : !appointment.professional && "bg-primary",
                 )}
+                style={appointment.professional && !inactive && !past && !inProgress ? { backgroundColor: appointment.professional.color } : undefined}
                 aria-hidden="true"
               />
               <div className={cn("min-w-0 flex-1", inactive && "opacity-60")}>
                 <p className={cn("truncate font-medium", inactive && "line-through")}>{appointment.customer.name}</p>
-                <p className="truncate text-sm text-muted-foreground">{appointment.service.name}</p>
+                <p className="truncate text-sm text-muted-foreground">
+                  {appointment.service.name}
+                  {appointment.professional && ` · ${appointment.professional.displayName}`}
+                </p>
               </div>
               {inProgress ? (
                 <span className="shrink-0 rounded-full bg-highlight px-2.5 py-0.5 text-xs font-medium text-white">Ahora</span>

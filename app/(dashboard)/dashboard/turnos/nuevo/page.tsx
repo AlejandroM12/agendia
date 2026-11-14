@@ -5,7 +5,9 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
+import { isTeamModeEnabled } from "@/lib/features";
 import { isValidDateStr, todayInTz } from "@/lib/time";
+import { listActiveProfessionals } from "@/modules/team/eligibility";
 
 export const metadata: Metadata = { title: "Nuevo turno" };
 
@@ -17,11 +19,11 @@ export default async function NewAppointmentPage(props: PageProps<"/dashboard/tu
   const requestedDate = typeof params.fecha === "string" ? params.fecha : "";
   const customerId = typeof params.cliente === "string" ? params.cliente : "";
 
-  const [services, customer] = await Promise.all([
+  const [services, customer, professionals] = await Promise.all([
     db.service.findMany({
       where: { organizationId: organization.id },
       orderBy: [{ active: "desc" }, { sortOrder: "asc" }],
-      select: { id: true, name: true, durationMinutes: true, active: true },
+      select: { id: true, name: true, durationMinutes: true, active: true, allProfessionals: true, professionals: { select: { professionalId: true } } },
     }),
     customerId
       ? db.customer.findFirst({
@@ -29,7 +31,24 @@ export default async function NewAppointmentPage(props: PageProps<"/dashboard/tu
           select: { id: true, name: true, phone: true, email: true },
         })
       : null,
+    listActiveProfessionals(db, organization.id),
   ]);
+
+  // Con varios profesionales activos, el turno se agenda eligiendo con quién (o «cualquiera»).
+  const requestedProfessional = typeof params.profesional === "string" ? params.profesional : "";
+  const team =
+    isTeamModeEnabled(organization) && professionals.length > 1
+      ? {
+          professionals: professionals.map((p) => ({ id: p.id, displayName: p.displayName })),
+          performedBy: Object.fromEntries(
+            services.map((s) => [
+              s.id,
+              s.allProfessionals ? professionals.map((p) => p.id) : s.professionals.map((l) => l.professionalId),
+            ]),
+          ),
+          defaultProfessionalId: professionals.some((p) => p.id === requestedProfessional) ? requestedProfessional : null,
+        }
+      : undefined;
 
   return (
     <>
@@ -42,7 +61,8 @@ export default async function NewAppointmentPage(props: PageProps<"/dashboard/tu
         />
       ) : (
         <AppointmentForm
-          services={services}
+          services={services.map(({ id, name, durationMinutes, active }) => ({ id, name, durationMinutes, active }))}
+          team={team}
           defaultDate={isValidDateStr(requestedDate) ? requestedDate : todayInTz(organization.timezone)}
           customer={customer ? { id: customer.id, name: customer.name, detail: customer.phone ?? customer.email ?? "" } : null}
         />

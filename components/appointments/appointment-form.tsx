@@ -12,6 +12,14 @@ import { SlotField } from "./slot-field";
 
 type ServiceOption = { id: string; name: string; durationMinutes: number; active: boolean };
 
+/** Solo cuando el negocio trabaja con varios profesionales activos. */
+export type TeamOptions = {
+  professionals: Array<{ id: string; displayName: string }>;
+  /** Para cada servicio: quiénes lo realizan. */
+  performedBy: Record<string, string[]>;
+  defaultProfessionalId: string | null;
+};
+
 function Step({ number, title, children }: { number: number; title: string; children: React.ReactNode }) {
   return (
     <section>
@@ -30,16 +38,27 @@ export function AppointmentForm({
   services,
   defaultDate,
   customer,
+  team,
 }: {
   services: ServiceOption[];
   defaultDate: string;
   customer: { id: string; name: string; detail: string } | null;
+  team?: TeamOptions;
 }) {
   const form = useForm(createAppointmentAction);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [date, setDate] = useState(defaultDate);
+  const [chosen, setChosen] = useState(team?.defaultProfessionalId ?? "any");
 
-  const loadSlots = useCallback((dateStr: string) => loadSlotsAction(serviceId, dateStr), [serviceId]);
+  // Solo se ofrecen los profesionales que realizan el servicio elegido.
+  const eligible = team ? team.professionals.filter((p) => team.performedBy[serviceId]?.includes(p.id)) : [];
+  const professionalId = eligible.some((p) => p.id === chosen) ? chosen : "any";
+  const askProfessional = eligible.length > 1;
+
+  const loadSlots = useCallback(
+    (dateStr: string) => loadSlotsAction(serviceId, dateStr, undefined, askProfessional && professionalId !== "any" ? professionalId : undefined),
+    [serviceId, askProfessional, professionalId],
+  );
 
   return (
     <form {...form.formProps} className="max-w-xl space-y-8">
@@ -64,7 +83,26 @@ export function AppointmentForm({
         </select>
       </Step>
 
-      <Step number={3} title="Día y horario">
+      {askProfessional && (
+        <Step number={3} title="Profesional">
+          <select
+            name="professionalId"
+            aria-label="Profesional"
+            className="field"
+            value={professionalId}
+            onChange={(e) => setChosen(e.target.value)}
+          >
+            <option value="any">Cualquiera disponible (se asigna automáticamente)</option>
+            {eligible.map((professional) => (
+              <option key={professional.id} value={professional.id}>
+                {professional.displayName}
+              </option>
+            ))}
+          </select>
+        </Step>
+      )}
+
+      <Step number={askProfessional ? 4 : 3} title="Día y horario">
         <div className="space-y-3">
           <input
             type="date"
@@ -75,11 +113,11 @@ export function AppointmentForm({
             onChange={(e) => setDate(e.target.value)}
             required
           />
-          <SlotField date={date} loadSlots={loadSlots} reloadKey={serviceId} allowCustomTime />
+          <SlotField date={date} loadSlots={loadSlots} reloadKey={`${serviceId}:${professionalId}`} allowCustomTime />
         </div>
       </Step>
 
-      <Step number={4} title="Nota interna (opcional)">
+      <Step number={askProfessional ? 5 : 4} title="Nota interna (opcional)">
         <textarea
           name="notes"
           aria-label="Nota interna"

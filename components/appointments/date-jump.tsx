@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { CalendarSearch } from "lucide-react";
 
 /** Salto directo a cualquier fecha de la agenda. */
-export function DateJump({ value }: { value: string }) {
+export function DateJump({ value, professionalId }: { value: string; professionalId?: string }) {
   const router = useRouter();
   return (
     <label className="relative inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-input bg-card px-3 text-sm font-medium hover:bg-muted">
@@ -16,7 +16,7 @@ export function DateJump({ value }: { value: string }) {
         className="absolute inset-0 cursor-pointer opacity-0"
         value={value}
         onChange={(e) => {
-          if (e.target.value) router.push(`/dashboard/agenda?fecha=${e.target.value}`);
+          if (e.target.value) router.push(`/dashboard/agenda?fecha=${e.target.value}${professionalId ? `&profesional=${professionalId}` : ""}`);
         }}
         onClick={(e) => {
           try {
