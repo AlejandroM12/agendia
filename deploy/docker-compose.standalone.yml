@@ -31,6 +31,7 @@ x-app-env: &app-env
   CONTACT_EMAIL: ${CONTACT_EMAIL:-}
   RESEND_API_KEY: ${RESEND_API_KEY:-}
   EMAIL_FROM: ${EMAIL_FROM:-}
+  TEAM_MODE_ENABLED: ${TEAM_MODE_ENABLED:-}
 
 x-logging: &logging
   driver: json-file

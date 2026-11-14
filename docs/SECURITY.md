@@ -56,3 +56,8 @@ Ampliado en `INFRASTRUCTURE.md` §7. Principios de seguridad específicos:
 - Un test de penetración formal o una auditoría de seguridad externa — razonable antes de manejar pagos reales en volumen (Fase 5 en adelante), no antes.
 - Cifrado de datos en reposo más allá de lo que el proveedor de base de datos ya ofrece por defecto — revisar si algún requisito regulatorio específico lo exige, una vez que haya claridad sobre el mercado objetivo.
 - Un WAF (Web Application Firewall) dedicado — las plataformas evaluadas en `INFRASTRUCTURE.md` ya incluyen protecciones básicas de borde; se reevalúa si el volumen de tráfico abusivo lo justifica.
+
+## Equipos y roles (pendiente)
+
+Hoy los roles `owner` y `admin` no se verifican en ningún punto del código y todo miembro puede todo; es inocuo porque solo existe el dueño (no hay invitaciones). **Antes de habilitar cuentas de profesionales** hay que resolver los cinco riesgos descriptos en `docs/MULTI_PROFESSIONAL.md` §10 (roles sin verificación, una membresía por usuario, avisos internos a todas las membresías, consultas sin alcance por profesional, acciones que validan escritura y no rol). Las claves foráneas compuestas `(organizationId, id)` ya impiden, en la base de datos, asociar turnos, horarios, bloqueos y servicios con profesionales de otra organización.
+

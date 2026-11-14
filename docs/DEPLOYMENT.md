@@ -128,6 +128,16 @@ La imagen se construye en el servidor y descarga tres tipografías más de Googl
 
 Sin migraciones, sin variables de entorno y sin dependencias nuevas: es solo código. Se despliega con `./deploy/deploy.sh` (y `./deploy/instance.sh update-all` si hay instalaciones independientes). Verificación: en `/registro` los requisitos de contraseña se ven desde el inicio; en una página pública, confirmar una reserva sin email ni WhatsApp marca los campos sin borrar el nombre ni el horario elegido. Rollback: `./deploy/deploy.sh <commit anterior>`, sin pasos sobre la base.
 
+### Versión con equipos (etapa 1): migración de base de datos
+
+A diferencia de las versiones anteriores, esta **incluye una migración** (`20261115010000_team_foundation`). Es aditiva y atómica (si una comprobación falla, se revierte entera), `deploy.sh` ya hace una copia previa y la aplica sola. Después de desplegar:
+
+```sh
+docker compose --env-file .env.production run --rm migrate node scripts/verify-team-data.mjs   # debe terminar en «OK»
+```
+
+El modo equipo queda **apagado** en todos los negocios: nada cambia para los usuarios. Encender un negocio (piloto): `docker compose --env-file .env.production run --rm migrate node scripts/team-mode.mjs <enlace> on`. **Rollback** con el modo apagado: `./deploy/deploy.sh <commit anterior>` sin tocar la base; con un negocio que ya usa varios profesionales, leer antes `docs/MULTI_PROFESSIONAL.md` §8. Variable opcional `TEAM_MODE_ENABLED=1` (enciende el modo para toda la instalación; para instalaciones independientes que lo usen).
+
 ## 6. Monitoreo, logs y alertas
 
 - **Disponibilidad:** `GET /api/health` responde 200 solo si la app llega a la base. Crear un monitor externo (UptimeRobot, plan gratuito: revisa cada 5 minutos y avisa por email) de tipo *keyword* sobre `https://TU_DOMINIO/api/health` buscando `"status":"ok"`. Sumar un monitor por cada instalación independiente. Es la única forma de enterarse si se cae el servidor entero.

@@ -210,3 +210,29 @@
 **Estado:** CONFIRMADO.
 **Decisión:** la ruta `/` muestra siempre la landing comercial, nunca un login directo. Es parte obligatoria del MVP.
 **Motivo:** la landing es el mecanismo de conversión de visitantes a usuarios; postergarla reduciría la capacidad de validar el producto comercialmente desde el lanzamiento.
+
+### D-42 · Equipos: agenda propia por profesional, apagado por defecto
+**Estado:** CONFIRMADO (etapa 1 implementada; ver `docs/MULTI_PROFESSIONAL.md`).
+**Decisión:** cada profesional tiene sus horarios, sus turnos y sus bloqueos; los bloqueos generales (sin profesional) afectan a todos. El modo equipo se activa por negocio (`Organization.teamModeEnabled`, con `scripts/team-mode.mjs`) o para toda la instalación (`TEAM_MODE_ENABLED=1`) y está apagado por defecto: apagado, el negocio se comporta como con un único profesional aunque la base tenga más filas. Un negocio con un solo profesional conserva exactamente la experiencia y la disponibilidad de antes.
+**Motivo:** poder atender a barberías, estéticas y consultorios sin arriesgar a los negocios en producción ni cambiar lo que ya funciona.
+
+### D-43 · Planes por cupo de profesionales activos
+**Estado:** CONFIRMADO (capacidades en `lib/plans.ts`; precios y cobro no cambian).
+**Decisión:** Plan Profesional hasta 2 profesionales activos, Plan Equipo hasta 5, la prueba gratuita hasta 2. La cuenta administrativa que no atiende y los profesionales desactivados no ocupan cupo; el dueño que atiende sí. `Organization.extraProfessionals` permite ampliaciones futuras. Los límites se validan en el servidor, con un lock por organización para que altas o reactivaciones simultáneas no los superen. Una reducción de plan nunca borra ni desactiva nada: bloquea altas y reactivaciones y deja al administrador elegir a quién desactivar.
+**Motivo:** la diferencia entre planes es la escala del equipo, no las funcionalidades.
+
+### D-44 · Asignación automática por menor carga, con un lock por profesional
+**Estado:** CONFIRMADO.
+**Decisión:** con «cualquier profesional» se asigna el elegible libre con menos turnos activos ese día, con desempate determinista (orden del equipo). Los candidatos se prueban de a uno, cada uno en su transacción con el lock de ese profesional; nunca se toman dos locks de profesional a la vez. La restricción de exclusión por profesional sigue siendo la garantía final. Los reintentos y dobles envíos se resuelven con una clave de idempotencia por formulario.
+**Motivo:** reparto parejo y predecible, sin deadlocks ni duplicados.
+
+### D-45 · Migración aditiva con trigger de compatibilidad
+**Estado:** CONFIRMADO.
+**Decisión:** `team_foundation` solo agrega estructura y rellena `professionalId` de los horarios con el profesional original; las claves foráneas son compuestas `(organizationId, id)` para que la base impida cruces entre organizaciones; los turnos ya no se borran en cascada al borrar un profesional. La columna de los horarios queda opcional y un trigger la completa para la versión anterior de la aplicación, de modo que el rollback sea seguro mientras el modo equipo esté apagado. La restricción obligatoria llega en una migración de cierre posterior.
+**Motivo:** poder volver atrás sin pérdida de datos durante el lanzamiento.
+
+### D-46 · Métricas de consumo con las tablas existentes
+**Estado:** CONFIRMADO.
+**Decisión:** el consumo por negocio (profesionales activos, turnos, correos por estado, tipo y reintentos) se calcula con `notifications`, `appointments` y `professionals`, y se muestra en `/admin`. Sin analítica externa ni infraestructura nueva.
+**Motivo:** los correos son el único costo variable y hay que verlo antes de definir planes.
+
