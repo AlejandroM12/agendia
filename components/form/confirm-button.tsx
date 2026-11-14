@@ -1,7 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { NETWORK_ERROR_MESSAGE } from "./use-form";
 
 type Props = Omit<React.ComponentProps<typeof Button>, "onClick" | "action"> & {
   action: () => Promise<unknown>;
@@ -17,7 +19,16 @@ export function ConfirmButton({ action, confirmMessage, children, variant = "des
       variant={variant}
       disabled={pending}
       onClick={() => {
-        if (window.confirm(confirmMessage)) startTransition(async () => void (await action()));
+        if (!window.confirm(confirmMessage)) return;
+        startTransition(async () => {
+          try {
+            await action();
+          } catch (error) {
+            // Las redirecciones de Next viajan como excepción: siguen su camino.
+            unstable_rethrow(error);
+            window.alert(NETWORK_ERROR_MESSAGE);
+          }
+        });
       }}
       {...props}
     >
