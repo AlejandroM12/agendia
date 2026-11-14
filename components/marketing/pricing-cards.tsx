@@ -84,6 +84,7 @@ export function PricingCards({ className }: { className?: string }) {
           "Tu propia página para recibir reservas online",
           "Tus clientes pueden reservar las 24 horas",
           "Confirmaciones y recordatorios automáticos por correo",
+          "Contactá a tus clientes por WhatsApp con mensajes preparados desde tu agenda",
           "Accedé desde tu celular o computadora",
           "Personalizá tu página con tu marca, logo y colores",
           "Te ayudamos a configurar tu agenda",

@@ -69,12 +69,15 @@ export default async function RemindersPage() {
                 </p>
               </div>
             </li>
-            <li className="flex items-start gap-3 rounded-xl border border-dashed border-input p-4">
-              <MessageCircle className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <li className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
+              <MessageCircle className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
               <div>
-                <p className="font-medium text-muted-foreground">WhatsApp automático · Próximamente</p>
+                <p className="font-medium">
+                  WhatsApp, a mano{" "}
+                  <span className="ml-1 rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-muted-foreground">Lo enviás vos</span>
+                </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  Mientras tanto, desde cada turno podés abrir un chat de WhatsApp con el mensaje ya escrito.
+                  Desde cada turno podés abrir WhatsApp con el mensaje ya escrito (confirmación, recordatorio, cambio o cancelación), revisarlo y enviarlo desde tu propio WhatsApp. No sale solo.
                 </p>
               </div>
             </li>

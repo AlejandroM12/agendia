@@ -24,7 +24,11 @@ export type AffectedItem = {
 
 function ReassignRow({ item }: { item: AffectedItem }) {
   const router = useRouter();
-  const form = useForm(reassignAppointmentAction.bind(null, item.id));
+  const form = useForm(async (prev: Parameters<typeof reassignAppointmentAction>[1], data: FormData) => {
+    const result = await reassignAppointmentAction(item.id, prev, data);
+    if (result?.ok) router.refresh();
+    return result;
+  });
   const [cancelError, setCancelError] = useState<string | null>(null);
 
   return (

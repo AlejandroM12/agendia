@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button-link";
-import { ProfessionalForm, PROFESSIONAL_COLORS } from "@/components/team/team-forms";
+import { ProfessionalForm } from "@/components/team/team-forms";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
 import { isTeamModeEnabled } from "@/lib/features";
+import { PROFESSIONAL_COLORS } from "@/lib/team-colors";
 import { createProfessionalAction } from "@/modules/team/actions";
 import { getProfessionalQuota } from "@/modules/team/professionals";
 
