@@ -1,5 +1,7 @@
 "use server";
 
+import { createHash } from "node:crypto";
+import { after } from "next/server";
 import { z } from "zod";
 import type { Organization } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -9,6 +11,9 @@ import { addDays, formatTime, isValidDateStr, todayInTz } from "@/lib/time";
 import { cancelAppointment, createAppointment, rescheduleAppointment } from "@/modules/appointments/service";
 import { getAvailability } from "@/modules/availability/queries";
 import { customerInputSchema } from "@/modules/customers/service";
+import { isEmailConfigured } from "@/modules/notifications/email";
+import { normalizeLookupEmail, requestAppointmentsLink } from "@/modules/public-page/lookup";
+import { resolvePublicSlug } from "@/modules/public-page/slug";
 
 /**
  * Acciones de la página pública de reservas. No hay sesión: todo se valida
@@ -184,4 +189,52 @@ export async function rescheduleByTokenAction(token: string, slotIso: string): P
     actor: "customer",
   });
   return result.ok ? { ok: true } : { ok: false, message: result.message };
+}
+
+export type LookupState = { ok: true; message: string; devLink?: string } | { ok: false; message: string } | undefined;
+
+/** La misma respuesta exista o no el email: no revela quién es cliente del negocio. */
+const LOOKUP_SENT = "Si ese email tiene turnos en este negocio, te enviamos un enlace para verlos. Revisá tu casilla (y el correo no deseado).";
+
+/**
+ * «Consultá tus turnos»: envía al email indicado un enlace temporal para
+ * ver sus reservas en este negocio. Nunca muestra turnos ni confirma si el
+ * email existe: el acceso se demuestra abriendo el enlace.
+ */
+export async function requestAppointmentsLinkAction(_prev: LookupState, formData: FormData): Promise<LookupState> {
+  if (String(formData.get("website") ?? "") !== "") return { ok: true, message: LOOKUP_SENT };
+
+  const ip = await clientIp();
+  if (!(await rateLimit(`lookup:ip:${ip}`, 8, 3600)).allowed) return { ok: false, message: TOO_MANY_ATTEMPTS };
+
+  const email = z.email().safeParse(normalizeLookupEmail(String(formData.get("email") ?? "")));
+  if (!email.success) return { ok: false, message: "Ingresá un email válido." };
+
+  const resolution = await resolvePublicSlug(String(formData.get("slug") ?? ""));
+  if (!resolution || resolution.kind !== "organization") return { ok: false, message: "No encontramos este negocio." };
+  const { organization } = resolution;
+
+  // Tope por casilla: nadie puede llenarle el correo a otra persona. Al
+  // superarlo se responde igual, sin enviar nada.
+  const emailKey = createHash("sha256").update(email.data).digest("hex").slice(0, 32);
+  if (!(await rateLimit(`lookup:email:${organization.id}:${emailKey}`, 3, 3600)).allowed) {
+    return { ok: true, message: LOOKUP_SENT };
+  }
+
+  if (isEmailConfigured()) {
+    // El envío ocurre después de responder: el tiempo de respuesta tampoco
+    // delata si el email tiene turnos.
+    after(() =>
+      requestAppointmentsLink(organization, email.data).catch((error) =>
+        console.error("[lookup] error al emitir el enlace de consulta", error),
+      ),
+    );
+    return { ok: true, message: LOOKUP_SENT };
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    return { ok: false, message: "La consulta por email no está disponible en este momento. Comunicate con el negocio." };
+  }
+  const result = await requestAppointmentsLink(organization, email.data);
+  return { ok: true, message: LOOKUP_SENT, devLink: result.devLink };
 }
