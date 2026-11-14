@@ -124,6 +124,10 @@ Verificación después de desplegar: abrir la página pública de un negocio exi
 
 La imagen se construye en el servidor y descarga tres tipografías más de Google Fonts durante el build: necesita salida a Internet, igual que antes.
 
+### Versión con formularios y pantallas de cuenta mejorados
+
+Sin migraciones, sin variables de entorno y sin dependencias nuevas: es solo código. Se despliega con `./deploy/deploy.sh` (y `./deploy/instance.sh update-all` si hay instalaciones independientes). Verificación: en `/registro` los requisitos de contraseña se ven desde el inicio; en una página pública, confirmar una reserva sin email ni WhatsApp marca los campos sin borrar el nombre ni el horario elegido. Rollback: `./deploy/deploy.sh <commit anterior>`, sin pasos sobre la base.
+
 ## 6. Monitoreo, logs y alertas
 
 - **Disponibilidad:** `GET /api/health` responde 200 solo si la app llega a la base. Crear un monitor externo (UptimeRobot, plan gratuito: revisa cada 5 minutos y avisa por email) de tipo *keyword* sobre `https://TU_DOMINIO/api/health` buscando `"status":"ok"`. Sumar un monitor por cada instalación independiente. Es la única forma de enterarse si se cae el servidor entero.

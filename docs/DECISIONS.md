@@ -106,6 +106,16 @@
 **Decisión:** el cliente ingresa su email en `/<negocio>/mis-turnos` y, solo si tiene turnos en ese negocio, recibe un enlace válido por 60 minutos. La respuesta en pantalla es siempre la misma y el envío ocurre después de responder. El token se guarda como hash, vale para un negocio y un email, se puede abrir más de una vez dentro de su vigencia y se invalida al pedir otro. Límites: 8 pedidos por hora por IP y 3 por hora por casilla y negocio. Cancelar y reprogramar reutilizan la página existente `/turno/<token>`.
 **Motivo:** acceso sin cuenta ni contraseña, sin exponer quién es cliente de un negocio ni datos personales a quien no controla la casilla.
 
+### D-40 · Un solo patrón para enviar formularios
+**Estado:** CONFIRMADO.
+**Decisión:** todos los formularios usan `useForm` (`components/form/use-form.ts`): el envío se hace con `onSubmit`, no con `<form action={…}>`. Valida en el navegador (restricciones nativas con mensajes en español y, donde hay, el mismo esquema Zod del servidor), muestra cada error debajo de su campo, lleva el foco al primero, convierte los fallos de red en un mensaje e ignora envíos repetidos. El servidor valida siempre. Los requisitos de contraseña tienen una única definición (`lib/password-rules.ts`) de la que salen el esquema y los indicadores en pantalla.
+**Motivo:** con `<form action>` React reinicia los campos no controlados cada vez que la acción termina, también cuando devuelve un error: la persona perdía lo que había escrito. Sin librerías nuevas.
+
+### D-41 · No comunicar «sin tarjeta»
+**Estado:** CONFIRMADO.
+**Decisión:** los textos visibles no mencionan tarjetas para describir la prueba; se comunica «7 días gratis». La lógica de la prueba y de los pagos no cambia.
+**Motivo:** decisión comercial del dueño.
+
 ### D-01 · Identidad comercial (nombre + identidad visual)
 **Estado:** CONFIRMADO. Identidad visual inicial aprobada.
 **Decisión:** nombre comercial **Agendia**; eslogan provisional «Tu agenda, más simple»; paleta celeste/blanco/grises (`primary #0284C7`, `primary light #E0F2FE`, `background #FFFFFF`, `surface #F8FAFC`, `border #E2E8F0`, `text #0F172A`); tipografía Geist; estilo SaaS premium minimalista, mobile-first, sin gradientes ni colores llamativos.
