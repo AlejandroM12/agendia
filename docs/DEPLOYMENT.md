@@ -128,6 +128,32 @@ La imagen se construye en el servidor y descarga tres tipografías más de Googl
 
 Sin migraciones, sin variables de entorno y sin dependencias nuevas: es solo código. Se despliega con `./deploy/deploy.sh` (y `./deploy/instance.sh update-all` si hay instalaciones independientes). Verificación: en `/registro` los requisitos de contraseña se ven desde el inicio; en una página pública, confirmar una reserva sin email ni WhatsApp marca los campos sin borrar el nombre ni el horario elegido. Rollback: `./deploy/deploy.sh <commit anterior>`, sin pasos sobre la base.
 
+### Despliegue acumulado de las etapas 1 a 3 y de la nueva oferta (orden y verificaciones)
+
+Todavía **nada de esto está en producción**. Orden recomendado, para evitar inconsistencias temporales (los precios de las páginas públicas se fijan al **construir la imagen**; el cobro sale de la base):
+
+1. **Antes de empezar:** CI verde en `main`; `git log HEAD..origin/main` revisado; copia de seguridad (`deploy/backup.sh`) y comprobar que se puede leer.
+2. **Precio del plan en `/admin`** (versión vigente, antes de desplegar): cambiar «Precio del Plan Profesional» de 14.000 a **9.900**. Durante unos minutos la página mostrará el precio viejo y se cobrará el nuevo (menor que el anunciado): la inconsistencia menos dañina. Solo afecta a las suscripciones que se inicien después; **no se modifican suscripciones existentes**.
+3. **`.env.production`** (antes de `deploy.sh`, que lo lee al construir): `PRICE_MONTHLY=9900`, `PRICE_ONE_TIME=149000`, `PRICE_LICENSE_RENEWAL=` (vacía: la renovación no está definida) y `TEAM_MODE_ENABLED=` (vacía: modo equipo deshabilitado). Nombres verificados contra `docker-compose.yml`, `Dockerfile` y `deploy/.env.production.example`.
+4. **`./deploy/deploy.sh`**: copia previa → construcción (toma los precios) → `up -d` (el servicio `migrate` aplica las cuatro migraciones **antes** de que arranque `web`: `team_foundation`, `professional_photos`, `professional_change_notification`, `notification_payload`) → espera a `/api/health`. No hay una ventana en la que la aplicación nueva corra sin las migraciones.
+5. **Instalaciones independientes:** `./deploy/instance.sh update-all` (cada una hace su copia previa). Su `.env` lleva su propio `TEAM_MODE_ENABLED`, vacío.
+
+**Verificaciones posteriores** (todas deben pasar; si una falla, ver rollback abajo):
+
+- Contenedores: `docker compose --env-file .env.production ps` (web, worker, postgres, caddy y backup arriba; `migrate` terminó en 0).
+- Health: `curl -fsS https://DOMINIO/api/health`.
+- Migraciones: `docker compose --env-file .env.production run --rm migrate npx prisma migrate status` (sin pendientes) y `node scripts/verify-team-data.mjs` (termina en «OK», totales iguales a los de antes).
+- Precio visible: la landing y `/precios` muestran **$9.900** y **$149.000**; la licencia aclara que desde el segundo año se renueva por separado.
+- Precio efectivo: «Mi plan» de una cuenta en prueba muestra 9.900; `/admin` muestra 9.900 (y, en sandbox, la suscripción se crea por 9.900; sin cobros reales).
+- Registro: crear una cuenta de prueba; su prueba vence **14 días** después (`trialEndsAt`).
+- Reserva de un solo profesional: una reserva pública completa en un negocio existente; **sin paso de profesional**, comportamiento de siempre.
+- Correos: la confirmación llega (o queda registrada en «Recordatorios»); sin la línea «Profesional».
+- Gestión del turno: «Ver mi turno», reprogramar y cancelar funcionan; «Consultá tus turnos» envía el enlace.
+- WhatsApp manual: desde un turno con teléfono válido, «WhatsApp» abre `wa.me` con el mensaje armado.
+- Modo equipo deshabilitado: `/dashboard/equipo` dice que no está habilitado; ninguna página pública muestra elección de profesional; `scripts/team-mode.mjs` lista negocios sin ninguno encendido.
+
+**Rollback acumulado.** Con el modo equipo apagado en todos los negocios y **sin** fotos de profesionales ni avisos `professional_change` (lo esperable justo después de desplegar): `./deploy/deploy.sh 81d974b` y listo; la base ya es compatible (trigger de compatibilidad de horarios, columnas nuevas opcionales). Si ya hay fotos de profesionales o avisos `professional_change`: antes de volver atrás, `node scripts/prepare-rollback.mjs` (informa) y `--apply` (aparta sin borrar; se revierte con `--restore`). Con negocios que ya usan varios profesionales: `scripts/team-mode.mjs <negocio> off` primero. Detalle y límites en `docs/MULTI_PROFESSIONAL.md` §15.7. La restauración de `backups/pre-deploy-*.sql.gz` es el último recurso y descarta lo cargado después.
+
 ### Precios nuevos (ARS 9.900 / 149.000) y prueba de 14 días
 
 Hay que actualizar **tres cosas** al desplegar, o la landing y el cobro quedan distintos:

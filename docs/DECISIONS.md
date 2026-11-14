@@ -257,3 +257,11 @@
 **Estado:** CONFIRMADO.
 **Decisión:** producción corre una versión anterior que inserta horarios sin profesional; el trigger de compatibilidad y la columna opcional son lo que permite volver atrás. Se aplicará (columna obligatoria, sin trigger) solo cuando la versión con equipos esté en producción, estable y sin necesidad de rollback.
 
+### D-52 · Reserva pública con elección de profesional
+**Estado:** CONFIRMADO (implementada, deshabilitada por defecto con el modo equipo).
+**Decisión:** el paso de profesional aparece solo con dos o más opciones reales, calculadas con la misma regla que valida la reserva; «Cualquier profesional» usa el motor y la asignación de la etapa 1. Reprogramar respeta la intención del cliente: quien eligió a alguien lo conserva (o se le informa que ya no está disponible); quien eligió «cualquiera» conserva al vigente si puede y, si no, se le avisa el cambio. La reasignación del negocio no cambia lo que el cliente pidió.
+
+### D-53 · Rollback no destructivo
+**Estado:** CONFIRMADO.
+**Decisión:** para volver a una versión anterior con filas que esta no entiende (fotos de profesionales, avisos de cambio de profesional) se usa `scripts/prepare-rollback.mjs`, que las aparta en tablas de respaldo y se puede revertir; borrar filas no es parte del procedimiento. La reducción del Plan Equipo con exceso de profesionales queda **sin implementar** hasta que el dueño apruebe una política (alternativas en `docs/MULTI_PROFESSIONAL.md` §15.10).
+

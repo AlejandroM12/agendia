@@ -8,7 +8,7 @@ Desde el detalle de un turno, el botón «WhatsApp» despliega los mensajes que 
 
 | Estado del turno | Opciones |
 |---|---|
-| Confirmado y por venir | Enviar confirmación · Enviar recordatorio · Avisar el cambio de horario · Escribir un mensaje |
+| Confirmado y por venir | Enviar confirmación · Enviar recordatorio · Avisar el cambio de horario · Avisar el cambio de profesional (solo negocios con equipo) · Escribir un mensaje |
 | Cancelado y por venir | Escribir un mensaje · Avisar la cancelación |
 | Pasado, completado o ausente | Escribir un mensaje |
 

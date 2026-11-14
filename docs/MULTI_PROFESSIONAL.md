@@ -1,6 +1,6 @@
 # Equipos con varios profesionales
 
-Estado: **etapas 1 y 2 implementadas** (modelo de datos, motor de disponibilidad, pantalla «Equipo», horarios por profesional, agenda del equipo, reasignación; ver sección 14). Las etapas 3 a 5 están diseñadas en la sección 12 y **no** están implementadas. La funcionalidad está **apagada por defecto**: ningún negocio existente cambia de comportamiento hasta que se la enciende a propósito (sección 7).
+Estado: **etapas 1, 2 y 3 implementadas** (modelo de datos, motor de disponibilidad, pantalla «Equipo», horarios por profesional, agenda del equipo, reasignación y reserva pública con elección de profesional; ver secciones 14 y 15). Las etapas 4 y 5 están diseñadas en la sección 12 y **no** están implementadas. La funcionalidad está **apagada por defecto**: ningún negocio existente cambia de comportamiento hasta que se la enciende a propósito (sección 7).
 
 ## 1. Qué cambió y qué no
 
@@ -258,7 +258,7 @@ Sigue **apagada por defecto**: todo lo de esta sección solo aparece con el modo
 1. `20261116000000_professional_photos`: valor `professional` en `OrganizationImageKind`; la unicidad `(organizationId, kind)` pasa a un índice parcial solo para logo y portada, de modo que cada profesional puede tener su foto. Los logos y portadas existentes no cambian.
 2. `20261116000100_professional_change_notification`: valor `professional_change` en `NotificationType`.
 
-Ambas son seguras con el esquema anterior mientras no existan filas con esos valores nuevos. **El rollback de la aplicación deja de ser seguro cuando existe una foto de profesional (el código anterior lee todas las imágenes del negocio y fallaría con el valor desconocido) o un aviso `professional_change` pendiente.** Antes de volver atrás: quitar las fotos de profesionales (`DELETE FROM organization_images WHERE kind = 'professional'`; el campo `photoImageId` pasa a nulo solo) y esperar o anular los avisos pendientes de ese tipo. Los valores de enum no se pueden quitar, pero quedan sin uso. Probadas sobre la base local y con la prueba de migración existente.
+Ambas son seguras con el esquema anterior mientras no existan filas con esos valores nuevos. **El rollback de la aplicación necesita un paso previo cuando existe una foto de profesional o un aviso `professional_change`** (el código anterior los lee y falla con el valor de enum desconocido). El paso **no borra nada**: ver la sección 15.7 (`scripts/prepare-rollback.mjs`). Los valores de enum no se pueden quitar de PostgreSQL, pero quedan sin uso.
 **No se aplicó la migración de cierre** de `availability_rules.professionalId` (D-51).
 
 ### Costos e infraestructura
@@ -272,4 +272,94 @@ No se borra ni se desactiva nada. La pantalla Equipo muestra el exceso; no se pu
 ### Qué no cubre esta etapa
 
 Reserva pública con elección de profesional y correos con el profesional en todos los casos (etapa 3); cuentas, invitaciones y roles de profesional (etapa 4); integración comercial (etapa 5). La etapa 3 puede empezar sin cambios de backend: ya acepta `professionalId`, `"any"` y `idempotencyKey`.
+
+## 15. Etapa 3: reserva pública con varios profesionales (implementada)
+
+Sigue **apagada por defecto** (modo equipo, sección 7). Con el modo apagado, o con un solo profesional elegible, la página pública es la de siempre.
+
+### 15.1 Flujo de reserva
+
+1. **Servicio** (se omite si hay uno solo). 2. **Profesional**, solo si el servicio tiene dos o más opciones reales. 3. **Día y horario.** 4. **Datos** con un **resumen** (negocio, servicio, profesional o «Cualquier profesional», fecha, hora, duración, precio si el negocio lo muestra y los datos del cliente). 5. **Confirmar**; la pantalla final nombra al profesional **efectivamente asignado**.
+
+- Las opciones salen de la misma regla que valida la reserva en el servidor (`eligiblePool` en `modules/team/eligibility.ts`): profesional activo, de este negocio, que realiza el servicio, con reservas online habilitadas y con el modo equipo encendido. Es imposible que la página ofrezca a alguien que la reserva rechazaría.
+- Con **un solo elegible no hay paso extra** y no se envía ningún identificador de profesional. Un servicio **sin ningún elegible** se muestra deshabilitado («Por ahora no se puede reservar online») y, si se llega a él, un mensaje invita a elegir otro servicio o contactar al negocio.
+- Cambiar de servicio o de profesional descarta el horario elegido y vuelve a pedir la disponibilidad; los datos personales no se pierden. Si el horario se ocupa durante la confirmación: «Ese horario acaba de ocuparse», se conservan los datos y el profesional elegido, y se vuelve a pedir la disponibilidad.
+- El doble clic y los reintentos usan la clave de idempotencia de la etapa 1 (misma clave, mismo turno).
+
+### 15.2 Selección de profesional
+
+Tarjetas en el orden definido por el administrador: foto (o la inicial sobre el color de la página del negocio), nombre, descripción breve y, si el profesional no hace todos los servicios, cuáles hace. La última tarjeta es «Cualquier profesional»: *«Encontrá un horario con cualquiera de los profesionales disponibles»* (no promete el primer turno). La página **nunca** recibe teléfono, correo, cuenta, color interno, orden ni configuración administrativa; solo `id`, nombre, descripción y la URL de la foto pública ya procesada (`modules/public-page/team.ts`). El `id` es el UUID del profesional, necesario para elegirlo, y **no es una credencial**: el servidor vuelve a validarlo en cada pedido.
+
+### 15.3 «Cualquier profesional»
+
+Disponibilidad: unión de los horarios de los elegibles, sin duplicados. Asignación: el elegible libre con **menos turnos ese día**, con el desempate fijo de la etapa 1 (orden del equipo); se revalida al confirmar y, si el primero deja de estar libre, se intenta con el siguiente, uno por vez y cada uno en su transacción (sin deadlocks). Si ninguno está libre, se informa el conflicto. No hay lógica de disponibilidad en el navegador: es el mismo motor.
+
+### 15.4 Gestión del turno por el cliente
+
+Mismo mecanismo de enlaces con token. La pantalla «Tu turno» y «Tus turnos» (consulta por email) nombran al profesional **solo en negocios con equipo**. Reglas de reprogramación (comportamiento exacto):
+
+| Situación | Horarios que ve el cliente | Qué pasa al confirmar |
+|---|---|---|
+| Eligió a un profesional | Solo los de su profesional vigente | Se conserva. Nunca se lo cambia por otro; un horario de otro profesional pedido a mano se rechaza |
+| Eligió a un profesional y este ya no atiende ese servicio online (inactivo, sin reservas online o sin el servicio) | Ninguno: mensaje «El profesional de tu turno ya no está disponible para reprogramar online» con el teléfono del negocio | No se reprograma ni se lo reemplaza; puede cancelar |
+| Eligió «cualquiera» | La unión de todos los elegibles | Se conserva al profesional vigente si está libre en el nuevo horario; si no, se asigna otro elegible libre. La pantalla avisa antes («puede cambiar quién te atiende») y después («Con este horario te atiende X») |
+| El negocio reasignó el turno antes | Se parte del profesional **vigente**; nunca se restaura en silencio al anterior | Quien eligió uno concreto pasa a «elegir al nuevo» (solo ve sus horarios); quien eligió «cualquiera» sigue en «cualquiera» |
+
+Todo se vuelve a validar en el servidor (elegibilidad y disponibilidad) con la misma transacción de las etapas anteriores. **Cancelar** libera el horario de ese profesional, conserva el historial y no toca otras agendas ni otros turnos.
+
+### 15.5 Correos
+
+Confirmación, recordatorio, reprogramación y cancelación incluyen «Profesional» (solo en negocios con equipo). Una reprogramación del cliente que cambia al profesional envía **un solo** correo que lo dice expresamente («antes era X y ahora te atiende Y», asunto «cambió de horario y de profesional»); el dato del profesional anterior viaja en `notifications.payload`. La reasignación administrativa envía «Cambió quién te atiende» (etapa 2). Los avisos pendientes se anulan y se reemplazan en cada cambio, así que no se duplican ni salen avisos de horarios viejos; no suben los correos por turno. Sin motivos de consulta, diagnósticos ni notas.
+
+### 15.6 WhatsApp manual
+
+Sigue igual y se amplía: el mensaje nombra al profesional asignado (salvo el modo discreto) y hay un aviso «Avisar el cambio de profesional» (solo en negocios con equipo y turnos por venir). Los enlaces de gestión, los teléfonos válidos e inválidos y el modo discreto están cubiertos por pruebas. Sin envíos automáticos ni API de Meta (`docs/WHATSAPP_AUTOMATION.md` no cambia).
+
+### 15.7 Migración y rollback
+
+**Migración nueva de la etapa 3** (aditiva): `20261117000000_notification_payload` agrega `notifications.payload` (JSON, opcional; la versión anterior la ignora).
+
+Migraciones pendientes de producción, en orden: `20261115010000_team_foundation` (etapa 1), `20261116000000_professional_photos`, `20261116000100_professional_change_notification` (etapa 2) y `20261117000000_notification_payload`. La de cierre de `availability_rules.professionalId` **sigue sin aplicarse** (D-51).
+
+**Qué impide volver a la versión anterior sin preparar la base:** (a) filas de `organization_images` con `kind = 'professional'` y (b) filas de `notifications` con `type = 'professional_change'`: la versión anterior no conoce esos valores y falla al leerlas (fotos: la página pública y el panel; avisos: la pantalla «Recordatorios»). Un negocio con varios profesionales, sus turnos asignados y sus horarios individuales **no** rompen la versión anterior (el trigger completa `professionalId` en los horarios; los turnos siguen siendo válidos), pero esa versión trataría a todos como un solo profesional: por eso, antes de volver atrás, apagar el modo equipo de los negocios que lo usan (`team:mode off`), que no borra nada.
+
+**Procedimiento no destructivo** (`scripts/prepare-rollback.mjs`, `npm run rollback:prepare`):
+
+1. Copia de seguridad completa (`deploy/backup.sh` o el `pg_dump` de `deploy.sh`).
+2. Sin argumentos informa cuántas filas habría que mover; no modifica nada.
+3. `--apply`, en **una transacción**: copia las fotos de profesionales a `rollback_backup_professional_images` (con el profesional al que pertenecían) y las saca de `organization_images`; los profesionales quedan sin foto, nada más cambia. Copia los avisos `professional_change` a `rollback_backup_notifications`, anula los pendientes y pasa el tipo de todos a `reschedule`. Es repetible.
+4. Volver a la versión anterior: `./deploy/deploy.sh <commit>`.
+5. Al volver a la versión nueva: `--restore` repone las fotos con su profesional y el tipo original de los avisos.
+
+Probado contra PostgreSQL real (`test/rollback-prepare.test.ts`): informa sin modificar, aparta, deja la base sin filas desconocidas, conserva turnos, profesionales y logos, es repetible y restaura. **No se ejecutó en producción.** El borrado de filas **no** es parte del procedimiento. Riesgo residual: si se usa `--apply` y no `--restore`, las fotos quedan solo en la tabla de respaldo (hay que volver a cargarlas o restaurarlas); mientras esas tablas existan, los datos no se pierden. Alternativa más conservadora: restaurar la copia `pre-deploy-*.sql.gz` (descarta todo lo cargado después).
+
+### 15.8 Seguridad
+
+Capa de permisos de la etapa 2 en todas las acciones del panel. Para el público, todo se valida en el servidor en cada pedido: negocio por identificador, que acepte reservas (estado de la cuenta, `canPerformWriteActions`), servicio activo, profesional elegible (activo, del negocio, con el servicio, con reservas online, modo equipo), disponibilidad real y límites por IP ya existentes (campo trampa, tope de reservas por hora). Pruebas con identificadores manipulados (de otro negocio, inactivos, privados, inexistentes, con inyección o demasiado largos), con el modo equipo apagado y con cuentas en solo lectura: ninguna crea nada. Tokens: los enlaces `/turno/…` y `/<negocio>/mis-turnos/…` llevan `Referrer-Policy: no-referrer` por encabezado (además de la etiqueta), no hay analítica ni terceros en esas páginas y los tokens no se registran en logs (revisado en `modules/booking`, `modules/appointments` y las páginas). Un token de un turno solo opera ese turno; uno de otro negocio no sirve.
+
+### 15.9 Riesgos que quedan
+
+- Los **identificadores de profesional** viajan al navegador (necesarios para elegir); si algún día se quiere ocultarlos hay que pasar a un código público opaco.
+- El enlace de gestión del turno es una **capacidad**: quien lo tenga puede ver, reprogramar o cancelar ese turno (igual que antes y que en los correos); no hay forma de revocarlo salvo cancelar el turno.
+- La asignación «menor carga del día» es un criterio simple: no pondera duración ni tipo de servicio.
+- Cuentas de profesionales: **siguen sin habilitarse**; los riesgos de la sección 10 (una membresía por usuario, avisos internos a todas las membresías, consultas sin alcance por profesional) se resuelven en la etapa 4.
+- No se probó con dispositivos físicos ni con las apps de WhatsApp o Instagram (ver el informe de la etapa).
+
+### 15.10 Reducción de plan con exceso de profesionales: alternativas (decisión comercial pendiente)
+
+Garantías vigentes y no negociables: no se borran profesionales ni datos, no se cancelan turnos solos, no se desactiva a nadie sin una decisión explícita, y se bloquean altas y reactivaciones mientras haya exceso. **No se implementó ninguna restricción nueva.** Alternativas para resolver el exceso, con su impacto en clientes con turnos futuros:
+
+1. **Solo bloquear altas y reactivaciones (hoy).** Los profesionales de más siguen atendiendo y recibiendo reservas. Impacto en clientes: ninguno. Contra: el negocio usa más cupos de los que paga indefinidamente.
+2. **Período de adaptación (p. ej. 30 días) con avisos**, luego dejar de ofrecer online a los profesionales que exceden el cupo (los últimos por orden o los que elija el administrador), sin tocar los turnos ya reservados. Impacto: los clientes con turnos futuros no se ven afectados; los nuevos solo ven a los profesionales dentro del cupo. Requiere decidir plazo y criterio.
+3. **El administrador elige a quién desactivar**, con la guía de reasignación de la etapa 2, sin plazo forzado. Impacto: es el administrador quien decide qué pasa con cada turno futuro (pasarlo o cancelarlo con aviso). Es lo más respetuoso con los clientes, pero depende de que el administrador actúe.
+4. **Congelar las reservas nuevas de todo el exceso desde el primer día** (los turnos existentes se mantienen). Impacto: ningún cliente actual pierde su turno, pero un profesional puede quedar sin agenda nueva de un día para otro: es el más brusco y el que más perjudica al negocio.
+5. **Pasar al negocio a la tarifa del Plan Equipo** si tiene más de 2 profesionales (con consentimiento explícito; nunca automático). Impacto en clientes: ninguno; es una decisión de cobro.
+
+Recomendación técnica (a validar): combinar 1 + 3 durante un plazo de adaptación definido por el negocio y avisos claros, y dejar 2 como política de último recurso con aviso previo y consentimiento. **Esperá tu aprobación antes de implementar nada.**
+
+### 15.11 Despliegue, costos y etapa siguiente
+
+Despliegue acumulado de las etapas 1 a 3: `docs/DEPLOYMENT.md`. Costos y rentabilidad actualizados con los precios vigentes y futuros: `docs/PRODUCTION_READINESS.md` §5. La reserva pública no agrega servicios, dependencias, tareas ni variables de entorno.
+
+**Etapa 4 (propuesta): cuentas, invitaciones y permisos.** (1) Resolver primero los riesgos de la sección 10: varias membresías por usuario con un negocio activo en sesión, avisos internos dirigidos al destinatario correcto (el profesional asignado; el propietario sin duplicar), y un único helper de alcance por rol para toda consulta de turnos y clientes (un profesional ve su agenda y los datos mínimos de sus clientes; nunca facturación, suscripción, configuración comercial ni a otros profesionales). (2) Invitación por correo con token de un solo uso, vencimiento y guardado como hash (mismo patrón que la verificación de email), que vincula `Professional.userId`; revocar una cuenta sin perder historial ni turnos. (3) Rol `professional` en `lib/permissions.ts` con permisos acotados a su agenda. (4) Pruebas de aislamiento **dentro del mismo negocio** y de enumeración de invitaciones. (5) Sin cambios comerciales. No avanzar sin aprobación.
 

@@ -143,6 +143,9 @@ test("reserva pública con equipo: elegir profesional, cualquiera, conflicto sin
   await expect(guest).toHaveURL(/\/turno\//);
   await expect(guest.getByText(/Te atiende/).first()).toBeVisible();
   await expect(guest.locator('meta[name="referrer"]')).toHaveAttribute("content", "no-referrer");
+  // Y también por encabezado: el token del enlace no viaja a terceros.
+  const headers = await (await guest.request.get(guest.url())).headers();
+  expect(headers["referrer-policy"]).toBe("no-referrer");
   await guest.getByRole("button", { name: "Reprogramar" }).click();
   await expect(guest.getByText(/Reservaste con «cualquier profesional»/)).toBeVisible();
   await expect(guest.getByText(/puede cambiar quién te atiende/)).toBeVisible();

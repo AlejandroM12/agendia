@@ -8,7 +8,7 @@ Evaluación técnica y económica previa al primer despliegue real. Fecha: novie
 
 - **Arquitectura recomendada para el MVP:** un VPS de 2 vCPU / 4 GB con el `docker-compose.yml` que ya está en el repositorio (probado en local y en CI). No requiere cambios de código.
 - **Costo mensual estimado de mantenerla funcionando:** entre **US$ 15 y US$ 47** (≈ ARS 24.000 a 74.000) según cantidad de negocios, más la comisión de Mercado Pago por cada cobro y los impuestos.
-- **Precios vigentes:** Plan Profesional ARS 9.900 por mes (14 días de prueba); Licencia independiente ARS 149.000, pago único (DECISIONS D-47). **El análisis de márgenes de más abajo se hizo con los importes anteriores (ARS 14.000 y 199.000) y hay que recalcularlo: con el nuevo precio el costo marginal pesa más.**
+- **Precios vigentes:** Plan Profesional ARS 9.900 por mes (14 días de prueba); Licencia independiente ARS 149.000, pago único (DECISIONS D-47). El análisis de costos y márgenes de la sección 5 ya está recalculado con estos importes y con la oferta multiprofesional futura.
 - **Bloqueos para abrir al público** (ninguno es de código): contratar servidor y dominio, cuenta de Resend con dominio verificado, credenciales de Mercado Pago validadas en sandbox, y textos legales.
 - **Mientras Resend no esté configurado, el registro permanece cerrado en producción**: sin email no hay recuperación de contraseña.
 
@@ -74,51 +74,81 @@ Cuándo revisar esta decisión: al pasar ~100 negocios, o al primer incidente de
 
 ## 5. Costos operativos y rentabilidad
 
-### Costo mensual de infraestructura
+> **Actualizado con la oferta vigente y la futura multiprofesional** (D-47): Plan Profesional ARS 9.900/mes, Plan Equipo ARS 19.900/mes (futuro, sin publicar), Licencia Profesional ARS 149.000 y Licencia Equipo ARS 249.000 (futura). Los importes anteriores (ARS 14.000 y 199.000) ya no rigen.
+>
+> **Qué es dato y qué es hipótesis.** Los costos de proveedores (VPS, Resend, dominio, comisión de Mercado Pago) son **los rangos que ya estaban documentados en este archivo** (cifras de prensa y de las páginas de los proveedores al redactarlos); **no se verificaron de nuevo ni se inventó ninguna tarifa**. Todo lo demás son hipótesis explícitas, listadas abajo, que hay que reemplazar por datos reales apenas existan. Un número de esta sección no es una promesa de capacidad ni de ingresos.
 
-| Concepto | 10 negocios | 50 negocios | 100 negocios |
-|---|---|---|---|
-| VPS | US$ 12–24 | US$ 24 | US$ 24 |
-| Email (Resend) | US$ 0 (gratis: 3.000/mes, 100/día) o US$ 20 | US$ 20 | US$ 20 |
-| Dominio (prorrateado) | ~US$ 1,5 | ~US$ 1,5 | ~US$ 1,5 |
-| Copia externa de backups | ~US$ 1 | ~US$ 1 | ~US$ 1 |
-| Monitor de uptime | US$ 0 | US$ 0 | US$ 0 |
-| **Total** | **US$ 15–47** | **≈ US$ 47** | **≈ US$ 47** |
-| **En pesos** | **ARS 24.000–74.000** | **≈ ARS 74.000** | **≈ ARS 74.000** |
+### Hipótesis
 
-Supuestos: ~100–150 turnos por negocio por mes y ~2,5 emails por turno (confirmación, recordatorio y aviso al profesional). Con 10 negocios el plan gratuito de Resend alcanza en volumen mensual pero su tope de **100 emails por día** puede cortarse en un día cargado: conviene pasar a Pro apenas haya clientes pagos.
+- Tipo de cambio: **ARS 1.560 por US$** (el implícito en los cálculos anteriores). Hay que actualizarlo: casi todos los costos están en dólares y el precio en pesos.
+- **120 turnos por profesional por mes**; **2,5 correos por turno** (confirmación, recordatorio y aviso al negocio; los de reasignación y cambio de profesional suman poco).
+- Plan Profesional: **1,5 profesionales activos** en promedio (de 1 a 2); Plan Equipo: **3** (de 2 a 5). Cada profesional con foto: ≈ 60 KB.
+- Dos mezclas de clientes: **A**, todos en Plan Profesional; **B**, 70 % Profesional y 30 % Equipo (el Equipo todavía no se vende).
+- Comisión de Mercado Pago: **2,2 % a 7,9 %** (según plazo de acreditación; **verificar en el simulador de tu cuenta**, no se encontró la tarifa de suscripciones).
+- Infraestructura: VPS de 2 vCPU / 4 GB (US$ 12–24), Resend gratuito (3.000 correos al mes, 100 por día) mientras alcance y **Resend Pro (≈ US$ 20)** cuando no, dominio ≈ US$ 1,5 prorrateado, copia externa ≈ US$ 1. **Se asume** que el plan Pro cubre el volumen de abajo: **hay que verificar el límite mensual vigente** (con 100 negocios de la mezcla B serían ≈ 58.000 correos al mes y quizá haga falta un plan superior).
+- No incluye impuestos ni el valor de tu tiempo.
 
-### Ingresos y margen (Plan Profesional, ARS 14.000 por mes)
+### Costos: fijos, variables y marginales (SaaS)
 
-Comisión de Mercado Pago con tarjeta de crédito, según plazo de acreditación (cifras de prensa de 2026, **verificar en el simulador de costos de tu cuenta**; no encontré la tarifa específica de suscripciones): ≈ 2,2 % a 35 días, ≈ 5,2 % a 10 días, ≈ 7,9 % en el momento (todas con IVA incluido).
+- **Fijos** (no dependen de la cantidad de negocios): VPS, dominio, monitor, copia externa. ≈ US$ 14–27 por mes con el plan gratuito de correo; ≈ US$ 47 con Resend Pro y VPS de 4 GB.
+- **Escalonados:** Resend Pro al superar el tope gratuito (≈ 10 negocios activos o antes, si un día supera los 100 correos); un VPS de 8 GB si la memoria o el disco lo piden.
+- **Variables por cobro:** comisión de Mercado Pago (2,2 %–7,9 % de lo que paga cada negocio).
+- **Marginales por negocio nuevo:** solo la comisión de cobro y sus correos (los correos caen dentro del plan de Resend ya pagado) más **tu tiempo**: configuración inicial asistida (~1 h por negocio, hipótesis) y soporte (~0,5 h por mes, hipótesis). **El tiempo es el costo real más grande** y no está en las tablas: con ARS 9.900 por mes, cada hora de soporte consume buena parte del margen.
+- **Base de datos y disco:** un turno ocupa ≈ 1 KB con índices; las fotos, ≈ 60 KB por profesional. 100 negocios de la mezcla B (≈ 195 profesionales) son ≈ 12 MB de fotos y ≈ 23.000 turnos por mes (≈ 0,3 GB por año): irrelevante frente a un disco de VPS, pero **sí crece el tamaño de cada backup diario**. La capacidad real del VPS **no está medida** (nunca se hizo una prueba de carga contra el servidor real): antes de prometer 100 negocios hay que hacerla.
 
-| | 10 negocios | 50 negocios | 100 negocios |
-|---|---|---|---|
-| Facturación mensual | ARS 140.000 | ARS 700.000 | ARS 1.400.000 |
-| Comisión MP (2,2 %–7,9 %) | 3.100–11.100 | 15.400–55.300 | 30.800–110.600 |
-| Infraestructura | 24.000–74.000 | ≈ 74.000 | ≈ 74.000 |
-| **Margen antes de impuestos** | **≈ 55.000 a 113.000** | **≈ 571.000–611.000** | **≈ 1.215.000–1.295.000** |
+### Escenarios SaaS (por mes, en ARS)
 
-- **ARS 14.000 equivale a ≈ US$ 9.** El costo marginal por negocio es de ≈ ARS 500–1.300 por mes (comisión de cobro + emails): el margen por cada negocio extra supera el 90 %.
-- **Punto de equilibrio de infraestructura:** 2 negocios con la configuración mínima; 6 con Resend Pro.
-- **Impuestos (no incluidos arriba):** dependen de tu situación fiscal. Como referencia, la cuota de Monotributo categoría A informada para el segundo semestre de 2026 ronda los ARS 49.500 por mes, con tope de facturación anual de ≈ ARS 12.000.000 (≈ 71 negocios a este precio, sin contar licencias). Consultalo con tu contador; Ingresos Brutos varía por provincia.
-- Los costos principales están en dólares y el precio en pesos: conviene revisarlo periódicamente. El precio que se cobra se edita en `/admin`; el que muestra la landing, con `PRICE_MONTHLY` (tienen que coincidir).
+Mezcla A: solo Plan Profesional.
 
-### Licencia independiente (ARS 199.000, pago único)
+| Negocios | Ingresos | Infra | Comisión MP | Margen antes de tiempo e impuestos |
+|---:|---:|---:|---:|---:|
+| 10 | 99.000 | ≈ 72.500 | 2.200–7.800 | ≈ 18.600–24.300 |
+| 25 | 247.500 | ≈ 72.500 | 5.400–19.600 | ≈ 155.000–170.000 |
+| 50 | 495.000 | ≈ 72.500 | 10.900–39.100 | ≈ 383.000–412.000 |
+| 100 | 990.000 | ≈ 72.500 | 21.800–78.200 | ≈ 839.000–896.000 |
 
-ARS 199.000 ≈ US$ 127, e incluye instalación, configuración y 12 meses de hosting, dominio y soporte. Como el hosting corre por tu cuenta, cada instalación se aloja en el mismo servidor que el SaaS (DECISIONS D-34), no en un servidor propio.
+Mezcla B: 70 % Profesional y 30 % Equipo.
 
-| Costo del primer año, por licencia | Estimación |
-|---|---|
-| Hosting: ≈ 350–450 MB de RAM en el VPS compartido (un servidor de 4 GB aloja el SaaS y unas 6 instalaciones) | ≈ US$ 3–4 por mes → US$ 36–48 |
-| Dominio: subdominio propio (US$ 0) o dominio registrado para el cliente | US$ 0–15 (confirmar el arancel vigente si es `.com.ar`) |
-| Emails por Resend | Dentro del plan que ya paga la plataforma |
-| Comisión de Mercado Pago (2,2 %–7,9 %) | ARS 4.400–15.700 |
-| **Total** | **≈ ARS 61.000–115.000** |
+| Negocios | Ingresos | Correos/mes | Margen antes de tiempo e impuestos |
+|---:|---:|---:|---:|
+| 10 | 129.000 | ≈ 5.900 | ≈ 46.000–54.000 |
+| 25 | 327.500 | ≈ 14.900 | ≈ 229.000–248.000 |
+| 50 | 645.000 | ≈ 29.300 | ≈ 522.000–558.000 |
+| 100 | 1.290.000 | ≈ 58.500 | ≈ 1.116.000–1.189.000 |
 
-- **Margen del primer año:** ≈ ARS 84.000–138.000 por licencia, antes de impuestos y sin contar tu tiempo (instalación y carga inicial: 1 a 2 horas con `deploy/instance.sh`; soporte durante el año).
-- **Desde el segundo año** la licencia solo deja margen si la renovación anual de hosting, dominio y soporte cubre su costo (≈ ARS 57.000–99.000 por año a los valores de hoy). **Ese valor todavía no está definido (B6).** Como referencia, el Plan Profesional cuesta ARS 168.000 por año.
-- **Capacidad:** al pasar de ~6 instalaciones hay que subir el servidor de plan (≈ US$ 24 más por mes por cada 8 GB adicionales, según proveedor) o sumar un segundo servidor.
+(La infraestructura usa el techo del rango, ≈ US$ 46,5 con Resend Pro.) Lecturas:
+
+- **Con 10 negocios el margen es de apenas ≈ ARS 1.900–2.400 por negocio y por mes** en la mezcla A: no paga ni una hora de soporte por negocio. A 25 negocios sube a ≈ ARS 6.200–6.800. **Los costos fijos pesan hasta ~15–20 negocios.**
+- El Plan Equipo mejora el margen por negocio (≈ ARS 4.600–5.400 con 10 y ≈ ARS 11.000–11.900 con 100) porque el costo marginal casi no sube con la cantidad de profesionales: el costo de un profesional extra es un puñado de correos y filas.
+- **Cuándo hace falta más infraestructura** (sin medir, solo señales): el plan gratuito de correo se queda corto desde ~10 negocios; un VPS de 8 GB al acercarse a 100 negocios o si `next build` y los backups compiten por memoria; separar la base de datos ante el primer incidente de disponibilidad con costo para un cliente. No se contrató ni se cambió nada.
+- **Sensibilidad:** si el dólar sube un 20 % y el precio en pesos no se ajusta, la infraestructura suma ≈ ARS 14.500 por mes: a 25 negocios (mezcla A) el margen baja de ≈ 63 % a ≈ 57 % de los ingresos; con 10 negocios casi desaparece.
+
+### Instalaciones independientes (licencias), primer año
+
+El hosting corre en el mismo VPS (D-34): ≈ 350–450 MB de RAM por instalación (≈ US$ 3–4 por mes, estimación previa). Para la Licencia Equipo se supone un **25 % más** (más profesionales, fotos y correos): hipótesis.
+
+| | Licencia Profesional | Licencia Equipo (futura) |
+|---|---:|---:|
+| Precio (ARS / ≈ US$) | 149.000 / 96 | 249.000 / 160 |
+| Costos del año (hosting, dominio 0–15 US$, comisión MP) | ≈ 59.400–110.000 | ≈ 75.700–136.700 |
+| **Margen antes de tiempo e impuestos** | **≈ 39.000–90.000** | **≈ 112.000–173.000** |
+
+- **No hay costo de licencia de software de terceros** que recuperar, pero tampoco un ingreso recurrente: el ingreso es único y los costos se repiten.
+- **Licencia Profesional (ARS 149.000):** con 1–2 horas de instalación y soporte durante 12 meses, **el margen real puede ser casi cero o negativo** si el cliente consume más de unas pocas horas (el margen del extremo desfavorable es de ≈ ARS 39.000 en todo el año: dividilo por el valor que le des a tu hora para saber cuántas horas de soporte lo consumen). Es sostenible **solo si el soporte es acotado y la renovación posterior está definida**.
+- **Licencia Equipo (ARS 249.000):** deja ≈ 3 veces más margen absoluto; es la más sostenible, siempre que el consumo de soporte no crezca con el equipo.
+- **Desde el segundo año** el hosting, dominio y soporte se renuevan por separado; **el valor no está definido (B6)**. Para no perder plata en infraestructura la renovación tendría que ser, como mínimo, de **≈ ARS 56.000–98.000 por año (Profesional)** y **≈ ARS 70.000–117.000 (Equipo)**, sin contar soporte. Como referencia, el Plan Profesional suma ARS 118.800 por año y el Equipo ARS 238.800.
+- **Capacidad:** al pasar de ~6 instalaciones hay que subir el servidor o sumar otro (ver arriba): costo escalonado que hoy ninguna licencia financia después del primer año.
+
+### Datos que hay que obtener para reemplazar las hipótesis
+
+1. Consumo real de correos por negocio (ya disponible en `/admin` → «Consumo del mes») y el límite mensual del plan de Resend que se elija.
+2. Comisión real de Mercado Pago para suscripciones y pagos únicos (simulador de la cuenta).
+3. Memoria, CPU y disco del VPS contratado bajo una prueba de carga con datos de varios negocios.
+4. Horas reales de configuración y soporte por negocio y por licencia (llevar un registro desde el primer cliente).
+5. Costo vigente del dominio de cada instalación y del proveedor elegido.
+6. Tipo de cambio y régimen impositivo.
+
+No se decidió ni se cambió ningún precio; las conclusiones sobre la licencia de ARS 149.000 son una alerta, no una propuesta.
 
 ## 6. Mercado Pago: estado y checklist de sandbox
 
