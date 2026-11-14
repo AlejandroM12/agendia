@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>TikTok 3 — Conversión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+
+  .piece { background: var(--pine); }
+  .glow { position: absolute; border-radius: 50%; }
+  .brand { position: absolute; left: 70px; top: 196px; display: flex; align-items: center; gap: 18px; color: #fbf9f5; }
+  .brand svg { width: 84px; height: 84px; }
+  .brand span { font: 600 72px/1 "Fraunces", serif; letter-spacing: -0.02em; font-variation-settings: "opsz" 48; }
+  h1 { position: absolute; left: 70px; top: 322px; width: 860px; font-size: 76px; line-height: 1.06; color: #fbf9f5; font-variation-settings: "opsz" 56; letter-spacing: -0.014em; }
+  h1 em { color: var(--peach); }
+  .browser { position: absolute; left: 60px; top: 626px; --w: 650px; z-index: 2; }
+  .browser img { aspect-ratio: 1440 / 780; }
+  .phone { position: absolute; right: 118px; top: 520px; --w: 322px; z-index: 4; transform: rotate(3deg); }
+  .free { position: absolute; left: 70px; top: 1262px; font: 600 48px/1.1 "Fraunces", serif; color: #fbf9f5; letter-spacing: -0.015em; font-variation-settings: "opsz" 48; width: 850px; }
+  .free em { color: var(--peach); }
+  .cta { position: absolute; left: 70px; top: 1334px; font-size: 36px; padding: 24px 40px; z-index: 6; }
+  .url { position: absolute; left: 70px; top: 1440px; font: 600 34px/1 "Geist"; color: #f3dfd3; z-index: 6; }
+  .note { bottom: 24px; }
+
+</style>
+</head>
+<body>
+<main class="piece tt">
+  <div class="glow" style="right:-320px;top:-260px;width:900px;height:900px;background:radial-gradient(circle,rgba(255,255,255,.1),rgba(255,255,255,0) 68%)"></div>
+  <div class="glow" style="right:-360px;bottom:-160px;width:1000px;height:1000px;background:radial-gradient(circle,rgba(200,100,60,.42),rgba(200,100,60,0) 66%)"></div>
+  <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#fbf9f5"/><rect x="8" y="9" width="16" height="15" rx="3.5" fill="none" stroke="#1f4d3f" stroke-width="2"/><path d="M12 7v4M20 7v4" stroke="#1f4d3f" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="18.5" r="2.4" fill="#c8643c"/></svg><span>Agendia</span></div>
+  <h1 class="display">Tu agenda organizada.<br><em>Tu negocio creciendo.</em></h1>
+
+  <div class="browser"><div class="bar"><i></i><i></i><i></i><b>agendia.atajolab.dev/dashboard</b></div><img src="../capturas/agenda-escritorio.png" alt=""></div>
+  <div class="phone"><div class="screen pad"><div class="statusbar"><span>15:24</span><span style="display:flex;gap:6px;align-items:center"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3.5" fill="none" stroke="#1d1b18"/><rect x="2.5" y="2.5" width="14" height="7" rx="2"/><rect x="24" y="4" width="2" height="4" rx="1"/></svg></span></div><img src="../capturas/panel-hoy-movil.png" alt=""></div></div>
+
+  <p class="free">Probá Agendia gratis durante <em>7 días.</em></p>
+  <div class="cta">Encontrá el enlace en nuestro perfil</div>
+  <div class="url">agendia.atajolab.dev</div>
+  <p class="note light">Vista ilustrativa con datos de ejemplo.</p>
+
+</main>
+</body>
+</html>

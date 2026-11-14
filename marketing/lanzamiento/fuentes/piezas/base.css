@@ -1,0 +1,113 @@
+@import url("../fonts.css");
+
+/*
+ * Sistema visual de las piezas de lanzamiento de Agendia.
+ * Colores, tipografías y logo salen de app/globals.css y components/brand/logo.tsx.
+ */
+:root {
+  --paper: #faf7f2;
+  --ink: #1d1b18;
+  --pine: #1f4d3f;
+  --pine-deep: #163a2f;
+  --pine-soft: #e3ede8;
+  --terra: #c8643c;
+  --terra-deep: #a9512c;
+  --terra-soft: #f8e9e1;
+  --peach: #f3b89c;
+  --sand: #f1ebe1;
+  --line: #e3dbcd;
+  --muted: #6b645a;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #888; }
+body { font-family: "Geist", system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+.piece { position: relative; overflow: hidden; background: var(--paper); }
+.ig { width: 1080px; height: 1350px; }
+.tt { width: 1080px; height: 1920px; }
+.abs { position: absolute; }
+
+.display { font-family: "Fraunces", Georgia, serif; font-optical-sizing: auto; font-weight: 600; letter-spacing: -0.022em; }
+.display em { font-style: italic; font-weight: 600; }
+
+/* ---------- logo ---------- */
+.logo { display: inline-flex; align-items: center; gap: 14px; }
+.logo svg { width: 56px; height: 56px; }
+.logo span { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: 44px; letter-spacing: -0.01em; }
+
+/* ---------- celular ---------- */
+.phone {
+  --w: 380px;
+  position: relative;
+  width: var(--w);
+  padding: calc(var(--w) * 0.028);
+  border-radius: calc(var(--w) * 0.15);
+  background: #15130f;
+  box-shadow:
+    0 0 0 calc(var(--w) * 0.004) #3a3631,
+    0 calc(var(--w) * 0.09) calc(var(--w) * 0.22) rgba(20, 15, 10, 0.38),
+    0 calc(var(--w) * 0.02) calc(var(--w) * 0.05) rgba(20, 15, 10, 0.25);
+}
+.phone .screen { overflow: hidden; border-radius: calc(var(--w) * 0.123); background: #fff; aspect-ratio: 390 / 844; }
+.phone .screen img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.phone::after {
+  content: ""; position: absolute; top: calc(var(--w) * 0.052); left: 50%; transform: translateX(-50%);
+  width: calc(var(--w) * 0.27); height: calc(var(--w) * 0.075); border-radius: 999px; background: #0b0a08;
+}
+
+/* ---------- ventana de navegador ---------- */
+.browser {
+  --w: 800px;
+  width: var(--w);
+  border-radius: 22px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(29, 27, 24, 0.08), 0 50px 90px rgba(20, 15, 10, 0.32), 0 12px 28px rgba(20, 15, 10, 0.2);
+}
+.browser .bar { height: 46px; background: #ece5d8; display: flex; align-items: center; gap: 9px; padding: 0 18px; }
+.browser .bar i { width: 13px; height: 13px; border-radius: 50%; background: #cfc5b3; display: block; }
+.browser .bar b { margin-left: 14px; flex: 1; max-width: 420px; height: 26px; border-radius: 13px; background: #faf7f2; font: 500 15px/26px "Geist", sans-serif; color: #7a7266; padding: 0 14px; }
+.browser img { display: block; width: 100%; aspect-ratio: 1440 / 900; object-fit: cover; object-position: top left; }
+
+/* ---------- elementos ---------- */
+.chip {
+  display: inline-flex; align-items: center; gap: 12px; padding: 14px 24px 14px 16px; border-radius: 999px;
+  background: #fff; color: var(--ink); font-weight: 600; font-size: 26px; letter-spacing: -0.005em;
+  box-shadow: 0 18px 40px rgba(20, 15, 10, 0.22), 0 0 0 1.5px rgba(29, 27, 24, 0.06);
+}
+.chip .dot { width: 40px; height: 40px; border-radius: 50%; background: var(--pine); color: #fff; display: grid; place-items: center; flex: none; }
+.chip .dot svg { width: 22px; height: 22px; }
+.chip.terra .dot { background: var(--terra); }
+
+.cta {
+  display: inline-flex; align-items: center; gap: 16px; padding: 24px 40px; border-radius: 999px; background: var(--terra); color: #fff;
+  font-weight: 700; font-size: 34px; letter-spacing: -0.01em; box-shadow: 0 20px 44px rgba(169, 81, 44, 0.42);
+}
+.cta svg { width: 32px; height: 32px; }
+
+.stamp {
+  display: grid; place-items: center; text-align: center; border-radius: 50%; background: var(--terra); color: #fff;
+  box-shadow: 0 18px 38px rgba(169, 81, 44, 0.4);
+}
+
+.dots { display: inline-flex; gap: 10px; }
+.dots i { width: 12px; height: 12px; border-radius: 50%; background: currentColor; opacity: 0.28; display: block; }
+.dots i.on { opacity: 1; width: 34px; border-radius: 8px; }
+
+/* ---------- mensajes (el problema) ---------- */
+.bubble {
+  position: absolute; white-space: nowrap; padding: 24px 32px 20px; border-radius: 34px; font-size: 33px; line-height: 1.22; font-weight: 500; letter-spacing: -0.01em;
+  box-shadow: 0 14px 34px rgba(60, 45, 30, 0.12);
+}
+.bubble small { display: block; margin-top: 8px; font-size: 20px; font-weight: 500; opacity: 0.55; text-align: right; }
+.bubble.in { background: #fff; color: var(--ink); border-bottom-left-radius: 10px; }
+.bubble.out { background: var(--pine); color: #fbf9f5; border-bottom-right-radius: 10px; }
+
+/* Capturas del panel: se deja lugar arriba para la barra de estado del celular. */
+.phone .screen.pad { position: relative; padding-top: 7.4%; background: var(--paper); }
+.phone .screen.pad img { height: 92.6%; }
+.statusbar { position: absolute; left: 0; right: 0; top: 0; height: 7.4%; display: flex; align-items: center; justify-content: space-between; padding: 0 8.5%; font: 600 calc(var(--w) * 0.04)/1 "Geist", sans-serif; color: var(--ink); z-index: 2; }
+.statusbar svg { height: calc(var(--w) * 0.034); width: auto; fill: var(--ink); }
+.note { position: absolute; z-index: 9; left: 0; right: 0; bottom: 15px; text-align: center; font-size: 17px; letter-spacing: .01em; color: rgba(29,27,24,.5); }
+.note.light { color: rgba(251,249,245,.6); }

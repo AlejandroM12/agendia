@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>TikTok 1 — Hook</title>
+<link rel="stylesheet" href="base.css">
+<style>
+
+  /* Zona segura de TikTok: x 70-910, y 190-1440. Lo importante vive ahi dentro. */
+  .piece { background: #1d1b18; }
+  .glow { position: absolute; border-radius: 50%; }
+  .pov { position: absolute; left: 70px; top: 196px; padding: 14px 30px; border-radius: 999px; background: var(--terra); color: #fff; font: 800 40px/1 "Geist"; letter-spacing: .04em; }
+  h1 { position: absolute; left: 70px; top: 284px; width: 850px; font-size: 76px; line-height: 1.06; color: #fbf9f5; font-weight: 600; font-variation-settings: "opsz" 56; letter-spacing: -0.012em; }
+  h1 em { color: var(--peach); }
+  .clock { position: absolute; left: 70px; right: 170px; top: 640px; text-align: center; color: #fbf9f5; }
+  .clock small { display: block; font: 500 32px/1 "Geist"; letter-spacing: .02em; opacity: .75; }
+  .clock b { display: block; margin-top: 8px; font: 700 150px/1 "Geist"; letter-spacing: -0.05em; }
+  .notif { position: absolute; left: 70px; width: 840px; padding: 24px 28px; border-radius: 34px; background: rgba(255,255,255,.13); border: 1.5px solid rgba(255,255,255,.14); display: flex; gap: 22px; align-items: center; color: #fbf9f5; box-shadow: 0 20px 40px rgba(0,0,0,.28); }
+  .notif .app { width: 76px; height: 76px; border-radius: 20px; background: #3a8f6b; display: grid; place-items: center; flex: none; }
+  .notif .app svg { width: 44px; height: 44px; }
+  .notif .tx { flex: 1; min-width: 0; }
+  .notif .top { display: flex; justify-content: space-between; font: 600 28px/1.1 "Geist"; }
+  .notif .top span { font-weight: 450; opacity: .6; font-size: 25px; }
+  .notif p { margin-top: 6px; font: 500 33px/1.18 "Geist"; letter-spacing: -0.01em; opacity: .95; }
+
+</style>
+</head>
+<body>
+<main class="piece tt">
+  <div class="glow" style="right:-300px;top:-200px;width:900px;height:900px;background:radial-gradient(circle,rgba(200,100,60,.34),rgba(200,100,60,0) 66%)"></div>
+  <div class="glow" style="left:-340px;bottom:-100px;width:900px;height:900px;background:radial-gradient(circle,rgba(31,77,63,.55),rgba(31,77,63,0) 66%)"></div>
+  <div class="pov">POV:</div>
+  <h1 class="display">tenés un negocio y <em>pasás el día respondiendo mensajes</em> para dar turnos.</h1>
+
+  <div class="clock"><small>Viernes 13 de noviembre</small><b>23:47</b></div>
+
+  <div class="notif" style="top:880px;transform:scale(1);opacity:1"><div class="app"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3C6.9 3 3 6.6 3 11c0 2.2 1 4.2 2.7 5.6L5 21l4.3-2.1c.9.2 1.8.3 2.7.3 5.1 0 9-3.6 9-8s-3.9-8-9-8Z"/></svg></div><div class="tx"><div class="top">Lucía <span>ahora</span></div><p>Hola! ¿Tenés turno para mañana?</p></div></div>
+  <div class="notif" style="top:1018px;transform:scale(0.98);opacity:0.95"><div class="app"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3C6.9 3 3 6.6 3 11c0 2.2 1 4.2 2.7 5.6L5 21l4.3-2.1c.9.2 1.8.3 2.7.3 5.1 0 9-3.6 9-8s-3.9-8-9-8Z"/></svg></div><div class="tx"><div class="top">Carolina <span>hace 2 min</span></div><p>¿A qué hora atendés el jueves?</p></div></div>
+  <div class="notif" style="top:1156px;transform:scale(0.96);opacity:0.88"><div class="app"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3C6.9 3 3 6.6 3 11c0 2.2 1 4.2 2.7 5.6L5 21l4.3-2.1c.9.2 1.8.3 2.7.3 5.1 0 9-3.6 9-8s-3.9-8-9-8Z"/></svg></div><div class="tx"><div class="top">Sofía <span>hace 5 min</span></div><p>¿Puedo cambiar mi turno del viernes?</p></div></div>
+  <div class="notif" style="top:1294px;transform:scale(0.94);opacity:0.78"><div class="app"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 3C6.9 3 3 6.6 3 11c0 2.2 1 4.2 2.7 5.6L5 21l4.3-2.1c.9.2 1.8.3 2.7.3 5.1 0 9-3.6 9-8s-3.9-8-9-8Z"/></svg></div><div class="tx"><div class="top">Rocío <span>hace 9 min</span></div><p>¿Me confirmás el horario?</p></div></div>
+</main>
+</body>
+</html>

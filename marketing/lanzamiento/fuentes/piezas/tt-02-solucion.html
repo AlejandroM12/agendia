@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>TikTok 2 — Solución</title>
+<link rel="stylesheet" href="base.css">
+<style>
+
+  .piece { background: var(--paper); }
+  .glow { position: absolute; border-radius: 50%; }
+  h1 { position: absolute; left: 70px; top: 200px; width: 850px; font-size: 104px; line-height: 1.01; color: var(--ink); font-variation-settings: "opsz" 56; letter-spacing: -0.014em; }
+  h1 em { color: var(--terra); }
+  .pa { position: absolute; left: 70px; top: 668px; --w: 356px; z-index: 3; transform: rotate(-3deg); }
+  .pb { position: absolute; right: 150px; top: 716px; --w: 356px; z-index: 2; transform: rotate(4deg); }
+  .pill { position: absolute; z-index: 6; }
+  .url { position: absolute; z-index: 6; left: 70px; top: 1410px; padding: 16px 30px; border-radius: 999px; background: var(--ink); color: #fbf9f5; font: 600 30px/1 "Geist"; letter-spacing: -0.005em; }
+  .note { bottom: 24px; }
+
+</style>
+</head>
+<body>
+<main class="piece tt">
+  <div class="glow" style="right:-360px;top:-260px;width:980px;height:980px;background:radial-gradient(circle,#f8e9e1,rgba(248,233,225,0) 66%)"></div>
+  <div class="glow" style="left:-380px;bottom:120px;width:980px;height:980px;background:radial-gradient(circle,#e3ede8,rgba(227,237,232,0) 64%)"></div>
+  <h1 class="display">Ahora tus clientes pueden <em>reservar solos.</em></h1>
+
+  <div class="phone pb"><div class="screen pad"><div class="statusbar"><span>15:24</span><span style="display:flex;gap:6px;align-items:center"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3.5" fill="none" stroke="#1d1b18"/><rect x="2.5" y="2.5" width="14" height="7" rx="2"/><rect x="24" y="4" width="2" height="4" rx="1"/></svg></span></div><img src="../capturas/reserva-2-datos.png" alt=""></div></div>
+  <div class="phone pa"><div class="screen pad"><div class="statusbar"><span>15:24</span><span style="display:flex;gap:6px;align-items:center"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3.5" fill="none" stroke="#1d1b18"/><rect x="2.5" y="2.5" width="14" height="7" rx="2"/><rect x="24" y="4" width="2" height="4" rx="1"/></svg></span></div><img src="../capturas/reserva-3-horarios.png" alt=""></div></div>
+
+  <div class="chip terra pill" style="left:70px;top:556px"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="6.5" cy="12" r="2.5"/><circle cx="14.5" cy="17.5" r="2.5"/><path d="M17 12a5 5 0 0 1-5 5" /></svg></span>Tu logo y tus colores</div>
+  <div class="chip pill" style="left:470px;top:556px"><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg></span>Tu enlace propio</div>
+  <p class="note">Vista ilustrativa con datos de ejemplo.</p>
+
+</main>
+</body>
+</html>

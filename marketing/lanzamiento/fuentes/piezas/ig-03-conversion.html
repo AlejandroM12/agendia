@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Instagram 3 — Conversión</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  .glow { position: absolute; border-radius: 50%; }
+  h1 { position: absolute; left: 80px; top: 88px; width: 920px; font-size: 96px; line-height: 1.02; color: var(--ink); font-variation-settings: "opsz" 56; letter-spacing: -0.012em; }
+  h1 em { color: var(--terra); }
+  .stamp { position: absolute; right: 56px; top: 92px; width: 206px; height: 206px; transform: rotate(8deg); z-index: 6; }
+  .stamp b { display: block; font: 600 84px/0.9 "Fraunces", serif; letter-spacing: -0.03em; }
+  .stamp span { display: block; font: 700 27px/1.05 "Geist"; letter-spacing: .01em; margin-top: 4px; }
+  .browser { position: absolute; left: 30px; top: 600px; --w: 790px; z-index: 2; }
+  .browser img { aspect-ratio: 1440 / 800; }
+  .phone { position: absolute; right: 40px; top: 470px; --w: 352px; z-index: 4; transform: rotate(3deg); }
+  .cta-band { position: absolute; left: 54px; right: 54px; bottom: 50px; height: 164px; border-radius: 40px; background: var(--pine); color: #fbf9f5; z-index: 8; display: flex; align-items: center; justify-content: space-between; padding: 0 40px 0 48px; box-shadow: 0 30px 60px rgba(31, 77, 63, .35); }
+  .cta-band p { font: 600 42px/1.08 "Fraunces", serif; letter-spacing: -0.015em; font-variation-settings: "opsz" 48; }
+  .cta-band p em { color: var(--peach); }
+  .cta-band .cta { font-size: 31px; padding: 22px 34px; white-space: nowrap; }
+  .tag { position: absolute; left: 54px; top: 1038px; z-index: 5; }
+</style>
+</head>
+<body>
+<main class="piece ig">
+  <div class="glow" style="right:-300px;top:-320px;width:800px;height:800px;background:radial-gradient(circle,#f8e9e1,rgba(248,233,225,0) 68%)"></div>
+  <div class="glow" style="left:-300px;bottom:-200px;width:900px;height:900px;background:radial-gradient(circle,#e3ede8,rgba(227,237,232,0) 66%)"></div>
+
+  <h1 class="display">Menos mensajes.<br><em>Más tiempo</em><br>para tu negocio.</h1>
+
+  <div class="stamp"><div><b>7</b><span>días<br>gratis</span></div></div>
+
+  <div class="browser"><div class="bar"><i></i><i></i><i></i><b>agendia.atajolab.dev/dashboard/agenda</b></div><img src="../capturas/agenda-escritorio.png" alt=""></div>
+  <div class="phone"><div class="screen pad"><div class="statusbar"><span>15:24</span><span style="display:flex;gap:6px;align-items:center"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3.5" fill="none" stroke="#1d1b18"/><rect x="2.5" y="2.5" width="14" height="7" rx="2"/><rect x="24" y="4" width="2" height="4" rx="1"/></svg></span></div><img src="../capturas/agenda-movil.png" alt=""></div></div>
+
+  <div class="cta-band">
+    <p>Probá Agendia gratis<br>durante <em>7 días.</em></p>
+    <div class="cta">agendia.atajolab.dev
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </div>
+  </div>
+  <p class="note">Vista ilustrativa con datos de ejemplo.</p>
+</main>
+</body>
+</html>
