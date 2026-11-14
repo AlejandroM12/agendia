@@ -29,6 +29,13 @@ enum OrganizationStatus {
 enum MembershipRole {
   owner
   admin
+  professional // acceso individual de un profesional a SU agenda (invitación)
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  revoked
 }
 
 model Organization {
@@ -72,8 +79,14 @@ model Organization {
   // negocio funciona exactamente como siempre, con un único profesional.
   // `extraProfessionals` son cupos adicionales a los del plan (por ejemplo,
   // una ampliación pactada); no cambia ningún precio.
-  teamModeEnabled    Boolean @default(false)
-  extraProfessionals Int     @default(0)
+  teamModeEnabled         Boolean @default(false)
+  extraProfessionals      Int     @default(0)
+  // Cuentas individuales e invitaciones (etapa 4): se habilitan aparte del
+  // modo equipo, por negocio o con TEAM_ACCOUNTS_ENABLED=1 (lib/features.ts).
+  teamAccountsEnabled     Boolean @default(false)
+  // Qué pueden hacer los profesionales con cuenta propia en este negocio
+  // (ver lib/permissions.ts). Nulo = valores predeterminados.
+  professionalPermissions Json?
 
   // Reglas de agenda (ver modules/availability)
   slotIntervalMinutes     Int @default(30)
@@ -88,6 +101,7 @@ model Organization {
   notifyOwnerOnBooking Boolean @default(true)
 
   memberships            Membership[]
+  invitations            Invitation[]
   professionals          Professional[]
   services               Service[]
   availabilityRules      AvailabilityRule[]
@@ -115,15 +129,21 @@ model Professional {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @default(now()) @updatedAt
 
-  description    String?
+  description         String?
   /// Color identificador en la agenda (hexadecimal validado).
-  color          String  @default("#1f4d3f")
+  color               String    @default("#1f4d3f")
   /// Orden de visualización y, a igualdad de carga, de asignación automática.
-  sortOrder      Int     @default(0)
-  bookableOnline Boolean @default(true)
-  photoImageId   String?
-  /// Cuenta de acceso asociada (se completa en la etapa de invitaciones).
-  userId         String? @unique
+  sortOrder           Int       @default(0)
+  bookableOnline      Boolean   @default(true)
+  photoImageId        String?
+  /// Cuenta de acceso asociada. Una persona puede ser profesional en varios
+  /// negocios, pero solo una vez en cada uno (@@unique). La base garantiza
+  /// (trigger) que sea miembro de ese negocio y la suelta si pierde la membresía.
+  userId              String?
+  /// Cuándo se revocó el acceso de la cuenta que tenía (para mostrar «Acceso revocado»).
+  accessRevokedAt     DateTime?
+  /// Excepciones a los permisos del negocio para este profesional (parcial).
+  permissionOverrides Json?
 
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user                   User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -133,10 +153,12 @@ model Professional {
   services               ServiceProfessional[]
   availabilityRules      AvailabilityRule[]
   availabilityExceptions AvailabilityException[]
+  invitations            Invitation[]
 
   // Permite claves foráneas compuestas (organizationId, id): la base de datos
   // garantiza que todo lo que apunta a un profesional es de su misma organización.
   @@unique([organizationId, id])
+  @@unique([organizationId, userId])
   @@index([organizationId, active, sortOrder])
   @@map("professionals")
 }
@@ -448,7 +470,7 @@ model User {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  professional            Professional?
+  professionals           Professional[]
   memberships             Membership[]
   passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
@@ -462,6 +484,9 @@ model Membership {
   userId         String
   role           MembershipRole @default(owner)
   createdAt      DateTime       @default(now())
+  // Avisos internos de turnos: el propietario/administrador, los de todo el
+  // negocio (si el negocio los tiene activos); el profesional, los de SUS turnos.
+  notifyBookings Boolean        @default(true)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -585,4 +610,36 @@ model CustomerAccessToken {
 
   @@index([organizationId, email])
   @@map("customer_access_tokens")
+}
+
+// Invitación para que una persona acceda a Agendia dentro de un negocio.
+// El token en texto plano nunca se persiste: solo su hash (como en
+// EmailVerificationToken). Una invitación está atada al correo invitado, al
+// negocio, al rol y (para profesionales) al perfil que va a vincular.
+// La unicidad «una invitación pendiente por profesional / por correo» la
+// garantizan índices parciales creados en SQL (Prisma no los modela).
+model Invitation {
+  id               String           @id @default(uuid())
+  organizationId   String
+  professionalId   String?
+  email            String
+  role             MembershipRole
+  tokenHash        String           @unique
+  status           InvitationStatus @default(pending)
+  expiresAt        DateTime
+  createdByUserId  String?
+  acceptedByUserId String?
+  acceptedAt       DateTime?
+  revokedAt        DateTime?
+  /// Cuántas veces se envió el correo (el alta y cada reenvío).
+  sendCount        Int              @default(1)
+  lastSentAt       DateTime         @default(now())
+  createdAt        DateTime         @default(now())
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  professional Professional? @relation(fields: [organizationId, professionalId], references: [organizationId, id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([email])
+  @@map("invitations")
 }

@@ -17,3 +17,17 @@
 export function isTeamModeEnabled(organization: { teamModeEnabled: boolean }): boolean {
   return process.env.TEAM_MODE_ENABLED === "1" || organization.teamModeEnabled;
 }
+
+/**
+ * Cuentas individuales e invitaciones (etapa 4): APAGADO por defecto y aparte
+ * del modo equipo, porque abre la aplicación a personas que no son el
+ * propietario y conviene probarlo con un negocio piloto antes. Se enciende
+ * por negocio (`Organization.teamAccountsEnabled`, `scripts/team-mode.mjs
+ * <enlace> accounts-on`) o para toda la instalación con `TEAM_ACCOUNTS_ENABLED=1`.
+ * Lo exigen el servidor al invitar y al aceptar una invitación; apagarlo no
+ * borra cuentas ni membresías (solo impide invitar y aceptar).
+ */
+export function isAccountsEnabled(organization: { teamAccountsEnabled: boolean }): boolean {
+  return process.env.TEAM_ACCOUNTS_ENABLED === "1" || organization.teamAccountsEnabled;
+}
+

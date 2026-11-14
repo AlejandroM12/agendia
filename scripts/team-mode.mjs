@@ -3,6 +3,8 @@
 //   npm run team:mode -- <slug> on
 //   npm run team:mode -- <slug> off
 //   npm run team:mode -- <slug> extra <n>     # cupos adicionales de profesionales (ampliación pactada)
+//   npm run team:mode -- <slug> accounts-on   # permite invitar profesionales y administradores (etapa 4)
+//   npm run team:mode -- <slug> accounts-off
 //   npm run team:mode -- <slug>               # muestra el estado
 //
 // En producción (Docker Compose):
@@ -24,15 +26,15 @@ if (!process.env.DATABASE_URL && existsSync(".env.local")) {
 }
 
 const [slug, action, value] = process.argv.slice(2);
-if (!slug || !process.env.DATABASE_URL || (action && !["on", "off", "extra"].includes(action))) {
-  console.error("Uso: node scripts/team-mode.mjs <slug> [on|off|extra <n>]   (requiere DATABASE_URL)");
+if (!slug || !process.env.DATABASE_URL || (action && !["on", "off", "extra", "accounts-on", "accounts-off"].includes(action))) {
+  console.error("Uso: node scripts/team-mode.mjs <slug> [on|off|extra <n>|accounts-on|accounts-off]   (requiere DATABASE_URL)");
   process.exit(1);
 }
 
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 try {
-  const found = await client.query('SELECT "id", "name", "teamModeEnabled", "extraProfessionals" FROM "organizations" WHERE "slug" = $1', [slug]);
+  const found = await client.query('SELECT "id", "name", "teamModeEnabled", "teamAccountsEnabled", "extraProfessionals" FROM "organizations" WHERE "slug" = $1', [slug]);
   if (found.rowCount === 0) {
     console.error(`No existe un negocio con el enlace "${slug}".`);
     process.exitCode = 1;
@@ -43,6 +45,12 @@ try {
       await client.query(
         'INSERT INTO "audit_logs" ("id", "organizationId", "action", "entityType", "entityId") VALUES (gen_random_uuid(), $1, $2, $3, $1)',
         [org.id, `team_mode.${action}`, "organization"],
+      );
+    } else if (action === "accounts-on" || action === "accounts-off") {
+      await client.query('UPDATE "organizations" SET "teamAccountsEnabled" = $2, "updatedAt" = now() WHERE "id" = $1', [org.id, action === "accounts-on"]);
+      await client.query(
+        'INSERT INTO "audit_logs" ("id", "organizationId", "action", "entityType", "entityId") VALUES (gen_random_uuid(), $1, $2, $3, $1)',
+        [org.id, `team_accounts.${action === "accounts-on" ? "on" : "off"}`, "organization"],
       );
     } else if (action === "extra") {
       const extra = Number(value);
@@ -56,9 +64,10 @@ try {
         [org.id, "team_mode.extra_professionals", "organization", JSON.stringify({ extra })],
       );
     }
-    const now = (await client.query('SELECT "teamModeEnabled", "extraProfessionals" FROM "organizations" WHERE "id" = $1', [org.id])).rows[0];
+    const now = (await client.query('SELECT "teamModeEnabled", "teamAccountsEnabled", "extraProfessionals" FROM "organizations" WHERE "id" = $1', [org.id])).rows[0];
     const active = (await client.query('SELECT count(*)::int AS n FROM "professionals" WHERE "organizationId" = $1 AND "active"', [org.id])).rows[0].n;
-    console.log(`${org.name} (/${slug}): modo equipo ${now.teamModeEnabled ? "ENCENDIDO" : "apagado"} · cupos adicionales ${now.extraProfessionals} · profesionales activos ${active}`);
+    console.log(`${org.name} (/${slug}): modo equipo ${now.teamModeEnabled ? "ENCENDIDO" : "apagado"} · cuentas individuales ${now.teamAccountsEnabled ? "ENCENDIDAS" : "apagadas"} · cupos adicionales ${now.extraProfessionals} · profesionales activos ${active}`);
+    if (process.env.TEAM_ACCOUNTS_ENABLED === "1") console.log("Aviso: TEAM_ACCOUNTS_ENABLED=1 habilita las cuentas individuales para toda la instalación.");
     if (process.env.TEAM_MODE_ENABLED === "1") console.log("Aviso: TEAM_MODE_ENABLED=1 enciende el modo equipo para toda la instalación, sin importar este valor.");
   }
 } finally {
