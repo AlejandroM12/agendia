@@ -276,7 +276,7 @@ export async function createAppointment(params: {
       startsAt: params.startsAt,
     });
     if (candidates.length === 0) {
-      return fail("unavailable", "Ese horario ya no está disponible. Elegí otro, por favor.");
+      return fail("unavailable", "Ese horario acaba de ocuparse. Elegí otro, por favor.");
     }
   }
   candidates = await rankCandidates({
@@ -466,7 +466,7 @@ export async function rescheduleAppointment(params: {
       ignoreAppointmentId: current.id,
     });
     if (candidates.length === 0) {
-      return fail("unavailable", "Ese horario ya no está disponible. Elegí otro, por favor.");
+      return fail("unavailable", "Ese horario acaba de ocuparse. Elegí otro, por favor.");
     }
   } else if (params.professional) {
     const eligible = await resolveEligibleProfessionals(db, {

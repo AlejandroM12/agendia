@@ -1,5 +1,5 @@
-import { describe, it, expect, afterAll, beforeAll, vi } from "vitest";
-import type { Organization, Professional } from "@prisma/client";
+import { describe, it, expect, afterAll, vi } from "vitest";
+import type { Professional } from "@prisma/client";
 import { db } from "@/lib/db";
 import { addDays, todayInTz, zonedTimeToUtc } from "@/lib/time";
 
@@ -245,8 +245,8 @@ describe("reserva pública con equipo", () => {
     const assigned: string[] = [];
     for (const hour of [10, 11, 12]) {
       const result = await book(t, hour, { professionalId: "any" });
-      expect(result.ok).toBe(true);
-      const row = await db.appointment.findFirstOrThrow({ where: { manageToken: result!.ok ? result.manageToken : "" } });
+      expect(result?.ok).toBe(true);
+      const row = await db.appointment.findFirstOrThrow({ where: { manageToken: result?.ok ? result.manageToken : "" } });
       assigned.push(row.professionalId);
       expect(row.professionalSelection).toBe("any");
       expect(row.requestedProfessionalId).toBeNull();

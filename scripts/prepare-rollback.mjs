@@ -1,0 +1,136 @@
+// Prepara la base para volver a una versión anterior de la aplicación SIN perder datos.
+//
+//   node scripts/prepare-rollback.mjs            informa qué habría que mover (no modifica nada)
+//   node scripts/prepare-rollback.mjs --apply    hace una copia y deja la base compatible
+//   node scripts/prepare-rollback.mjs --restore  vuelve a poner lo copiado (al volver a la versión nueva)
+//
+// Por qué hace falta: las versiones anteriores no conocen dos valores nuevos de
+// enum (`OrganizationImageKind.professional` y `NotificationType.professional_change`)
+// y fallan al leer una fila que los tenga. Los valores de enum no se pueden quitar,
+// así que las filas se APARTAN, no se borran:
+//
+//  1. Las fotos de profesionales se copian a `rollback_backup_professional_images`
+//     y se sacan de `organization_images` (el profesional queda sin foto; nada más cambia).
+//  2. Los avisos `professional_change` se copian a `rollback_backup_notifications`;
+//     los pendientes se anulan y el tipo de todos pasa a `reschedule` (el historial
+//     se conserva, con el tipo más parecido que conoce la versión anterior).
+//
+// Todo ocurre en UNA transacción: si algo falla, no cambia nada. `--restore` revierte
+// ambos pasos. Antes de usarlo en producción: copia de seguridad completa (deploy/backup.sh).
+
+import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+import pg from "pg";
+
+const PHOTO_BACKUP = "rollback_backup_professional_images";
+const NOTICE_BACKUP = "rollback_backup_notifications";
+
+/** Cuántas filas habría que mover. Solo lectura. */
+export async function inspect(client) {
+  const photos = await client.query(`SELECT count(*)::int AS n FROM "organization_images" WHERE "kind"::text = 'professional'`);
+  const notices = await client.query(`SELECT count(*)::int AS n FROM "notifications" WHERE "type"::text = 'professional_change'`);
+  return { photos: photos.rows[0].n, notices: notices.rows[0].n };
+}
+
+export async function apply(client) {
+  await client.query("BEGIN");
+  try {
+    await client.query(`CREATE TABLE IF NOT EXISTS "${PHOTO_BACKUP}" (LIKE "organization_images" INCLUDING DEFAULTS)`);
+    await client.query(`ALTER TABLE "${PHOTO_BACKUP}" ALTER COLUMN "kind" TYPE text USING "kind"::text`);
+    await client.query(`CREATE TABLE IF NOT EXISTS "${NOTICE_BACKUP}" (LIKE "notifications" INCLUDING DEFAULTS)`);
+    await client.query(`ALTER TABLE "${NOTICE_BACKUP}" ALTER COLUMN "type" TYPE text USING "type"::text`);
+    await client.query(`ALTER TABLE "${NOTICE_BACKUP}" ALTER COLUMN "status" TYPE text USING "status"::text`);
+    await client.query(`ALTER TABLE "${NOTICE_BACKUP}" ALTER COLUMN "channel" TYPE text USING "channel"::text`);
+
+    // Qué profesional usaba cada foto, para poder restaurarla.
+    await client.query(`ALTER TABLE "${PHOTO_BACKUP}" ADD COLUMN IF NOT EXISTS "professionalId" text`);
+    await client.query(
+      `INSERT INTO "${PHOTO_BACKUP}" ("id","organizationId","kind","contentType","width","height","bytes","createdAt","professionalId")
+       SELECT i."id", i."organizationId", i."kind"::text, i."contentType", i."width", i."height", i."bytes", i."createdAt", p."id"
+       FROM "organization_images" i LEFT JOIN "professionals" p ON p."photoImageId" = i."id"
+       WHERE i."kind"::text = 'professional' AND NOT EXISTS (SELECT 1 FROM "${PHOTO_BACKUP}" b WHERE b."id" = i."id")`,
+    );
+    // La clave foránea es ON DELETE SET NULL: los profesionales quedan sin foto, sin más cambios.
+    const photos = await client.query(`DELETE FROM "organization_images" WHERE "kind"::text = 'professional'`);
+
+    await client.query(
+      `INSERT INTO "${NOTICE_BACKUP}" ("id","organizationId","appointmentId","type","channel","recipient","scheduledFor","status","attempts","lastError","sentAt","idempotencyKey","lockedUntil","payload","createdAt")
+       SELECT n."id", n."organizationId", n."appointmentId", n."type"::text, n."channel"::text, n."recipient",
+         n."scheduledFor", n."status"::text, n."attempts", n."lastError", n."sentAt", n."idempotencyKey", n."lockedUntil", n."payload", n."createdAt"
+       FROM "notifications" n WHERE n."type"::text = 'professional_change' AND NOT EXISTS (SELECT 1 FROM "${NOTICE_BACKUP}" b WHERE b."id" = n."id")`,
+    );
+    await client.query(`UPDATE "notifications" SET "status" = 'canceled' WHERE "type"::text = 'professional_change' AND "status" = 'pending'`);
+    const notices = await client.query(`UPDATE "notifications" SET "type" = 'reschedule' WHERE "type"::text = 'professional_change'`);
+
+    await client.query("COMMIT");
+    return { photosMoved: photos.rowCount, noticesConverted: notices.rowCount };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+export async function restore(client) {
+  await client.query("BEGIN");
+  try {
+    const hasPhotos = (await client.query(`SELECT to_regclass('"${PHOTO_BACKUP}"') AS t`)).rows[0].t;
+    const hasNotices = (await client.query(`SELECT to_regclass('"${NOTICE_BACKUP}"') AS t`)).rows[0].t;
+    let photos = 0;
+    let notices = 0;
+    if (hasPhotos) {
+      await client.query(
+        `INSERT INTO "organization_images" ("id","organizationId","kind","contentType","width","height","bytes","createdAt")
+         SELECT b."id",b."organizationId",b."kind"::"OrganizationImageKind",b."contentType",b."width",b."height",b."bytes",b."createdAt" FROM "${PHOTO_BACKUP}" b
+         WHERE NOT EXISTS (SELECT 1 FROM "organization_images" i WHERE i."id" = b."id")`,
+      );
+      photos = (
+        await client.query(
+          `UPDATE "professionals" p SET "photoImageId" = b."id" FROM "${PHOTO_BACKUP}" b WHERE b."professionalId" = p."id" AND p."photoImageId" IS NULL`,
+        )
+      ).rowCount;
+    }
+    if (hasNotices) {
+      notices = (
+        await client.query(
+          `UPDATE "notifications" n SET "type" = 'professional_change', "status" = b."status"::"NotificationStatus"
+           FROM "${NOTICE_BACKUP}" b WHERE b."id" = n."id"`,
+        )
+      ).rowCount;
+    }
+    await client.query("COMMIT");
+    return { photosRestored: photos, noticesRestored: notices };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+async function main() {
+  if (!process.env.DATABASE_URL && existsSync(".env.local")) {
+    const { config } = await import("dotenv");
+    config({ path: ".env.local", quiet: true });
+  }
+  if (!process.env.DATABASE_URL) {
+    console.error("Requiere DATABASE_URL.");
+    process.exit(1);
+  }
+  const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    const mode = process.argv.includes("--apply") ? "apply" : process.argv.includes("--restore") ? "restore" : "inspect";
+    if (mode === "inspect") {
+      const found = await inspect(client);
+      console.log(`Fotos de profesionales: ${found.photos}`);
+      console.log(`Avisos de cambio de profesional: ${found.notices}`);
+      console.log(found.photos + found.notices === 0 ? "Nada que mover: la base ya es compatible con la versión anterior." : "Para apartarlos sin borrar nada: node scripts/prepare-rollback.mjs --apply");
+    } else if (mode === "apply") {
+      console.log(await apply(client));
+    } else {
+      console.log(await restore(client));
+    }
+  } finally {
+    await client.end();
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();

@@ -148,6 +148,20 @@ describe("mensajes de WhatsApp", () => {
     expect(contact).toContain("Te escribimos de Barbería Avenida por tu turno mañana a las 16:00 hs.");
   });
 
+  it("el aviso de cambio de profesional nombra al nuevo profesional, salvo en el modo discreto", () => {
+    const text = buildWhatsAppMessage("professional_change", base({ professionalName: "Martín" }));
+    expect(text).toContain("tu turno sigue mañana a las 16:00 hs, pero cambió quién te atiende: ahora te atiende Martín.");
+    expect(text).toContain("Profesional: Martín.");
+    expect(text).toContain("https://agendia.test/turno/abc123token");
+    const discreet = buildWhatsAppMessage("professional_change", base({ professionalName: "Martín", discreet: true }));
+    expect(discreet).not.toContain("Martín");
+    expect(discreet).toContain("cambió quién te atiende.");
+    // Solo se ofrece en negocios con equipo y turnos por venir.
+    const now = new Date("2026-11-17T12:00:00Z");
+    expect(availableKinds({ status: "confirmed", startsAt: new Date("2026-11-18T12:00:00Z") }, now, false)).not.toContain("professional_change");
+    expect(availableKinds({ status: "canceled", startsAt: new Date("2026-11-18T12:00:00Z") }, now, true)).not.toContain("professional_change");
+  });
+
   it("sin profesional (negocio individual) no hay línea de profesional; el mensaje discreto tampoco nombra al profesional ni da contacto", () => {
     expect(buildWhatsAppMessage("confirmation", base({ professionalName: null }))).not.toContain("Profesional");
     const discreet = buildWhatsAppMessage("confirmation", base({ discreet: true }));
