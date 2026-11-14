@@ -1,7 +1,7 @@
 # Progreso
 
-- **Última funcionalidad completada:** preparación para el lanzamiento: precios definitivos (Plan Profesional ARS 14.000/mes, Licencia independiente ARS 199.000), verificación de email obligatoria, compra de la licencia por Mercado Pago, instalaciones independientes alojadas en el mismo servidor (`deploy/instance.sh`), copia externa de backups y guía de despliegue actualizada.
-- **Validación:** lint, typecheck, build, tests (Vitest) y E2E Playwright mobile + desktop en verde. Stack de producción completo probado en Docker local (HTTPS de prueba, backup y restauración, instalación independiente de punta a punta).
-- **Estado:** **no desplegada.** No hay servidor, dominio ni cuentas externas contratadas; no hay cobros habilitados.
-- **Bloqueos reales (requieren al dueño):** VPS + dominio; cuenta de Resend con dominio verificado; credenciales de prueba de Mercado Pago (checklist de 20 casos en `docs/PRODUCTION_READINESS.md` §6) y, después, autorización para las productivas; destino de la copia externa; valor de la renovación anual de la licencia; términos, privacidad y texto de la licencia.
-- **Siguiente paso:** primer despliegue siguiendo `docs/DEPLOYMENT.md` §3.
+- **Producción:** https://agendia.atajolab.dev (Hetzner, Docker Compose, Caddy, PostgreSQL, Resend).
+- **Última funcionalidad completada:** páginas públicas personalizables por negocio — «Mi página pública» en el panel (identidad, logo y portada, colores, tipografía, contacto, visibilidad, identificador de URL, vista previa celular/escritorio, compartir por WhatsApp y QR), página de reservas rediseñada, «Consultá tus turnos» por email, enlaces anteriores que redirigen, metadata e imagen de vista previa por negocio, emails con el nombre y el color del negocio. Decisiones D-36 a D-39.
+- **Validación:** lint, typecheck, build, tests (Vitest) y E2E Playwright mobile + desktop en verde; imagen de producción probada en un contenedor (subida de imágenes, imagen de vista previa, QR).
+- **Pendiente de desplegar:** esta versión todavía no está en producción. Procedimiento y rollback en `docs/DEPLOYMENT.md` §5.
+- **Limitaciones conocidas:** sin dominios propios ni subdominios por negocio; una sola portada (sin galería); el logo no se incluye en los emails; «Consultá tus turnos» requiere que el cliente haya reservado con email.

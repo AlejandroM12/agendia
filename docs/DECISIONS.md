@@ -86,6 +86,26 @@
 **Decisión:** una cuenta nueva no puede usar la aplicación hasta abrir el enlace de verificación (token de un uso, 48 horas, guardado como hash). Restablecer la contraseña desde el email también confirma la casilla. Sin canal de email (desarrollo, pruebas) la cuenta nace verificada. `admin:grant` exige una cuenta verificada.
 **Motivo:** impide registrar cuentas con el email de otra persona y garantiza que la recuperación de contraseña llegue a su dueño.
 
+### D-36 · Página pública personalizable sin CSS del usuario
+**Estado:** CONFIRMADO.
+**Decisión:** cada negocio elige dos colores (hexadecimales validados), una tipografía entre cinco opciones y sus datos de contacto. `lib/theme.ts` calcula a partir de eso las variables de color de la página y garantiza contraste AA: un color claro se usa tal cual en botones y portada, y oscurecido en textos y bordes. No se acepta CSS, HTML ni fuentes arbitrarias. La personalización está incluida en el plan actual y funciona igual en modo standalone.
+**Motivo:** identidad propia para cada negocio sin abrir la puerta a inyección de estilos ni a páginas ilegibles.
+
+### D-37 · Imágenes en PostgreSQL
+**Estado:** CONFIRMADO (revisable si el volumen crece).
+**Decisión:** logo y portada se validan por contenido, se reescalan y se guardan como WebP en la tabla `organization_images` (≈ 20 KB y ≈ 150 KB). Se sirven por `/api/media/<id>` con caché inmutable; reemplazar una imagen crea un id nuevo y borra la anterior en la misma transacción.
+**Motivo:** persisten sin depender del disco del contenedor, entran en los mismos backups y restauraciones que el resto de los datos, funcionan en las instalaciones independientes sin configuración y no requieren servicios ni credenciales nuevas. Con 100 negocios ocupan unos 20 MB. Alternativas descartadas: volumen de Docker (habría que sumarlo a los backups y a cada instalación) y object storage (costo y credenciales nuevas). `modules/public-page/images.ts` es el único punto a cambiar para migrar.
+
+### D-38 · Enlaces anteriores al cambiar el identificador
+**Estado:** CONFIRMADO.
+**Decisión:** al cambiar el identificador de URL, el anterior queda como alias (`organization_slug_aliases`) y redirige (307) al actual, incluidas las subrutas. Un alias no puede ser tomado por otro negocio. Se conservan los 5 más recientes por negocio.
+**Motivo:** no romper enlaces ni códigos QR ya compartidos, sin permitir que un negocio acapare identificadores indefinidamente.
+
+### D-39 · «Consultá tus turnos» con enlace temporal por email
+**Estado:** CONFIRMADO.
+**Decisión:** el cliente ingresa su email en `/<negocio>/mis-turnos` y, solo si tiene turnos en ese negocio, recibe un enlace válido por 60 minutos. La respuesta en pantalla es siempre la misma y el envío ocurre después de responder. El token se guarda como hash, vale para un negocio y un email, se puede abrir más de una vez dentro de su vigencia y se invalida al pedir otro. Límites: 8 pedidos por hora por IP y 3 por hora por casilla y negocio. Cancelar y reprogramar reutilizan la página existente `/turno/<token>`.
+**Motivo:** acceso sin cuenta ni contraseña, sin exponer quién es cliente de un negocio ni datos personales a quien no controla la casilla.
+
 ### D-01 · Identidad comercial (nombre + identidad visual)
 **Estado:** CONFIRMADO. Identidad visual inicial aprobada.
 **Decisión:** nombre comercial **Agendia**; eslogan provisional «Tu agenda, más simple»; paleta celeste/blanco/grises (`primary #0284C7`, `primary light #E0F2FE`, `background #FFFFFF`, `surface #F8FAFC`, `border #E2E8F0`, `text #0F172A`); tipografía Geist; estilo SaaS premium minimalista, mobile-first, sin gradientes ni colores llamativos.

@@ -107,6 +107,23 @@ El script hace una copia de la base, construye, migra, reemplaza los contenedore
 
 **Migraciones:** son solo hacia adelante. Un cambio que rompe compatibilidad (borrar una columna o tabla) se despliega en una versión posterior a la que deja de usarla, nunca en la misma. Si una migración sale mal, se restaura la copia `backups/pre-deploy-*.sql.gz` que el script generó (sección 7) y se vuelve al commit anterior.
 
+### Versión con páginas públicas personalizables
+
+No agrega variables de entorno ni servicios. Incluye una migración (`public_page_customization`) que **solo agrega** columnas con valores por defecto y tres tablas nuevas: los negocios existentes conservan su página, su enlace y su aspecto.
+
+```sh
+cd agendia
+git fetch origin && git log --oneline HEAD..origin/main   # revisar qué entra
+./deploy/deploy.sh                                        # copia previa + build + migración + reemplazo + health
+./deploy/instance.sh update-all                           # solo si hay instalaciones independientes
+```
+
+Verificación después de desplegar: abrir la página pública de un negocio existente (debe verse y reservar como antes), `/dashboard/pagina` (subir un logo y guardarlo), y `https://TU_DOMINIO/<negocio>/og` (debe devolver una imagen).
+
+**Rollback:** `./deploy/deploy.sh <commit anterior>`. Como la migración es aditiva, la versión anterior funciona con la base ya migrada y no hace falta restaurar la copia; lo personalizado queda guardado y vuelve a verse al redesplegar. La copia `backups/pre-deploy-*.sql.gz` que genera el script solo se usa si se quiere volver también el esquema (`./deploy/restore.sh <copia> --replace`, que descarta lo cargado después de esa copia).
+
+La imagen se construye en el servidor y descarga tres tipografías más de Google Fonts durante el build: necesita salida a Internet, igual que antes.
+
 ## 6. Monitoreo, logs y alertas
 
 - **Disponibilidad:** `GET /api/health` responde 200 solo si la app llega a la base. Crear un monitor externo (UptimeRobot, plan gratuito: revisa cada 5 minutos y avisa por email) de tipo *keyword* sobre `https://TU_DOMINIO/api/health` buscando `"status":"ok"`. Sumar un monitor por cada instalación independiente. Es la única forma de enterarse si se cae el servidor entero.
