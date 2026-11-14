@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Bell,
   CalendarDays,
+  CircleUserRound,
   Clock,
   CreditCard,
   Ellipsis,
@@ -21,6 +22,9 @@ import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; icon: LucideIcon; exact?: boolean };
 
+/** Qué ve cada persona: el panel completo del negocio, o el del profesional (solo lo suyo). */
+export type NavigationVariant = "business" | "professional";
+
 const PRIMARY: Item[] = [
   { href: "/dashboard", label: "Hoy", icon: Sun, exact: true },
   { href: "/dashboard/agenda", label: "Agenda", icon: CalendarDays },
@@ -36,18 +40,37 @@ const SETUP: Item[] = [
 ];
 
 const TEAM: Item = { href: "/dashboard/equipo", label: "Equipo", icon: UsersRound };
-
 const BILLING: Item = { href: "/dashboard/facturacion", label: "Mi plan", icon: CreditCard };
+
+const PROFESSIONAL_PRIMARY: Item[] = [
+  { href: "/dashboard", label: "Hoy", icon: Sun, exact: true },
+  { href: "/dashboard/agenda", label: "Mi agenda", icon: CalendarDays },
+  { href: "/dashboard/turnos", label: "Mis turnos", icon: CalendarDays },
+];
 
 function useIsActive() {
   const pathname = usePathname();
   return (item: Item) => (item.exact ? pathname === item.href : pathname.startsWith(item.href));
 }
 
-export function SidebarNav({ showBilling, showTeam = false }: { showBilling: boolean; showTeam?: boolean }) {
+export function SidebarNav({
+  variant = "business",
+  showBilling,
+  showTeam = false,
+  showSettings = true,
+  showMyClients = false,
+}: {
+  variant?: NavigationVariant;
+  showBilling: boolean;
+  showTeam?: boolean;
+  /** Los administradores ven la configuración del negocio; el propietario también. */
+  showSettings?: boolean;
+  /** Profesional con permiso para tratar con sus clientes. */
+  showMyClients?: boolean;
+}) {
   const isActive = useIsActive();
   const pathname = usePathname();
-  const agendaActive = pathname.startsWith("/dashboard/turnos");
+  const agendaActive = pathname.startsWith("/dashboard/turnos") && variant === "business";
 
   const link = (item: Item) => {
     const active = isActive(item) || (item.href === "/dashboard/agenda" && agendaActive);
@@ -67,42 +90,74 @@ export function SidebarNav({ showBilling, showTeam = false }: { showBilling: boo
     );
   };
 
+  if (variant === "professional") {
+    return (
+      <nav className="flex flex-col gap-1" aria-label="Principal">
+        {PROFESSIONAL_PRIMARY.map(link)}
+        {showMyClients && link({ href: "/dashboard/clientes", label: "Mis clientes", icon: Users })}
+        <p className="mt-5 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground/80 uppercase">Yo</p>
+        {link({ href: "/dashboard/disponibilidad", label: "Mis horarios", icon: Clock })}
+        {link({ href: "/dashboard/perfil", label: "Mi perfil", icon: CircleUserRound })}
+      </nav>
+    );
+  }
+
+  const setup = SETUP.filter((item) => showSettings || !["/dashboard/recordatorios", "/dashboard/configuracion"].includes(item.href));
   return (
     <nav className="flex flex-col gap-1" aria-label="Principal">
       {PRIMARY.map(link)}
       <p className="mt-5 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground/80 uppercase">
         Mi negocio
       </p>
-      {SETUP.slice(0, 2).map(link)}
+      {setup.slice(0, 2).map(link)}
       {showTeam && link(TEAM)}
-      {SETUP.slice(2).map(link)}
+      {setup.slice(2).map(link)}
       {showBilling && link(BILLING)}
+      {link({ href: "/dashboard/perfil", label: "Mi cuenta", icon: CircleUserRound })}
     </nav>
   );
 }
 
 /** Barra inferior del celular: lo de todos los días, a un pulgar de distancia. */
-export function MobileTabBar({ canWrite }: { canWrite: boolean }) {
+export function MobileTabBar({ canWrite, variant = "business" }: { canWrite: boolean; variant?: NavigationVariant }) {
   const pathname = usePathname();
-  const tabs: Array<Item & { match: (p: string) => boolean }> = [
-    { href: "/dashboard", label: "Hoy", icon: Sun, match: (p) => p === "/dashboard" },
-    {
-      href: "/dashboard/agenda",
-      label: "Agenda",
-      icon: CalendarDays,
-      match: (p) => p.startsWith("/dashboard/agenda") || (p.startsWith("/dashboard/turnos") && p !== "/dashboard/turnos/nuevo"),
-    },
-    { href: "/dashboard/clientes", label: "Clientes", icon: Users, match: (p) => p.startsWith("/dashboard/clientes") },
-    {
-      href: "/dashboard/mas",
-      label: "Más",
-      icon: Ellipsis,
-      match: (p) =>
-        ["/dashboard/mas", "/dashboard/pagina", "/dashboard/servicios", "/dashboard/equipo", "/dashboard/disponibilidad", "/dashboard/recordatorios", "/dashboard/configuracion", "/dashboard/facturacion"].some(
-          (prefix) => p.startsWith(prefix),
-        ),
-    },
-  ];
+  const professional = variant === "professional";
+  const tabs: Array<Item & { match: (p: string) => boolean }> = professional
+    ? [
+        { href: "/dashboard", label: "Hoy", icon: Sun, match: (p) => p === "/dashboard" },
+        { href: "/dashboard/agenda", label: "Agenda", icon: CalendarDays, match: (p) => p.startsWith("/dashboard/agenda") },
+        {
+          href: "/dashboard/turnos",
+          label: "Turnos",
+          icon: Users,
+          match: (p) => p.startsWith("/dashboard/turnos") && p !== "/dashboard/turnos/nuevo",
+        },
+        {
+          href: "/dashboard/mas",
+          label: "Más",
+          icon: Ellipsis,
+          match: (p) => ["/dashboard/mas", "/dashboard/perfil", "/dashboard/disponibilidad", "/dashboard/clientes"].some((prefix) => p.startsWith(prefix)),
+        },
+      ]
+    : [
+        { href: "/dashboard", label: "Hoy", icon: Sun, match: (p) => p === "/dashboard" },
+        {
+          href: "/dashboard/agenda",
+          label: "Agenda",
+          icon: CalendarDays,
+          match: (p) => p.startsWith("/dashboard/agenda") || (p.startsWith("/dashboard/turnos") && p !== "/dashboard/turnos/nuevo"),
+        },
+        { href: "/dashboard/clientes", label: "Clientes", icon: Users, match: (p) => p.startsWith("/dashboard/clientes") },
+        {
+          href: "/dashboard/mas",
+          label: "Más",
+          icon: Ellipsis,
+          match: (p) =>
+            ["/dashboard/mas", "/dashboard/pagina", "/dashboard/servicios", "/dashboard/equipo", "/dashboard/disponibilidad", "/dashboard/recordatorios", "/dashboard/configuracion", "/dashboard/facturacion", "/dashboard/perfil"].some(
+              (prefix) => p.startsWith(prefix),
+            ),
+        },
+      ];
 
   const tab = (item: (typeof tabs)[number]) => {
     const active = item.match(pathname);

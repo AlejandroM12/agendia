@@ -3,7 +3,7 @@ import sharp from "sharp";
 import type { AppContext } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { generateUniqueOrganizationSlug, isValidSlugFormat, slugify } from "@/lib/slug";
-import { createSchedulableOrganization, uniqueSuffix } from "./helpers";
+import { createSchedulableOrganization, fakeContext, uniqueSuffix } from "./helpers";
 
 /**
  * Página pública personalizable: validación de la configuración,
@@ -39,12 +39,7 @@ let b: Tenant;
 
 async function signInAs(tenant: Tenant, canWrite = true) {
   const organization = await db.organization.findUniqueOrThrow({ where: { id: tenant.organization.id } });
-  session.current = {
-    user: { id: tenant.userId, email: tenant.ownerEmail, name: "Owner", isPlatformAdmin: false },
-    organization,
-    role: "owner",
-    canWrite,
-  } satisfies AppContext;
+  session.current = fakeContext({ userId: tenant.userId, email: tenant.ownerEmail, organization, canWrite }) satisfies AppContext;
   return organization;
 }
 

@@ -30,23 +30,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const { email, password } = parsed.data;
 
-        const user = await db.user.findUnique({
-          where: { email },
-          include: { memberships: { take: 1 } },
-        });
+        const user = await db.user.findUnique({ where: { email } });
         if (!user) return null;
 
         const isValid = await verifyPassword(password, user.passwordHash);
         if (!isValid) return null;
 
-        const membership = user.memberships[0];
-
+        // El token NO lleva negocio ni rol: una persona puede pertenecer a varios
+        // negocios y su rol en cada uno puede cambiar o revocarse mientras la
+        // sesión sigue abierta. Todo eso se resuelve en cada request (lib/dal.ts).
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-          organizationId: membership?.organizationId ?? null,
-          role: membership?.role ?? null,
           sessionVersion: user.sessionVersion,
         };
       },
@@ -57,8 +53,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // (ver guía de Next.js sobre sesiones: nunca datos sensibles).
     async jwt({ token, user }) {
       if (user) {
-        token.organizationId = user.organizationId;
-        token.role = user.role;
         token.sessionVersion = user.sessionVersion;
       }
       return token;
@@ -66,8 +60,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.sub as string;
-        session.user.organizationId = token.organizationId as string | null;
-        session.user.role = token.role as string | null;
         session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 0;
       }
       return session;

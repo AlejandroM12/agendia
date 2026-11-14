@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll, beforeAll, beforeEach, vi } from "vites
 import type { AppContext } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { addDays, dateStrToDbDate, todayInTz, zonedTimeToUtc } from "@/lib/time";
-import { createSchedulableOrganization } from "./helpers";
+import { createSchedulableOrganization, fakeContext } from "./helpers";
 
 /**
  * Aislamiento entre negocios a nivel de server actions.
@@ -18,16 +18,7 @@ import { createSchedulableOrganization } from "./helpers";
 
 const session = vi.hoisted(() => ({ current: null as unknown }));
 
-vi.mock("@/lib/dal", () => {
-  const context = () => session.current as AppContext;
-  return {
-    READ_ONLY_MESSAGE: "solo lectura",
-    requireContext: async () => context(),
-    requireOrganization: async () => context(),
-    requireWriteContext: async () =>
-      context().canWrite ? { ok: true, context: context() } : { ok: false, message: "solo lectura" },
-  };
-});
+vi.mock("@/lib/dal", async () => (await import("./dal-mock")).createDalMock(() => session.current as AppContext));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -86,12 +77,10 @@ describe("aislamiento entre negocios en las server actions", () => {
   let tomorrow: string;
 
   function actAs(tenant: Tenant, overrides: Partial<AppContext> = {}) {
+    const { user, ...rest } = overrides;
     session.current = {
-      user: { id: tenant.userId, email: tenant.ownerEmail, name: "Owner Test", isPlatformAdmin: false },
-      organization: tenant.organization,
-      role: "owner",
-      canWrite: true,
-      ...overrides,
+      ...fakeContext({ userId: tenant.userId, email: tenant.ownerEmail, organization: tenant.organization, canWrite: true, isPlatformAdmin: user?.isPlatformAdmin }),
+      ...rest,
     } satisfies AppContext;
   }
 

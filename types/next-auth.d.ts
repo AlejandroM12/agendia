@@ -1,26 +1,22 @@
 import type { DefaultSession } from "next-auth";
 
+// El token y la sesión NO llevan negocio ni rol (ver auth.ts y lib/dal.ts):
+// se resuelven en el servidor en cada pedido.
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      organizationId: string | null;
-      role: string | null;
       sessionVersion: number;
     } & DefaultSession["user"];
   }
 
   interface User {
-    organizationId?: string | null;
-    role?: string | null;
     sessionVersion?: number;
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
-    organizationId?: string | null;
-    role?: string | null;
     sessionVersion?: number;
   }
 }

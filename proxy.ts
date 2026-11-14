@@ -5,7 +5,7 @@ import { isStandalone } from "@/lib/deployment";
 // A partir de Next.js 16, "Middleware" se llama "Proxy" (mismo mecanismo).
 // Ver node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md
 
-const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/onboarding", "/vista-previa"];
+const PROTECTED_PREFIXES = ["/dashboard", "/admin", "/onboarding", "/vista-previa", "/sin-acceso"];
 const AUTH_PAGES = ["/login", "/registro"];
 
 export default auth((req) => {

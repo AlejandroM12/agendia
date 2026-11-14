@@ -1,37 +1,44 @@
 import "server-only";
 
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import type { Organization } from "@prisma/client";
+import type { MembershipRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { canPerformWriteActions, getOrganizationWithSyncedStatus } from "@/lib/organization-access";
-import { can, FORBIDDEN_MESSAGE, type Permission } from "@/lib/permissions";
+import { composeContext, type AppContext, type LoadedContext } from "@/lib/app-context";
+import { getOrganizationWithSyncedStatus } from "@/lib/organization-access";
+
+export { composeContext, type AppContext };
+import { FORBIDDEN_MESSAGE, type Permission } from "@/lib/permissions";
 
 /**
- * Data Access Layer: el único lugar donde se resuelve "quién es el usuario
- * y a qué organización pertenece". Páginas, server actions y route handlers
- * obtienen la organización desde acá — nunca de un parámetro del cliente.
+ * Data Access Layer: el único lugar donde se resuelve "quién es el usuario,
+ * a qué negocio está accediendo y qué puede hacer ahí". Páginas, server
+ * actions y route handlers obtienen todo desde acá — nunca de un parámetro
+ * del cliente.
  *
- * En cada request se revalida contra la base de datos que:
+ * Una persona puede ser miembro de varios negocios. El negocio ACTIVO se
+ * decide en el servidor en cada pedido:
+ *  - la cookie `agendia_org` es solo una **pista** (el último negocio usado);
+ *    se acepta únicamente si la persona tiene hoy una membresía en ese negocio;
+ *  - sin pista válida, se usa su primera membresía (el comportamiento de siempre).
+ *
+ * En cada request se vuelve a leer de la base de datos —no del token de
+ * sesión— que:
  * - el usuario sigue existiendo y su sesión no fue invalidada (cambio de
  *   contraseña → `sessionVersion`),
- * - sigue siendo miembro de la organización que dice su sesión, y
- * - confirmó su email.
+ * - sigue siendo miembro del negocio activo y con qué rol (una membresía
+ *   revocada deja de servir de inmediato, aunque la sesión siga abierta),
+ * - confirmó su email,
+ * - y qué permisos le tocan (los del profesional los configura el propietario).
  */
 export const getCurrentSession = cache(async () => auth());
 
-export type AppContext = {
-  user: { id: string; email: string; name: string; isPlatformAdmin: boolean };
-  organization: Organization;
-  role: "owner" | "admin";
-  /** `false` con la prueba vencida o la cuenta suspendida: solo lectura. */
-  canWrite: boolean;
-};
+/** Cookie con el último negocio usado. Solo una pista: nunca autoriza nada por sí sola. */
+export const ACTIVE_ORGANIZATION_COOKIE = "agendia_org";
 
-type LoadedContext = AppContext & { emailVerified: boolean };
-
-const loadContext = cache(async (): Promise<LoadedContext | "anonymous" | "stale"> => {
+const loadContext = cache(async (): Promise<LoadedContext | "anonymous" | "stale" | "no_workspace"> => {
   const session = await getCurrentSession();
   if (!session?.user?.id) return "anonymous";
 
@@ -44,23 +51,24 @@ const loadContext = cache(async (): Promise<LoadedContext | "anonymous" | "stale
       sessionVersion: true,
       isPlatformAdmin: true,
       emailVerifiedAt: true,
-      memberships: { orderBy: { createdAt: "asc" }, take: 1, select: { organizationId: true, role: true } },
+      memberships: { orderBy: { createdAt: "asc" }, select: { id: true, organizationId: true, role: true, notifyBookings: true } },
     },
   });
+  if (!user || user.sessionVersion !== session.user.sessionVersion) return "stale";
+  if (user.memberships.length === 0) return "no_workspace";
 
-  const membership = user?.memberships[0];
-  if (!user || !membership || user.sessionVersion !== session.user.sessionVersion) return "stale";
+  // La pista solo cuenta si hoy sigue siendo un negocio al que pertenece.
+  const hint = (await cookies()).get(ACTIVE_ORGANIZATION_COOKIE)?.value;
+  const membership = user.memberships.find((m) => m.organizationId === hint) ?? user.memberships[0];
 
   const organization = await getOrganizationWithSyncedStatus(membership.organizationId);
   if (!organization) return "stale";
 
-  return {
-    user: { id: user.id, email: user.email, name: user.name, isPlatformAdmin: user.isPlatformAdmin },
-    organization,
-    role: membership.role,
-    canWrite: canPerformWriteActions(organization),
-    emailVerified: user.emailVerifiedAt !== null,
-  };
+  const professional = await db.professional.findFirst({
+    where: { organizationId: organization.id, userId: user.id },
+    select: { id: true, displayName: true, active: true, permissionOverrides: true },
+  });
+  return composeContext({ user, membership, organization, professional });
 });
 
 /**
@@ -73,11 +81,13 @@ export async function requireSignedInUser(): Promise<LoadedContext> {
   // Sesión que ya no es válida: /logout borra la cookie (un Server
   // Component no puede hacerlo) y vuelve a /login.
   if (context === "stale") redirect("/logout");
+  // Cuenta válida sin ningún negocio (por ejemplo, se le revocó el acceso al único que tenía).
+  if (context === "no_workspace") redirect("/sin-acceso");
   return context;
 }
 
 /**
- * Exige usuario + organización válidos y el email verificado. Redirige a
+ * Exige usuario + negocio activo válidos y el email verificado. Redirige a
  * /login si no hay sesión, y a /verificar-email si falta confirmar el email.
  */
 export async function requireContext(): Promise<AppContext> {
@@ -93,20 +103,30 @@ export async function requireOrganization(): Promise<AppContext> {
   return context;
 }
 
+/**
+ * Para páginas: además exige el permiso; sin él, la persona vuelve a su
+ * pantalla de inicio (nunca ve una sección que no le corresponde).
+ */
+export async function requirePagePermission(permission: Permission): Promise<AppContext> {
+  const context = await requireOrganization();
+  if (!context.permissions.has(permission)) redirect("/dashboard");
+  return context;
+}
+
 export const READ_ONLY_MESSAGE =
   "Tu cuenta está en modo de solo lectura. Activá tu plan para volver a crear y modificar turnos.";
 
 /**
  * Para server actions que modifican datos: devuelve el contexto, o un
- * mensaje de error si la cuenta está en solo lectura. La restricción se
- * aplica acá, en el servidor, no solo ocultando botones.
+ * mensaje de error si la cuenta está en solo lectura o el rol no tiene el
+ * permiso. Ambas restricciones se aplican acá, en el servidor, no solo
+ * ocultando botones. El rol y la membresía se leen de la base en cada request.
  */
 export async function requireWriteContext(
   permission?: Permission,
 ): Promise<{ ok: true; context: AppContext } | { ok: false; message: string }> {
   const context = await requireContext();
-  // El rol se lee de la membresía en la base de datos en cada request, nunca de lo que envía el cliente.
-  if (permission && !can(context.role, permission)) return { ok: false, message: FORBIDDEN_MESSAGE };
+  if (permission && !context.permissions.has(permission)) return { ok: false, message: FORBIDDEN_MESSAGE };
   if (!context.canWrite) return { ok: false, message: READ_ONLY_MESSAGE };
   return { ok: true, context };
 }
@@ -120,4 +140,45 @@ export async function requirePermission(
   permission: Permission,
 ): Promise<{ ok: true; context: AppContext } | { ok: false; message: string }> {
   return requireWriteContext(permission);
+}
+
+/**
+ * Para acciones que un propietario/administrador hace sobre cualquiera y un
+ * profesional solo sobre SU agenda. Devuelve el contexto si tiene el permiso
+ * general (`any`) o, siendo profesional, el propio (`own`).
+ */
+export async function requireScopedWrite(
+  any: Permission,
+  own: Permission,
+): Promise<{ ok: true; context: AppContext } | { ok: false; message: string }> {
+  const context = await requireContext();
+  if (!context.permissions.has(any) && !context.permissions.has(own)) return { ok: false, message: FORBIDDEN_MESSAGE };
+  if (!context.canWrite) return { ok: false, message: READ_ONLY_MESSAGE };
+  return { ok: true, context };
+}
+
+export type Workspace = {
+  organizationId: string;
+  name: string;
+  slug: string;
+  role: MembershipRole;
+  logoImageId: string | null;
+  active: boolean;
+};
+
+/** Los negocios a los que pertenece la persona (para el selector). Una sola consulta agrupada. */
+export async function listWorkspaces(userId: string, activeOrganizationId: string): Promise<Workspace[]> {
+  const memberships = await db.membership.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    select: { role: true, organization: { select: { id: true, name: true, slug: true, images: { where: { kind: "logo" }, select: { id: true }, take: 1 } } } },
+  });
+  return memberships.map((m) => ({
+    organizationId: m.organization.id,
+    name: m.organization.name,
+    slug: m.organization.slug,
+    role: m.role,
+    logoImageId: m.organization.images[0]?.id ?? null,
+    active: m.organization.id === activeOrganizationId,
+  }));
 }

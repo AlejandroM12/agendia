@@ -4,7 +4,7 @@ import type { AppContext } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { addDays, todayInTz, zonedTimeToUtc } from "@/lib/time";
-import { addProfessional, createSchedulableOrganization, enableTeam, ownerProfessional } from "./helpers";
+import { addProfessional, createSchedulableOrganization, enableTeam, fakeContext, ownerProfessional } from "./helpers";
 
 /**
  * Las acciones de «Equipo» con la sesión de un negocio y, para probar la
@@ -14,21 +14,7 @@ import { addProfessional, createSchedulableOrganization, enableTeam, ownerProfes
 
 const session = vi.hoisted(() => ({ current: null as unknown }));
 
-vi.mock("@/lib/dal", async () => {
-  const { can, FORBIDDEN_MESSAGE } = await import("@/lib/permissions");
-  const context = () => session.current as AppContext;
-  const requireWriteContext = async (permission?: Parameters<typeof can>[1]) => {
-    if (permission && !can(context().role, permission)) return { ok: false, message: FORBIDDEN_MESSAGE };
-    return context().canWrite ? { ok: true, context: context() } : { ok: false, message: "solo lectura" };
-  };
-  return {
-    READ_ONLY_MESSAGE: "solo lectura",
-    requireContext: async () => context(),
-    requireOrganization: async () => context(),
-    requireWriteContext,
-    requirePermission: requireWriteContext,
-  };
-});
+vi.mock("@/lib/dal", async () => (await import("./dal-mock")).createDalMock(() => session.current as AppContext));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -70,15 +56,9 @@ const form = (fields: Record<string, string | string[]>) => {
   return data;
 };
 
-async function actAs(tenant: Tenant, patch: Partial<AppContext> = {}) {
+async function actAs(tenant: Tenant, patch: { role?: AppContext["role"]; canWrite?: boolean } = {}) {
   const organization = await db.organization.findUniqueOrThrow({ where: { id: tenant.organization.id } });
-  session.current = {
-    user: { id: tenant.userId, email: tenant.ownerEmail, name: "Owner", isPlatformAdmin: false },
-    organization,
-    role: "owner",
-    canWrite: true,
-    ...patch,
-  } satisfies AppContext;
+  session.current = fakeContext({ userId: tenant.userId, email: tenant.ownerEmail, organization, role: patch.role, canWrite: patch.canWrite ?? true });
 }
 
 const run = async (fn: () => Promise<unknown>) => {

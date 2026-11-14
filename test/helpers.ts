@@ -1,4 +1,5 @@
-import type { Organization, Professional } from "@prisma/client";
+import type { MembershipRole, Organization, Professional } from "@prisma/client";
+import { composeContext, type AppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 
 /**
@@ -131,3 +132,27 @@ export async function addProfessional(
 /** El profesional que crea el registro (el dueño). */
 export const ownerProfessional = (organizationId: string) =>
   db.professional.findFirstOrThrow({ where: { organizationId }, orderBy: { createdAt: "asc" } });
+
+/**
+ * Contexto de sesión completo para las pruebas que reemplazan solo la capa
+ * que lee la cookie (lib/dal): los permisos y el alcance salen de las mismas
+ * funciones que usa la aplicación, no de una copia.
+ */
+export function fakeContext(input: {
+  userId: string;
+  email: string;
+  name?: string;
+  organization: Organization;
+  role?: MembershipRole;
+  canWrite?: boolean;
+  isPlatformAdmin?: boolean;
+  professional?: { id: string; displayName: string; active: boolean; permissionOverrides?: unknown } | null;
+}): AppContext {
+  const context = composeContext({
+    user: { id: input.userId, email: input.email, name: input.name ?? "Owner Test", isPlatformAdmin: input.isPlatformAdmin ?? false, emailVerifiedAt: new Date() },
+    membership: { id: "membership-test", role: input.role ?? "owner", notifyBookings: true },
+    organization: input.organization,
+    professional: input.professional ? { permissionOverrides: null, ...input.professional } : null,
+  });
+  return { ...context, ...(input.canWrite === undefined ? {} : { canWrite: input.canWrite }) };
+}
