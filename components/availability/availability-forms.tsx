@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
+import { useForm } from "@/components/form/use-form";
 import {
   addExceptionAction,
   saveBookingSettingsAction,
@@ -15,13 +16,13 @@ import { WeeklyHoursEditor } from "./weekly-hours-editor";
 type Rule = { weekday: number; startMinute: number; endMinute: number };
 
 export function WeeklyHoursForm({ rules, disabled }: { rules: Rule[]; disabled: boolean }) {
-  const [state, action] = useActionState(saveWeeklyHoursAction, undefined);
+  const form = useForm(saveWeeklyHoursAction);
   return (
-    <form action={action} className="space-y-4">
+    <form {...form.formProps} className="space-y-4">
       <fieldset disabled={disabled} className="space-y-4">
         <WeeklyHoursEditor initialRules={rules} />
-        <FormMessage message={state?.message} tone={state?.ok ? "success" : "error"} />
-        <SubmitButton>Guardar horarios</SubmitButton>
+        <FormMessage message={form.message} tone={form.state?.ok ? "success" : "error"} />
+        <SubmitButton pending={form.pending}>Guardar horarios</SubmitButton>
       </fieldset>
     </form>
   );
@@ -55,12 +56,12 @@ export function BookingSettingsForm({
   };
   disabled: boolean;
 }) {
-  const [state, action] = useActionState(saveBookingSettingsAction, undefined);
+  const form = useForm(saveBookingSettingsAction);
   return (
-    <form action={action}>
+    <form {...form.formProps}>
       <fieldset disabled={disabled} className="space-y-5">
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Ofrecer horarios cada" htmlFor="slotIntervalMinutes">
+          <Field label="Ofrecer horarios cada" htmlFor="slotIntervalMinutes" error={form.error("slotIntervalMinutes")}>
             <select id="slotIntervalMinutes" name="slotIntervalMinutes" className="field" defaultValue={settings.slotIntervalMinutes}>
               {[10, 15, 20, 30, 45, 60].map((m) => (
                 <option key={m} value={m}>
@@ -69,7 +70,7 @@ export function BookingSettingsForm({
               ))}
             </select>
           </Field>
-          <Field label="Descanso entre turnos" htmlFor="bufferMinutes">
+          <Field label="Descanso entre turnos" htmlFor="bufferMinutes" error={form.error("bufferMinutes")}>
             <select id="bufferMinutes" name="bufferMinutes" className="field" defaultValue={settings.bufferMinutes}>
               {withCurrent([[0, "Sin descanso"], [5, "5 minutos"], [10, "10 minutos"], [15, "15 minutos"], [30, "30 minutos"]], settings.bufferMinutes, (v) => `${v} minutos`).map(([v, label]) => (
                 <option key={v} value={v}>
@@ -78,7 +79,7 @@ export function BookingSettingsForm({
               ))}
             </select>
           </Field>
-          <Field label="Se puede reservar hasta" htmlFor="minNoticeMinutes" hint="Evita reservas de último momento.">
+          <Field label="Se puede reservar hasta" htmlFor="minNoticeMinutes" hint="Evita reservas de último momento." error={form.error("minNoticeMinutes")}>
             <select id="minNoticeMinutes" name="minNoticeMinutes" className="field" defaultValue={settings.minNoticeMinutes}>
               {withCurrent(NOTICE_OPTIONS, settings.minNoticeMinutes, (v) => `${Math.round(v / 60)} horas antes`).map(([v, label]) => (
                 <option key={v} value={v}>
@@ -87,7 +88,7 @@ export function BookingSettingsForm({
               ))}
             </select>
           </Field>
-          <Field label="Agenda abierta para los próximos" htmlFor="maxAdvanceDays">
+          <Field label="Agenda abierta para los próximos" htmlFor="maxAdvanceDays" error={form.error("maxAdvanceDays")}>
             <select id="maxAdvanceDays" name="maxAdvanceDays" className="field" defaultValue={settings.maxAdvanceDays}>
               {withCurrent([[7, "7 días"], [14, "14 días"], [30, "30 días"], [60, "60 días"], [90, "90 días"], [180, "6 meses"]], settings.maxAdvanceDays, (v) => `${v} días`).map(([v, label]) => (
                 <option key={v} value={v}>
@@ -100,7 +101,8 @@ export function BookingSettingsForm({
             label="Tus clientes pueden cancelar o reprogramar hasta"
             htmlFor="cancellationNoticeHours"
             className="sm:col-span-2"
-          >
+          error={form.error("cancellationNoticeHours")}
+        >
             <select id="cancellationNoticeHours" name="cancellationNoticeHours" className="field sm:max-w-xs" defaultValue={settings.cancellationNoticeHours}>
               {withCurrent([[0, "El momento del turno"], [1, "1 hora antes"], [2, "2 horas antes"], [6, "6 horas antes"], [12, "12 horas antes"], [24, "24 horas antes"], [48, "48 horas antes"]], settings.cancellationNoticeHours, (v) => `${v} horas antes`).map(([v, label]) => (
                 <option key={v} value={v}>
@@ -110,25 +112,25 @@ export function BookingSettingsForm({
             </select>
           </Field>
         </div>
-        <FormMessage message={state?.message} tone={state?.ok ? "success" : "error"} />
-        <SubmitButton>Guardar reglas</SubmitButton>
+        <FormMessage message={form.message} tone={form.state?.ok ? "success" : "error"} />
+        <SubmitButton pending={form.pending}>Guardar reglas</SubmitButton>
       </fieldset>
     </form>
   );
 }
 
 export function ExceptionForm({ minDate, disabled }: { minDate: string; disabled: boolean }) {
-  const [state, action] = useActionState(addExceptionAction, undefined);
+  const form = useForm(addExceptionAction);
   const [fullDay, setFullDay] = useState(true);
 
   return (
-    <form action={action}>
+    <form {...form.formProps}>
       <fieldset disabled={disabled} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Fecha" htmlFor="date">
+          <Field label="Fecha" htmlFor="date" error={form.error("date")}>
             <Input id="date" name="date" type="date" min={minDate} required />
           </Field>
-          <Field label="Motivo" htmlFor="reason" optional>
+          <Field label="Motivo" htmlFor="reason" optional error={form.error("reason")}>
             <Input id="reason" name="reason" maxLength={120} placeholder="Feriado, vacaciones, trámite…" />
           </Field>
         </div>
@@ -149,8 +151,8 @@ export function ExceptionForm({ minDate, disabled }: { minDate: string; disabled
             <input type="time" name="end" aria-label="Hasta" className="field w-auto" defaultValue="14:00" required />
           </div>
         )}
-        <FormMessage message={state?.message} tone={state?.ok ? "success" : "error"} />
-        <SubmitButton variant="outline">Agregar bloqueo</SubmitButton>
+        <FormMessage message={form.message} tone={form.state?.ok ? "success" : "error"} />
+        <SubmitButton pending={form.pending} variant="outline">Agregar bloqueo</SubmitButton>
       </fieldset>
     </form>
   );

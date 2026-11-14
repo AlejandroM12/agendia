@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
-import { type ActionState, firstError } from "@/lib/action-state";
+import { useForm } from "@/components/form/use-form";
+import { type ActionState, firstFieldErrors } from "@/lib/action-state";
+import { customerInputSchema } from "@/modules/customers/schema";
 
 type Action = (prev: ActionState, formData: FormData) => Promise<ActionState>;
 
@@ -20,23 +21,29 @@ export function CustomerForm({
   submitLabel: string;
   disabled?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
+  const form = useForm(action, {
+    // El mismo esquema con el que valida el servidor.
+    validate: (data) => {
+      const parsed = customerInputSchema.safeParse(Object.fromEntries(data));
+      return parsed.success ? null : firstFieldErrors(parsed.error);
+    },
+  });
 
   return (
-    <form action={formAction}>
+    <form {...form.formProps}>
       <fieldset disabled={disabled} className="max-w-lg space-y-5">
-        <Field label="Nombre" htmlFor="name" error={firstError(state, "name")}>
+        <Field label="Nombre" htmlFor="name" error={form.error("name")}>
           <Input id="name" name="name" defaultValue={customer?.name} maxLength={120} required />
         </Field>
         <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="Teléfono" htmlFor="phone" optional error={firstError(state, "phone")}>
+          <Field label="Teléfono" htmlFor="phone" optional error={form.error("phone")}>
             <Input id="phone" name="phone" type="tel" inputMode="tel" defaultValue={customer?.phone ?? ""} />
           </Field>
-          <Field label="Email" htmlFor="email" optional error={firstError(state, "email")}>
+          <Field label="Email" htmlFor="email" optional error={form.error("email")}>
             <Input id="email" name="email" type="email" inputMode="email" defaultValue={customer?.email ?? ""} />
           </Field>
         </div>
-        <Field label="Observaciones" htmlFor="notes" optional hint="Solo las ves vos.">
+        <Field label="Observaciones" htmlFor="notes" optional hint="Solo las ves vos." error={form.error("notes")}>
           <textarea
             id="notes"
             name="notes"
@@ -45,8 +52,8 @@ export function CustomerForm({
             defaultValue={customer?.notes ?? ""}
           />
         </Field>
-        <FormMessage message={state?.message} tone={state?.ok ? "success" : "error"} />
-        {!disabled && <SubmitButton>{submitLabel}</SubmitButton>}
+        <FormMessage message={form.message} tone={form.state?.ok ? "success" : "error"} />
+        {!disabled && <SubmitButton pending={form.pending}>{submitLabel}</SubmitButton>}
       </fieldset>
     </form>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Monitor, Smartphone } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button-link";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
-import { firstError } from "@/lib/action-state";
+import { useForm } from "@/components/form/use-form";
 import { contrastRatio, normalizeHexColor, resolveTheme, THEME_FONTS, THEME_PRESETS, type ThemePreset } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { updatePublicPageAction } from "@/modules/public-page/actions";
@@ -90,7 +90,7 @@ export function PublicPageEditor({
   disabled: boolean;
 }) {
   const router = useRouter();
-  const [state, action] = useActionState(updatePublicPageAction, undefined);
+  const form = useForm(updatePublicPageAction);
   const [values, setValues] = useState<Values>(() => toValues(profile));
   const [device, setDevice] = useState<Device>("mobile");
   const [query, setQuery] = useState(() => previewQuery(toValues(profile)));
@@ -106,13 +106,14 @@ export function PublicPageEditor({
   }, [values]);
 
   // Tras guardar, el resto del panel (enlace para compartir, QR) toma los datos nuevos.
-  const handled = useRef<typeof state>(undefined);
+  const saved = form.state;
+  const handled = useRef<typeof saved>(undefined);
   useEffect(() => {
-    if (state?.ok && state !== handled.current) {
-      handled.current = state;
+    if (saved?.ok && saved !== handled.current) {
+      handled.current = saved;
       router.refresh();
     }
-  }, [state, router]);
+  }, [saved, router]);
 
   const theme = useMemo(
     () => resolveTheme({ primary: values.themePrimary, secondary: values.themeSecondary, font: values.themeFont }),
@@ -137,7 +138,7 @@ export function PublicPageEditor({
 
   return (
     <div className="grid gap-10 xl:grid-cols-[minmax(0,27rem)_minmax(0,1fr)] xl:items-start">
-      <form action={action}>
+      <form {...form.formProps}>
         <fieldset disabled={disabled} className="space-y-9">
           <Group title="Identidad" description="Cómo se presenta tu negocio.">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -160,7 +161,7 @@ export function PublicPageEditor({
                 onChanged={() => setImagesVersion((v) => v + 1)}
               />
             </div>
-            <Field label="Nombre comercial o profesional" htmlFor="name" error={firstError(state, "name")}>
+            <Field label="Nombre comercial o profesional" htmlFor="name" error={form.error("name")}>
               <Input id="name" name="name" value={values.name} onChange={(e) => set("name", e.target.value)} maxLength={80} required />
             </Field>
             <Field
@@ -168,11 +169,11 @@ export function PublicPageEditor({
               htmlFor="specialty"
               optional
               hint="Por ejemplo: Osteopatía, Barbería, Uñas esculpidas."
-              error={firstError(state, "specialty")}
+              error={form.error("specialty")}
             >
               <Input id="specialty" name="specialty" value={values.specialty} onChange={(e) => set("specialty", e.target.value)} maxLength={60} />
             </Field>
-            <Field label="Descripción" htmlFor="description" optional error={firstError(state, "description")}>
+            <Field label="Descripción" htmlFor="description" optional error={form.error("description")}>
               <textarea
                 id="description"
                 name="description"
@@ -221,7 +222,7 @@ export function PublicPageEditor({
                 hint="Botones, enlaces y detalles."
                 value={values.themePrimary}
                 onChange={(value) => set("themePrimary", value)}
-                error={firstError(state, "themePrimary")}
+                error={form.error("themePrimary")}
               />
               <ColorField
                 id="themeSecondary"
@@ -229,7 +230,7 @@ export function PublicPageEditor({
                 hint="Acompaña al principal en la portada."
                 value={values.themeSecondary}
                 onChange={(value) => set("themeSecondary", value)}
-                error={firstError(state, "themeSecondary")}
+                error={form.error("themeSecondary")}
               />
             </div>
 
@@ -257,7 +258,7 @@ export function PublicPageEditor({
               </div>
             )}
 
-            <Field label="Tipografía" htmlFor="themeFont" error={firstError(state, "themeFont")}>
+            <Field label="Tipografía" htmlFor="themeFont" error={form.error("themeFont")}>
               <select id="themeFont" name="themeFont" className="field" value={values.themeFont} onChange={(e) => set("themeFont", e.target.value)}>
                 {THEME_FONTS.map((font) => (
                   <option key={font.id} value={font.id}>
@@ -277,7 +278,7 @@ export function PublicPageEditor({
               visible={values.showAddress}
               onVisible={(value) => set("showAddress", value)}
               toggleName="showAddress"
-              error={firstError(state, "address")}
+              error={form.error("address")}
               maxLength={160}
             />
             <ContactField
@@ -290,7 +291,7 @@ export function PublicPageEditor({
               visible={values.showWhatsapp}
               onVisible={(value) => set("showWhatsapp", value)}
               toggleName="showWhatsapp"
-              error={firstError(state, "whatsapp")}
+              error={form.error("whatsapp")}
               maxLength={40}
             />
             <ContactField
@@ -302,7 +303,7 @@ export function PublicPageEditor({
               visible={values.showInstagram}
               onVisible={(value) => set("showInstagram", value)}
               toggleName="showInstagram"
-              error={firstError(state, "instagram")}
+              error={form.error("instagram")}
               maxLength={80}
             />
             <ContactField
@@ -314,7 +315,7 @@ export function PublicPageEditor({
               visible={values.showPhone}
               onVisible={(value) => set("showPhone", value)}
               toggleName="showPhone"
-              error={firstError(state, "phone")}
+              error={form.error("phone")}
               maxLength={40}
             />
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-card p-4">
@@ -339,7 +340,7 @@ export function PublicPageEditor({
               label="Identificador"
               htmlFor="slug"
               hint="Solo letras, números y guiones. Si lo cambiás, el enlace anterior sigue funcionando y lleva al nuevo."
-              error={firstError(state, "slug")}
+              error={form.error("slug")}
             >
               <div className="flex items-center rounded-lg border border-input bg-card focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/25">
                 <span className="shrink-0 pl-3 text-sm text-muted-foreground">{host}/</span>
@@ -359,12 +360,12 @@ export function PublicPageEditor({
           </Group>
 
           <div className="sticky bottom-20 z-10 space-y-3 rounded-2xl border border-border bg-card/95 p-4 shadow-lg backdrop-blur lg:bottom-4">
-            <FormMessage message={state?.message} tone={state?.ok ? "success" : "error"} />
+            <FormMessage message={form.message} tone={form.state?.ok ? "success" : "error"} />
             {disabled ? (
               <p className="text-sm text-muted-foreground">Tu cuenta está en solo lectura: activá tu plan para editar tu página.</p>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
-                <SubmitButton>Guardar cambios</SubmitButton>
+                <SubmitButton pending={form.pending}>Guardar cambios</SubmitButton>
                 <ButtonLink variant="outline" href={`${baseUrl}/${profile.slug}`} target="_blank" rel="noopener noreferrer">
                   <ExternalLink aria-hidden="true" /> Ver página publicada
                 </ButtonLink>

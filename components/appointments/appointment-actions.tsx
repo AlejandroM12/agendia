@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/form/confirm-button";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
+import { useForm } from "@/components/form/use-form";
 import {
   cancelAppointmentAction,
   loadSlotsAction,
@@ -24,7 +25,7 @@ export function RescheduleForm({
 }) {
   const [open, setOpen] = useState(false);
   const [date, setDate] = useState(defaultDate);
-  const [state, action] = useActionState(rescheduleAppointmentAction.bind(null, appointmentId), undefined);
+  const form = useForm(rescheduleAppointmentAction.bind(null, appointmentId));
   const loadSlots = useCallback(
     (dateStr: string) => loadSlotsAction(serviceId, dateStr, appointmentId),
     [serviceId, appointmentId],
@@ -39,7 +40,7 @@ export function RescheduleForm({
   }
 
   return (
-    <form action={action} className="w-full space-y-3 rounded-2xl border border-border bg-card p-4">
+    <form {...form.formProps} className="w-full space-y-3 rounded-2xl border border-border bg-card p-4">
       <p className="font-semibold">Elegí el nuevo día y horario</p>
       <input
         type="date"
@@ -51,9 +52,9 @@ export function RescheduleForm({
         required
       />
       <SlotField date={date} loadSlots={loadSlots} allowCustomTime />
-      <FormMessage message={state?.message} />
+      <FormMessage message={form.message} />
       <div className="flex gap-3">
-        <SubmitButton pendingLabel="Reprogramando…">Confirmar cambio</SubmitButton>
+        <SubmitButton pending={form.pending} pendingLabel="Reprogramando…">Confirmar cambio</SubmitButton>
         <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
           Cancelar
         </Button>
@@ -78,9 +79,9 @@ export function CancelAppointmentButton({ appointmentId, hasEmail }: { appointme
 }
 
 export function NotesForm({ appointmentId, notes, disabled }: { appointmentId: string; notes: string | null; disabled: boolean }) {
-  const [state, action] = useActionState(updateNotesAction.bind(null, appointmentId), undefined);
+  const form = useForm(updateNotesAction.bind(null, appointmentId));
   return (
-    <form action={action} className="space-y-3">
+    <form {...form.formProps} className="space-y-3">
       <textarea
         name="notes"
         aria-label="Nota interna"
@@ -90,9 +91,9 @@ export function NotesForm({ appointmentId, notes, disabled }: { appointmentId: s
         placeholder="Solo la ves vos."
         disabled={disabled}
       />
-      <FormMessage message={state?.message} tone={state?.ok ? "success" : "error"} />
+      <FormMessage message={form.message} tone={form.state?.ok ? "success" : "error"} />
       {!disabled && (
-        <SubmitButton variant="outline" size="sm">
+        <SubmitButton pending={form.pending} variant="outline" size="sm">
           Guardar nota
         </SubmitButton>
       )}

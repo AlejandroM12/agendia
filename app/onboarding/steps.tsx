@@ -1,18 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
+import { useForm } from "@/components/form/use-form";
 import { WeeklyHoursEditor } from "@/components/availability/weekly-hours-editor";
 import { ServicesQuickEditor } from "@/components/services/services-quick-editor";
 import { industries } from "@/lib/brand";
-import { firstError } from "@/lib/action-state";
 import { saveBusinessStep, saveHoursStep, saveServicesStep } from "./actions";
 
-function StepFooter({ backHref, submitLabel }: { backHref?: string; submitLabel: string }) {
+function StepFooter({ backHref, submitLabel, pending }: { backHref?: string; submitLabel: string; pending: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3 pt-2">
       {backHref ? (
@@ -22,25 +21,25 @@ function StepFooter({ backHref, submitLabel }: { backHref?: string; submitLabel:
       ) : (
         <span />
       )}
-      <SubmitButton size="lg">{submitLabel}</SubmitButton>
+      <SubmitButton pending={pending} size="lg">{submitLabel}</SubmitButton>
     </div>
   );
 }
 
 export function BusinessStep({ name, industry }: { name: string; industry: string | null }) {
-  const [state, action] = useActionState(saveBusinessStep, undefined);
+  const form = useForm(saveBusinessStep);
   return (
-    <form action={action} className="space-y-5">
-      <FormMessage message={state?.message} />
+    <form {...form.formProps} className="space-y-5">
+      <FormMessage message={form.message} />
       <Field
         label="¿Cómo se llama tu negocio?"
         htmlFor="name"
         hint="Puede ser tu propio nombre. Es lo que van a ver tus clientes."
-        error={firstError(state, "name")}
+        error={form.error("name")}
       >
         <Input id="name" name="name" defaultValue={name} maxLength={80} required autoFocus />
       </Field>
-      <Field label="¿A qué te dedicás?" htmlFor="industry" error={firstError(state, "industry")}>
+      <Field label="¿A qué te dedicás?" htmlFor="industry" error={form.error("industry")}>
         <select id="industry" name="industry" className="field" defaultValue={industry ?? ""} required>
           <option value="" disabled>
             Elegí una actividad
@@ -52,7 +51,7 @@ export function BusinessStep({ name, industry }: { name: string; industry: strin
           ))}
         </select>
       </Field>
-      <StepFooter submitLabel="Continuar" />
+      <StepFooter pending={form.pending} submitLabel="Continuar" />
     </form>
   );
 }
@@ -62,12 +61,12 @@ export function ServicesStep({
 }: {
   initial: Array<{ name: string; durationMinutes: number; price: number | null }>;
 }) {
-  const [state, action] = useActionState(saveServicesStep, undefined);
+  const form = useForm(saveServicesStep);
   return (
-    <form action={action} className="space-y-5">
-      <FormMessage message={state?.message} />
+    <form {...form.formProps} className="space-y-5">
+      <FormMessage message={form.message} />
       <ServicesQuickEditor initial={initial} />
-      <StepFooter backHref="/onboarding?paso=1" submitLabel="Continuar" />
+      <StepFooter pending={form.pending} backHref="/onboarding?paso=1" submitLabel="Continuar" />
     </form>
   );
 }
@@ -77,12 +76,12 @@ export function HoursStep({
 }: {
   initialRules: Array<{ weekday: number; startMinute: number; endMinute: number }>;
 }) {
-  const [state, action] = useActionState(saveHoursStep, undefined);
+  const form = useForm(saveHoursStep);
   return (
-    <form action={action} className="space-y-5">
-      <FormMessage message={state?.message} />
+    <form {...form.formProps} className="space-y-5">
+      <FormMessage message={form.message} />
       <WeeklyHoursEditor initialRules={initialRules} />
-      <StepFooter backHref="/onboarding?paso=2" submitLabel="Terminar y ver mi agenda" />
+      <StepFooter pending={form.pending} backHref="/onboarding?paso=2" submitLabel="Terminar y ver mi agenda" />
     </form>
   );
 }

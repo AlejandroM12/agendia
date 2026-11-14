@@ -91,7 +91,13 @@ export function ImageUploader({
   }
 
   function remove() {
-    startTransition(async () => finish(await removePublicImageAction(kind)));
+    startTransition(async () => {
+      try {
+        finish(await removePublicImageAction(kind));
+      } catch {
+        setError("No pudimos quitar la imagen. Revisá tu conexión e intentá de nuevo.");
+      }
+    });
   }
 
   return (

@@ -71,7 +71,7 @@ export function PricingCards({ className }: { className?: string }) {
           "Sin permanencia: cancelás cuando quieras",
         ]}
         cta={{ label: "Empezar la prueba gratis", href: "/registro" }}
-        note="Sin tarjeta para empezar."
+        note={`${trialPolicy.trialDays} días gratis con todas las funciones.`}
       />
       <Card
         badge="Pago único"

@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useCallback, useState } from "react";
+import { useCallback, useState } from "react";
 import { ButtonLink } from "@/components/ui/button-link";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
+import { useForm } from "@/components/form/use-form";
 import { formatDuration } from "@/lib/time";
 import { createAppointmentAction, loadSlotsAction } from "@/modules/appointments/actions";
 import { CustomerPicker } from "./customer-picker";
@@ -34,14 +35,14 @@ export function AppointmentForm({
   defaultDate: string;
   customer: { id: string; name: string; detail: string } | null;
 }) {
-  const [state, action] = useActionState(createAppointmentAction, undefined);
+  const form = useForm(createAppointmentAction);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [date, setDate] = useState(defaultDate);
 
   const loadSlots = useCallback((dateStr: string) => loadSlotsAction(serviceId, dateStr), [serviceId]);
 
   return (
-    <form action={action} className="max-w-xl space-y-8">
+    <form {...form.formProps} className="max-w-xl space-y-8">
       <Step number={1} title="Cliente">
         <CustomerPicker initial={customer} />
       </Step>
@@ -88,10 +89,10 @@ export function AppointmentForm({
         />
       </Step>
 
-      <FormMessage message={state?.message} />
+      <FormMessage message={form.message} />
 
       <div className="flex gap-3">
-        <SubmitButton size="lg" pendingLabel="Agendando…">
+        <SubmitButton pending={form.pending} size="lg" pendingLabel="Agendando…">
           Agendar turno
         </SubmitButton>
         <ButtonLink variant="ghost" size="lg" href="/dashboard/agenda">Cancelar</ButtonLink>

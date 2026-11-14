@@ -1,12 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
-import { type ActionState, firstError } from "@/lib/action-state";
+import { useForm } from "@/components/form/use-form";
+import { type ActionState } from "@/lib/action-state";
 import { formatDuration } from "@/lib/time";
 import { DURATION_OPTIONS } from "@/modules/services/schema";
 
@@ -21,17 +21,17 @@ export function ServiceForm({
   service?: { name: string; description: string | null; durationMinutes: number; price: number | null };
   submitLabel: string;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
+  const form = useForm(action);
   const durations = Array.from(new Set([...DURATION_OPTIONS, service?.durationMinutes ?? 30])).sort((a, b) => a - b);
 
   return (
-    <form action={formAction} className="max-w-lg space-y-5">
-      <FormMessage message={state?.message} />
-      <Field label="Nombre" htmlFor="name" error={firstError(state, "name")}>
+    <form {...form.formProps} className="max-w-lg space-y-5">
+      <FormMessage message={form.message} />
+      <Field label="Nombre" htmlFor="name" error={form.error("name")}>
         <Input id="name" name="name" defaultValue={service?.name} maxLength={80} required />
       </Field>
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Duración" htmlFor="durationMinutes" error={firstError(state, "durationMinutes")}>
+        <Field label="Duración" htmlFor="durationMinutes" error={form.error("durationMinutes")}>
           <select id="durationMinutes" name="durationMinutes" className="field" defaultValue={service?.durationMinutes ?? 30}>
             {durations.map((minutes) => (
               <option key={minutes} value={minutes}>
@@ -40,7 +40,7 @@ export function ServiceForm({
             ))}
           </select>
         </Field>
-        <Field label="Precio" htmlFor="price" optional error={firstError(state, "price")}>
+        <Field label="Precio" htmlFor="price" optional error={form.error("price")}>
           <Input id="price" name="price" inputMode="numeric" defaultValue={service?.price ?? ""} placeholder="Sin precio" />
         </Field>
       </div>
@@ -49,7 +49,7 @@ export function ServiceForm({
         htmlFor="description"
         optional
         hint="Se muestra en tu página de reservas."
-        error={firstError(state, "description")}
+        error={form.error("description")}
       >
         <textarea
           id="description"
@@ -60,7 +60,7 @@ export function ServiceForm({
         />
       </Field>
       <div className="flex gap-3 pt-1">
-        <SubmitButton>{submitLabel}</SubmitButton>
+        <SubmitButton pending={form.pending}>{submitLabel}</SubmitButton>
         <ButtonLink variant="ghost" href="/dashboard/servicios">Cancelar</ButtonLink>
       </div>
     </form>
