@@ -3,6 +3,7 @@ import { PublicPage } from "@/components/booking/public-page";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
 import { getOrganizationImages } from "@/modules/public-page/images";
+import { loadPublicTeamView } from "@/modules/public-page/team";
 import { publicPageSchema, readPublicPageInput, toPublicProfile } from "@/modules/public-page/settings";
 
 export const metadata: Metadata = { title: "Vista previa", robots: { index: false, follow: false } };
@@ -28,14 +29,16 @@ export default async function PublicPagePreview(props: PageProps<"/vista-previa"
   // El identificador de URL no se previsualiza: las reservas de prueba usan el real.
   const profile = draft.success ? { ...saved, ...draft.data, slug: saved.slug } : saved;
 
-  const [images, services] = await Promise.all([
+  const [images, services, team] = await Promise.all([
     getOrganizationImages(organization.id),
     db.service.findMany({
       where: { organizationId: organization.id, active: true },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       select: { id: true, name: true, description: true, durationMinutes: true, price: true },
     }),
+    // Con varios profesionales, la vista previa muestra el mismo paso que verá el cliente.
+    loadPublicTeamView(organization),
   ]);
 
-  return <PublicPage profile={profile} images={images} services={services} bookable={canWrite} preview />;
+  return <PublicPage profile={profile} images={images} services={services} team={team} bookable={canWrite} preview />;
 }

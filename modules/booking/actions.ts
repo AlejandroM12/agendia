@@ -14,7 +14,7 @@ import { bookingContactSchema } from "@/modules/customers/schema";
 import { isEmailConfigured } from "@/modules/notifications/email";
 import { normalizeLookupEmail, requestAppointmentsLink } from "@/modules/public-page/lookup";
 import { resolvePublicSlug } from "@/modules/public-page/slug";
-import { resolveEligibleProfessionals, type ProfessionalChoice } from "@/modules/team/eligibility";
+import { resolveEligibleProfessionals, usesTeam, type ProfessionalChoice } from "@/modules/team/eligibility";
 
 /**
  * Acciones de la página pública de reservas. No hay sesión: todo se valida
@@ -120,7 +120,15 @@ const bookingSchema = z.object({
 });
 
 export type BookingState =
-  | { ok: true; manageToken: string; startsAt: string; message?: undefined; errors?: undefined }
+  | {
+      ok: true;
+      manageToken: string;
+      startsAt: string;
+      /** Quién atiende, ya asignado. Solo en negocios con varios profesionales. */
+      professionalName?: string | null;
+      message?: undefined;
+      errors?: undefined;
+    }
   | {
       ok: false;
       message: string;
@@ -172,7 +180,22 @@ export async function bookAppointmentAction(_prev: BookingState, formData: FormD
   });
 
   if (!result.ok) return { ok: false, message: result.message, refresh: true };
-  return { ok: true, manageToken: result.appointment.manageToken, startsAt: result.appointment.startsAt.toISOString() };
+  return {
+    ok: true,
+    manageToken: result.appointment.manageToken,
+    startsAt: result.appointment.startsAt.toISOString(),
+    professionalName: await assignedProfessionalName(organization, result.appointment.professionalId),
+  };
+}
+
+/** Nombre del profesional asignado, solo si el negocio trabaja con varios (con uno solo no se menciona). */
+async function assignedProfessionalName(organization: Organization, professionalId: string): Promise<string | null> {
+  if (!(await usesTeam(db, organization))) return null;
+  const professional = await db.professional.findFirst({
+    where: { id: professionalId, organizationId: organization.id },
+    select: { displayName: true },
+  });
+  return professional?.displayName ?? null;
 }
 
 async function findByToken(token: string) {
@@ -180,7 +203,15 @@ async function findByToken(token: string) {
   return db.appointment.findUnique({ where: { manageToken: token }, include: { organization: true } });
 }
 
-export type ManageState = { ok: true } | { ok: false; message: string } | undefined;
+export type ManageState =
+  | {
+      ok: true;
+      /** Tras reprogramar: quién atiende ahora, y si cambió respecto del turno anterior. */
+      professionalName?: string | null;
+      professionalChanged?: boolean;
+    }
+  | { ok: false; message: string }
+  | undefined;
 
 export async function cancelByTokenAction(token: string): Promise<ManageState> {
   const ip = await clientIp();
@@ -213,7 +244,14 @@ export async function getRescheduleAvailabilityAction(token: string, fromDateStr
     audience: "public",
     choice: appointment.professionalSelection === "any" ? "any" : (appointment.requestedProfessionalId ?? appointment.professionalId),
   });
-  if (!eligible.ok) return { ok: false, message: NOT_BOOKABLE };
+  if (!eligible.ok) {
+    // Eligió a alguien que ya no atiende este servicio online: no se lo cambia por otro.
+    const phone = appointment.organization.phone;
+    return {
+      ok: false,
+      message: `El profesional de tu turno ya no está disponible para reprogramar online.${phone ? ` Comunicate con el negocio al ${phone}.` : " Comunicate con el negocio."}`,
+    };
+  }
   return availabilityFor(
     appointment.organization,
     duration,
@@ -240,7 +278,12 @@ export async function rescheduleByTokenAction(token: string, slotIso: string): P
     startsAt,
     actor: "customer",
   });
-  return result.ok ? { ok: true } : { ok: false, message: result.message };
+  if (!result.ok) return { ok: false, message: result.message };
+  return {
+    ok: true,
+    professionalName: await assignedProfessionalName(appointment.organization, result.appointment.professionalId),
+    professionalChanged: Boolean(result.previousProfessionalId),
+  };
 }
 
 export type LookupState = { ok: true; message: string; devLink?: string } | { ok: false; message: string } | undefined;

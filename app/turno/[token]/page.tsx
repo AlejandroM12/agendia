@@ -8,6 +8,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { db } from "@/lib/db";
 import { formatDateLong, formatDuration, formatTime, toZoned } from "@/lib/time";
 import { getOrganizationImages } from "@/modules/public-page/images";
+import { usesTeam } from "@/modules/team/eligibility";
 import { toPublicProfile } from "@/modules/public-page/settings";
 
 export const metadata: Metadata = {
@@ -25,12 +26,19 @@ export default async function ManageAppointmentPage(props: PageProps<"/turno/[to
   // El token opaco es la credencial: quien tiene el enlace gestiona el turno.
   const appointment = await db.appointment.findUnique({
     where: { manageToken: token },
-    include: { organization: true, service: true, customer: { select: { name: true } } },
+    include: {
+      organization: true,
+      service: true,
+      customer: { select: { name: true } },
+      professional: { select: { displayName: true } },
+    },
   });
   if (!appointment) notFound();
 
   const { organization } = appointment;
   const images = await getOrganizationImages(organization.id);
+  // Solo se nombra al profesional en negocios con equipo: con uno solo, la pantalla es la de siempre.
+  const showProfessional = await usesTeam(db, organization);
   const tz = organization.timezone;
   const dateStr = toZoned(appointment.startsAt, tz).dateStr;
   const duration = Math.round((appointment.endsAt.getTime() - appointment.startsAt.getTime()) / 60000);
@@ -51,11 +59,20 @@ export default async function ManageAppointmentPage(props: PageProps<"/turno/[to
         <p className="mt-3 text-muted-foreground">
           {appointment.service.name} · {formatDuration(duration)}
         </p>
+        {showProfessional && (
+          <p className="mt-1 text-muted-foreground">
+            Te atiende <span className="font-medium text-foreground">{appointment.professional.displayName}</span>
+          </p>
+        )}
       </div>
 
       <div className="mt-6">
         {upcoming && withinDeadline ? (
-          <ManageAppointment token={token} />
+          <ManageAppointment
+            token={token}
+            professionalName={showProfessional ? appointment.professional.displayName : null}
+            anyProfessional={showProfessional && appointment.professionalSelection === "any"}
+          />
         ) : upcoming ? (
           <p className="rounded-xl bg-secondary px-4 py-3 text-sm text-muted-foreground">
             Falta poco para tu turno, así que ya no se puede cambiar online.

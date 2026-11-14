@@ -3,6 +3,7 @@ import { PublicPage } from "@/components/booking/public-page";
 import { db } from "@/lib/db";
 import { canPerformWriteActions } from "@/lib/organization-access";
 import { findPublicOrganization, loadPublicOrganization } from "@/modules/public-page/load";
+import { loadPublicTeamView } from "@/modules/public-page/team";
 
 // Disponibilidad en tiempo real: siempre se renderiza por request.
 export const instant = false;
@@ -56,5 +57,7 @@ export default async function PublicBookingPage(props: PageProps<"/[slug]">) {
       })
     : [];
 
-  return <PublicPage profile={profile} images={images} services={services} bookable={bookable} />;
+  const team = bookable ? await loadPublicTeamView(organization) : undefined;
+
+  return <PublicPage profile={profile} images={images} services={services} team={team} bookable={bookable} />;
 }

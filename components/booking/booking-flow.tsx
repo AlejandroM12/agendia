@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { bookAppointmentAction, getPublicAvailabilityAction } from "@/modules/booking/actions";
 import { bookingContactSchema } from "@/modules/customers/schema";
 import { DaySlotPicker, type PickedSlot } from "./day-slot-picker";
+import { ANY_PROFESSIONAL, ProfessionalPicker, type PublicTeamView } from "./professional-picker";
 
 /** `price` llega en `null` cuando el servicio no tiene precio o el negocio eligió no mostrarlos. */
 export type BookableService = {
@@ -42,15 +43,20 @@ export function BookingFlow({
   slug,
   businessName,
   services,
+  team,
   preview = false,
 }: {
   slug: string;
   businessName: string;
   services: BookableService[];
+  /** Quiénes atienden cada servicio online. Sin esto, o con un solo profesional, no hay paso de profesional. */
+  team?: PublicTeamView;
   /** Vista previa del panel: se puede recorrer, pero no reserva. */
   preview?: boolean;
 }) {
   const [service, setService] = useState<BookableService | null>(services.length === 1 ? services[0] : null);
+  // «any» (cualquiera), el identificador de un profesional, o nada todavía.
+  const [choice, setChoice] = useState<string | null>(null);
   const [slot, setSlot] = useState<PickedSlot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   // Los datos del cliente viven acá, fuera del formulario: si el horario
@@ -71,13 +77,26 @@ export function BookingFlow({
     },
   });
   const state = form.state;
+  const professionalRef = useRef<HTMLElement>(null);
   const scheduleRef = useRef<HTMLElement>(null);
   const detailsRef = useRef<HTMLElement>(null);
   const handled = useRef<typeof state>(undefined);
 
+  // Quiénes atienden el servicio elegido. Con uno solo no hay nada que elegir; sin ninguno, no se puede reservar.
+  const eligibleIds = service ? (team?.byService[service.id] ?? null) : null;
+  const eligible = eligibleIds && team ? eligibleIds.map((id) => team.professionals.find((p) => p.id === id)).filter((p) => p !== undefined) : [];
+  const noProfessional = Boolean(service && team && eligible.length === 0);
+  const asksProfessional = eligible.length > 1;
+  // La elección solo vale si sigue siendo una opción real del servicio actual.
+  const professional = asksProfessional && choice && (choice === ANY_PROFESSIONAL || eligible.some((p) => p.id === choice)) ? choice : null;
+  const chosenProfessional = professional && professional !== ANY_PROFESSIONAL ? eligible.find((p) => p.id === professional) : null;
+  const readyForSchedule = Boolean(service) && !noProfessional && (!asksProfessional || Boolean(professional));
+  const scheduleStep = asksProfessional ? 3 : 2;
+  const detailsStep = scheduleStep + 1;
+
   const load = useCallback(
-    (from?: string) => getPublicAvailabilityAction(slug, service?.id ?? "", from),
-    [slug, service?.id],
+    (from?: string) => getPublicAvailabilityAction(slug, service?.id ?? "", from, professional ?? undefined),
+    [slug, service?.id, professional],
   );
 
   // Si el horario se ocupó mientras el cliente completaba sus datos, se
@@ -100,6 +119,14 @@ export function BookingFlow({
     setService(item);
     setSlot(null);
     // En el celular la lista de servicios puede ser larga: se lleva la vista al paso siguiente.
+    requestAnimationFrame(() => (team && (team.byService[item.id]?.length ?? 0) > 1 ? professionalRef : scheduleRef).current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
+  function chooseProfessional(value: string) {
+    setChoice(value);
+    // Los horarios mostrados eran de otra elección: se vuelven a pedir.
+    setSlot(null);
+    setConflict(null);
     requestAnimationFrame(() => scheduleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
@@ -113,6 +140,12 @@ export function BookingFlow({
         {slot && service && (
           <p className="mt-2 text-muted-foreground">
             {service.name} en {businessName}
+            {state.professionalName && (
+              <>
+                <br />
+                Te atiende <span className="font-medium text-foreground">{state.professionalName}</span>
+              </>
+            )}
             <br />
             <span className="inline-block font-medium text-foreground first-letter:uppercase">
               {formatDateLong(slot.dateStr)}, {slot.label} h
@@ -159,25 +192,53 @@ export function BookingFlow({
           </div>
         ) : (
           <ul className="grid gap-2.5 sm:grid-cols-2">
-            {services.map((item) => (
+            {services.map((item) => {
+              const unavailable = team ? (team.byService[item.id]?.length ?? 0) === 0 : false;
+              return (
               <li key={item.id}>
                 <button
                   type="button"
+                  disabled={unavailable}
                   onClick={() => chooseService(item)}
-                  className="group flex h-full w-full items-center justify-between gap-3 rounded-2xl border border-input bg-card px-4 py-3.5 text-left transition-colors hover:border-brand-border hover:bg-accent/40"
+                  className="group flex h-full w-full items-center justify-between gap-3 rounded-2xl border border-input bg-card px-4 py-3.5 text-left transition-colors hover:border-brand-border hover:bg-accent/40 disabled:opacity-60 disabled:hover:border-input disabled:hover:bg-card"
                 >
-                  <ServiceSummary service={item} />
-                  <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-brand-text" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <ServiceSummary service={item} />
+                    {unavailable && <p className="mt-1 text-xs font-medium text-muted-foreground">Por ahora no se puede reservar online</p>}
+                  </div>
+                  {!unavailable && <ChevronRight className="size-4 shrink-0 text-muted-foreground group-hover:text-brand-text" aria-hidden="true" />}
                 </button>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>
 
-      {service && (
+      {noProfessional && (
+        <FormMessage
+          tone="info"
+          message="Por ahora este servicio no se puede reservar online: no hay profesionales disponibles. Elegí otro servicio o comunicate con el negocio."
+        />
+      )}
+
+      {service && asksProfessional && (
+        <section aria-labelledby="paso-profesional" ref={professionalRef} className="scroll-mt-4">
+          <StepTitle id="paso-profesional" number={2} done={Boolean(professional)}>
+            {professional ? "Profesional" : "Elegí con quién"}
+          </StepTitle>
+          <ProfessionalPicker
+            professionals={eligible}
+            value={professional}
+            onChange={chooseProfessional}
+            performedBy={performedByProfessional(team, services)}
+          />
+        </section>
+      )}
+
+      {readyForSchedule && service && (
         <section aria-labelledby="paso-horario" ref={scheduleRef} className="scroll-mt-4">
-          <StepTitle id="paso-horario" number={2} done={Boolean(slot)}>
+          <StepTitle id="paso-horario" number={scheduleStep} done={Boolean(slot)}>
             Elegí día y horario
           </StepTitle>
           {conflict && !slot && (
@@ -188,7 +249,7 @@ export function BookingFlow({
           )}
           <DaySlotPicker
             load={load}
-            reloadKey={`${service.id}:${refreshKey}`}
+            reloadKey={`${service.id}:${professional ?? ""}:${refreshKey}`}
             value={slot}
             onChange={(next) => {
               setSlot(next);
@@ -198,9 +259,9 @@ export function BookingFlow({
         </section>
       )}
 
-      {service && slot && (
+      {readyForSchedule && service && slot && (
         <section aria-labelledby="paso-datos" ref={detailsRef} className="scroll-mt-4">
-          <StepTitle id="paso-datos" number={3} done={false}>
+          <StepTitle id="paso-datos" number={detailsStep} done={false}>
             Tus datos
           </StepTitle>
           <form
@@ -211,6 +272,7 @@ export function BookingFlow({
             <input type="hidden" name="slug" value={slug} />
             <input type="hidden" name="serviceId" value={service.id} />
             <input type="hidden" name="slot" value={slot.iso} />
+            {professional && <input type="hidden" name="professionalId" value={professional} />}
             <input type="hidden" name="idempotencyKey" value={submissionKey} />
             {/* Campo trampa anti-bots: invisible para personas y lectores de pantalla. */}
             <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
@@ -278,13 +340,25 @@ export function BookingFlow({
               <FieldError>Revisá los datos marcados. Lo que ya completaste sigue acá.</FieldError>
             )}
 
-            <div className="rounded-2xl bg-secondary px-4 py-3 text-sm">
-              <p className="font-medium">{service.name}</p>
-              <p className="text-muted-foreground first-letter:uppercase">
-                {formatDateLong(slot.dateStr)}, {slot.label} h · {formatDuration(service.durationMinutes)}
-                {service.price !== null && ` · ${formatMoney(service.price)}`}
-              </p>
-            </div>
+            <dl className="space-y-1.5 rounded-2xl bg-secondary px-4 py-3 text-sm" aria-label="Resumen de tu reserva">
+              <SummaryRow label="Negocio">{businessName}</SummaryRow>
+              <SummaryRow label="Servicio">{service.name}</SummaryRow>
+              {asksProfessional && (
+                <SummaryRow label="Profesional">
+                  {chosenProfessional ? chosenProfessional.displayName : "Cualquier profesional (te asignamos uno al confirmar)"}
+                </SummaryRow>
+              )}
+              <SummaryRow label="Cuándo">
+                <span className="first-letter:uppercase">{formatDateLong(slot.dateStr)}</span>, {slot.label} h
+              </SummaryRow>
+              <SummaryRow label="Duración">{formatDuration(service.durationMinutes)}</SummaryRow>
+              {service.price !== null && <SummaryRow label="Precio">{formatMoney(service.price)}</SummaryRow>}
+              {(contact.name.trim() || contact.email.trim() || contact.phone.trim()) && (
+                <SummaryRow label="Tus datos">
+                  {[contact.name.trim(), contact.email.trim(), contact.phone.trim()].filter(Boolean).join(" · ")}
+                </SummaryRow>
+              )}
+            </dl>
             {preview ? (
               <p className="rounded-xl border border-dashed border-input px-4 py-3 text-center text-sm text-muted-foreground">
                 Vista previa: desde acá no se crean reservas.
@@ -335,4 +409,24 @@ function ServiceSummary({ service }: { service: BookableService }) {
       {service.description && <p className="mt-1 text-sm text-muted-foreground">{service.description}</p>}
     </div>
   );
+}
+
+function SummaryRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <dt className="w-24 shrink-0 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 flex-1 font-medium break-words">{children}</dd>
+    </div>
+  );
+}
+
+/** Servicios que hace cada profesional, solo para quienes no hacen todos (así la tarjeta aclara algo útil). */
+function performedByProfessional(team: PublicTeamView | undefined, services: BookableService[]): Record<string, string[]> | undefined {
+  if (!team || services.length < 2) return undefined;
+  const result: Record<string, string[]> = {};
+  for (const professional of team.professionals) {
+    const names = services.filter((service) => team.byService[service.id]?.includes(professional.id)).map((service) => service.name);
+    if (names.length > 0 && names.length < services.length) result[professional.id] = names;
+  }
+  return result;
 }

@@ -113,6 +113,7 @@ export async function listUpcomingAppointments(organizationId: string, email: st
       endsAt: true,
       manageToken: true,
       service: { select: { name: true } },
+      professional: { select: { displayName: true } },
     },
   });
 }

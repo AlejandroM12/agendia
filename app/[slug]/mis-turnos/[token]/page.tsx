@@ -8,6 +8,8 @@ import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { formatDateLong, formatDuration, formatTime, toZoned } from "@/lib/time";
 import { loadPublicOrganization } from "@/modules/public-page/load";
 import { listUpcomingAppointments, resolveAccessToken } from "@/modules/public-page/lookup";
+import { usesTeam } from "@/modules/team/eligibility";
+import { db } from "@/lib/db";
 
 export const instant = false;
 export const metadata: Metadata = {
@@ -33,6 +35,7 @@ export default async function CustomerAppointmentsPage(props: PageProps<"/[slug]
 
   const appointments = await listUpcomingAppointments(organization.id, access.email);
   const tz = organization.timezone;
+  const showProfessional = await usesTeam(db, organization);
 
   return (
     <PublicShell profile={profile} images={images}>
@@ -63,6 +66,7 @@ export default async function CustomerAppointmentsPage(props: PageProps<"/[slug]
                     </span>
                     <span className="block text-sm text-muted-foreground">
                       {appointment.service.name} · {formatDuration(duration)}
+                      {showProfessional && ` · ${appointment.professional.displayName}`}
                     </span>
                     <span className="mt-1 block text-sm font-medium text-brand-text">Ver, reprogramar o cancelar</span>
                   </span>
