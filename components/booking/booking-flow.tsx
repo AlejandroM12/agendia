@@ -1,17 +1,20 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarCheck, Check, ChevronRight, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Input } from "@/components/ui/input";
-import { Field } from "@/components/form/field";
+import { Field, FieldError } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
+import { useForm } from "@/components/form/use-form";
+import { firstFieldErrors } from "@/lib/action-state";
 import { formatMoney } from "@/lib/brand";
 import { formatDateLong, formatDuration } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { bookAppointmentAction, getPublicAvailabilityAction } from "@/modules/booking/actions";
+import { bookingContactSchema } from "@/modules/customers/schema";
 import { DaySlotPicker, type PickedSlot } from "./day-slot-picker";
 
 /** `price` llega en `null` cuando el servicio no tiene precio o el negocio eligió no mostrarlos. */
@@ -38,7 +41,23 @@ export function BookingFlow({
   const [service, setService] = useState<BookableService | null>(services.length === 1 ? services[0] : null);
   const [slot, setSlot] = useState<PickedSlot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [state, action] = useActionState(bookAppointmentAction, undefined);
+  // Los datos del cliente viven acá, fuera del formulario: si el horario
+  // elegido se ocupa y hay que elegir otro, el paso «Tus datos» desaparece
+  // un momento de la pantalla, pero lo escrito no se pierde.
+  const [contact, setContact] = useState({ name: "", email: "", phone: "" });
+  const [conflict, setConflict] = useState<string | null>(null);
+  const form = useForm(bookAppointmentAction, {
+    // El mismo esquema con el que valida el servidor.
+    validate: (data) => {
+      const parsed = bookingContactSchema.safeParse({
+        name: data.get("name") ?? "",
+        email: data.get("email") ?? "",
+        phone: data.get("phone") ?? "",
+      });
+      return parsed.success ? null : firstFieldErrors(parsed.error);
+    },
+  });
+  const state = form.state;
   const scheduleRef = useRef<HTMLElement>(null);
   const detailsRef = useRef<HTMLElement>(null);
   const handled = useRef<typeof state>(undefined);
@@ -54,7 +73,9 @@ export function BookingFlow({
     if (state && state !== handled.current && !state.ok && state.refresh) {
       handled.current = state;
       setSlot(null);
+      setConflict(state.message);
       setRefreshKey((k) => k + 1);
+      scheduleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [state]);
 
@@ -146,7 +167,21 @@ export function BookingFlow({
           <StepTitle id="paso-horario" number={2} done={Boolean(slot)}>
             Elegí día y horario
           </StepTitle>
-          <DaySlotPicker load={load} reloadKey={`${service.id}:${refreshKey}`} value={slot} onChange={setSlot} />
+          {conflict && !slot && (
+            <FormMessage
+              className="mb-4"
+              message={`${conflict} Tus datos quedaron guardados: solo tenés que elegir otro horario.`}
+            />
+          )}
+          <DaySlotPicker
+            load={load}
+            reloadKey={`${service.id}:${refreshKey}`}
+            value={slot}
+            onChange={(next) => {
+              setSlot(next);
+              if (next) setConflict(null);
+            }}
+          />
         </section>
       )}
 
@@ -155,7 +190,11 @@ export function BookingFlow({
           <StepTitle id="paso-datos" number={3} done={false}>
             Tus datos
           </StepTitle>
-          <form action={preview ? undefined : action} className="space-y-4">
+          <form
+            {...form.formProps}
+            onSubmit={preview ? (event) => event.preventDefault() : form.formProps.onSubmit}
+            className="space-y-4"
+          >
             <input type="hidden" name="slug" value={slug} />
             <input type="hidden" name="serviceId" value={service.id} />
             <input type="hidden" name="slot" value={slot.iso} />
@@ -167,19 +206,63 @@ export function BookingFlow({
               </label>
             </div>
 
-            <Field label="Nombre y apellido" htmlFor="name">
-              <Input id="name" name="name" autoComplete="name" maxLength={120} required />
+            <Field label="Nombre y apellido" htmlFor="name" required error={form.error("name")}>
+              <Input
+                id="name"
+                name="name"
+                autoComplete="name"
+                maxLength={120}
+                value={contact.name}
+                onChange={(event) => setContact((current) => ({ ...current, name: event.target.value }))}
+              />
             </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Email" htmlFor="email" hint="Te enviamos la confirmación y un recordatorio.">
-                <Input id="email" name="email" type="email" inputMode="email" autoComplete="email" />
-              </Field>
-              <Field label="Teléfono" htmlFor="phone" optional>
-                <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" />
-              </Field>
-            </div>
 
-            <FormMessage message={state && !state.ok ? state.message : null} />
+            <fieldset className="space-y-4">
+              <legend className="text-sm font-medium">
+                ¿Cómo te avisamos?{" "}
+                <span className="font-normal text-muted-foreground">Completá al menos uno de los dos.</span>
+              </legend>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Email" htmlFor="email" hint="Para enviarte la confirmación y un recordatorio." error={form.error("email")}>
+                  <Input
+                    id="email"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    maxLength={200}
+                    value={contact.email}
+                    onChange={(event) => {
+                      setContact((current) => ({ ...current, email: event.target.value }));
+                      // «Al menos uno»: completar un contacto resuelve el error del otro.
+                      form.clearError("phone");
+                    }}
+                  />
+                </Field>
+                <Field label="WhatsApp o teléfono" htmlFor="phone" hint="Con característica. Ej.: 11 5555 0000." error={form.error("phone")}>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    maxLength={40}
+                    value={contact.phone}
+                    onChange={(event) => {
+                      setContact((current) => ({ ...current, phone: event.target.value }));
+                      form.clearError("email");
+                    }}
+                  />
+                </Field>
+              </div>
+            </fieldset>
+
+            {/* Errores que no son de un campo: un fallo de conexión, por ejemplo. */}
+            {!form.hasErrors && !(state && !state.ok && state.refresh) && <FormMessage message={form.message} />}
+            {form.hasErrors && (
+              <FieldError>Revisá los datos marcados. Lo que ya completaste sigue acá.</FieldError>
+            )}
 
             <div className="rounded-2xl bg-secondary px-4 py-3 text-sm">
               <p className="font-medium">{service.name}</p>
@@ -193,7 +276,7 @@ export function BookingFlow({
                 Vista previa: desde acá no se crean reservas.
               </p>
             ) : (
-              <SubmitButton size="lg" className="w-full" pendingLabel="Reservando…">
+              <SubmitButton size="lg" className="w-full" pending={form.pending} pendingLabel="Reservando…">
                 Confirmar reserva
               </SubmitButton>
             )}

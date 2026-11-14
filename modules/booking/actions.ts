@@ -10,7 +10,7 @@ import { clientIp, rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
 import { addDays, formatTime, isValidDateStr, todayInTz } from "@/lib/time";
 import { cancelAppointment, createAppointment, rescheduleAppointment } from "@/modules/appointments/service";
 import { getAvailability } from "@/modules/availability/queries";
-import { customerInputSchema } from "@/modules/customers/service";
+import { bookingContactSchema } from "@/modules/customers/schema";
 import { isEmailConfigured } from "@/modules/notifications/email";
 import { normalizeLookupEmail, requestAppointmentsLink } from "@/modules/public-page/lookup";
 import { resolvePublicSlug } from "@/modules/public-page/slug";
@@ -90,8 +90,15 @@ const bookingSchema = z.object({
 });
 
 export type BookingState =
-  | { ok: true; manageToken: string; startsAt: string }
-  | { ok: false; message: string; refresh?: boolean }
+  | { ok: true; manageToken: string; startsAt: string; message?: undefined; errors?: undefined }
+  | {
+      ok: false;
+      message: string;
+      /** Errores por campo (name, email, phone): la página los muestra debajo de cada uno. */
+      errors?: Record<string, string[] | undefined>;
+      /** El horario ya no está disponible: hay que elegir otro (los datos del cliente se conservan). */
+      refresh?: boolean;
+    }
   | undefined;
 
 export async function bookAppointmentAction(_prev: BookingState, formData: FormData): Promise<BookingState> {
@@ -110,16 +117,14 @@ export async function bookAppointmentAction(_prev: BookingState, formData: FormD
   });
   if (!base.success) return { ok: false, message: "Elegí un servicio y un horario." };
 
-  const customer = customerInputSchema.safeParse({
-    name: formData.get("name"),
+  // El mismo esquema con el que la página valida antes de enviar.
+  const customer = bookingContactSchema.safeParse({
+    name: formData.get("name") ?? "",
     email: formData.get("email") ?? "",
     phone: formData.get("phone") ?? "",
   });
   if (!customer.success) {
-    return { ok: false, message: customer.error.issues[0]?.message ?? "Revisá tus datos." };
-  }
-  if (!customer.data.email && !customer.data.phone) {
-    return { ok: false, message: "Dejanos un email o un teléfono para poder contactarte." };
+    return { ok: false, message: "Revisá los datos marcados.", errors: z.flattenError(customer.error).fieldErrors };
   }
 
   const organization = await findBookableOrganization(base.data.slug);

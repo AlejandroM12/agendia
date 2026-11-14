@@ -4,6 +4,7 @@ import { useCallback, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { FormMessage } from "@/components/form/form-message";
+import { NETWORK_ERROR_MESSAGE } from "@/components/form/use-form";
 import { formatDateLong } from "@/lib/time";
 import {
   cancelByTokenAction,
@@ -26,25 +27,34 @@ export function ManageAppointment({ token }: { token: string }) {
   function cancel() {
     if (!window.confirm("¿Cancelar tu turno?")) return;
     startTransition(async () => {
-      const result = await cancelByTokenAction(token);
-      if (result?.ok) router.refresh();
-      else setMessage(result?.message ?? "No pudimos cancelar el turno.");
+      try {
+        const result = await cancelByTokenAction(token);
+        if (result?.ok) router.refresh();
+        else setMessage(result?.message ?? "No pudimos cancelar el turno.");
+      } catch {
+        setMessage(NETWORK_ERROR_MESSAGE);
+      }
     });
   }
 
   function reschedule() {
     if (!slot) return;
     startTransition(async () => {
-      const result = await rescheduleByTokenAction(token, slot.iso);
-      if (result?.ok) {
-        setMode("idle");
-        setSlot(null);
-        setMessage(null);
-        router.refresh();
-      } else {
-        setMessage(result?.message ?? "No pudimos reprogramar el turno.");
-        setSlot(null);
-        setRefreshKey((k) => k + 1);
+      try {
+        const result = await rescheduleByTokenAction(token, slot.iso);
+        if (result?.ok) {
+          setMode("idle");
+          setSlot(null);
+          setMessage(null);
+          router.refresh();
+        } else {
+          setMessage(result?.message ?? "No pudimos reprogramar el turno.");
+          setSlot(null);
+          setRefreshKey((k) => k + 1);
+        }
+      } catch {
+        // Sin conexión: el horario elegido se conserva para reintentar.
+        setMessage(NETWORK_ERROR_MESSAGE);
       }
     });
   }
