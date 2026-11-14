@@ -1,46 +1,11 @@
 import "server-only";
 
-import { z } from "zod";
 import type { Customer, Prisma } from "@prisma/client";
+import { normalizePhone } from "./schema";
 
 type Tx = Prisma.TransactionClient;
 
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .transform((v) => (v === "" ? null : v))
-    .nullable()
-    .optional()
-    .transform((v) => v ?? null);
-
-export const customerInputSchema = z.object({
-  name: z.string().trim().min(2, "Ingresá el nombre.").max(120),
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .max(200)
-    .refine((v) => v === "" || z.email().safeParse(v).success, "Ingresá un email válido.")
-    .transform((v) => (v === "" ? null : v))
-    .nullable()
-    .optional()
-    .transform((v) => v ?? null),
-  phone: optionalText(40),
-  notes: optionalText(2000),
-});
-
-export type CustomerInput = z.infer<typeof customerInputSchema>;
-
-/** Deja solo dígitos (y un "+" inicial) para comparar teléfonos escritos distinto. */
-export function normalizePhone(phone: string | null | undefined): string | null {
-  if (!phone) return null;
-  const trimmed = phone.trim();
-  const digits = trimmed.replace(/\D/g, "");
-  if (digits.length < 6) return null;
-  return trimmed.startsWith("+") ? `+${digits}` : digits;
-}
+export { customerInputSchema, normalizePhone, type CustomerInput } from "./schema";
 
 /**
  * Busca un cliente existente de la organización por email o teléfono; si no

@@ -5,17 +5,11 @@ import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
 import { generateUniqueOrganizationSlug } from "@/lib/slug";
 import { trialPolicy } from "@/lib/brand";
+import { registerSchema } from "@/modules/auth/schemas";
 
-export const registerOrganizationSchema = z.object({
+export const registerOrganizationSchema = registerSchema.extend({
   // Opcional: el nombre del negocio se termina de definir en el onboarding.
   businessName: z.string().trim().max(120).optional(),
-  name: z.string().trim().min(2, "Ingresá tu nombre.").max(120),
-  email: z.email("Ingresá un email válido.").trim().toLowerCase(),
-  password: z
-    .string()
-    .min(8, "Debe tener al menos 8 caracteres.")
-    .regex(/[a-zA-Z]/, "Debe contener al menos una letra.")
-    .regex(/[0-9]/, "Debe contener al menos un número."),
 });
 
 export type RegisterOrganizationInput = z.infer<typeof registerOrganizationSchema> & {

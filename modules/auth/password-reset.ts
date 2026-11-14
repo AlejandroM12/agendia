@@ -7,6 +7,7 @@ import { hashPassword } from "@/lib/password";
 import { brand } from "@/lib/brand";
 import { isEmailConfigured, sendEmail } from "@/modules/notifications/email";
 import { renderEmail } from "@/modules/notifications/templates";
+import { newPasswordSchema } from "./schemas";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
 
@@ -76,14 +77,7 @@ export async function requestPasswordReset(
   return { requested: true };
 }
 
-export const resetPasswordSchema = z.object({
-  token: z.string().min(1),
-  password: z
-    .string()
-    .min(8, "Debe tener al menos 8 caracteres.")
-    .regex(/[a-zA-Z]/, "Debe contener al menos una letra.")
-    .regex(/[0-9]/, "Debe contener al menos un número."),
-});
+export const resetPasswordSchema = newPasswordSchema.extend({ token: z.string().min(1) });
 
 export type ResetPasswordResult = { success: true } | { success: false; error: string };
 

@@ -13,6 +13,7 @@ import {
 } from "@/modules/auth/password-reset";
 import { clientIp, rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
 import { getRegistrationStatus } from "@/modules/auth/registration";
+import { emailSchema, newPasswordSchema } from "@/modules/auth/schemas";
 import { isEmailVerificationRequired, issueEmailVerification } from "@/modules/auth/email-verification";
 import { requireSignedInUser } from "@/lib/dal";
 
@@ -51,7 +52,7 @@ export async function registerAction(
   const result = await registerOrganization({ ...validated.data, emailVerified: !mustVerify });
 
   if (!result.success) {
-    return { message: result.error };
+    return { errors: { email: [`${result.error} Ingresá con tu cuenta o usá otro email.`] } };
   }
 
   if (mustVerify) {
@@ -110,13 +111,17 @@ export async function requestPasswordResetAction(
     return { message: TOO_MANY_ATTEMPTS };
   }
 
-  const result = await requestPasswordReset({ email: formData.get("email") });
+  const email = emailSchema.safeParse(formData.get("email"));
+  if (!email.success) return { errors: { email: [email.error.issues[0].message] } };
+
+  const result = await requestPasswordReset({ email: email.data });
 
   if (!result.requested) {
-    return { message: "Ingresá un email válido." };
+    return { errors: { email: ["Ingresá un email válido."] } };
   }
 
   return {
+    ok: true,
     message:
       "Si existe una cuenta con ese email, te enviamos un enlace para restablecer la contraseña.",
     devResetLink: result.devResetLink,
@@ -127,10 +132,8 @@ export async function resetPasswordAction(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const password = String(formData.get("password") ?? "");
-  if (password.length < 8 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-    return { message: "La contraseña debe tener al menos 8 caracteres, con letras y números." };
-  }
+  const validated = newPasswordSchema.safeParse({ password: formData.get("password") });
+  if (!validated.success) return { errors: z.flattenError(validated.error).fieldErrors };
 
   const result = await resetPassword({
     token: formData.get("token"),

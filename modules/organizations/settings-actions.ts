@@ -7,6 +7,7 @@ import { requireContext, requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { industries } from "@/lib/brand";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { changePasswordSchema } from "@/modules/auth/schemas";
 
 function isValidTimeZone(value: string): boolean {
   try {
@@ -62,19 +63,10 @@ export async function updateRemindersAction(_prev: ActionState, formData: FormDa
   return { ok: true, message: "Preferencias guardadas. Se aplican a los turnos que se agenden desde ahora." };
 }
 
-const passwordSchema = z.object({
-  current: z.string().min(1, "Ingresá tu contraseña actual."),
-  next: z
-    .string()
-    .min(8, "Debe tener al menos 8 caracteres.")
-    .regex(/[a-zA-Z]/, "Debe contener al menos una letra.")
-    .regex(/[0-9]/, "Debe contener al menos un número."),
-});
-
 export async function changePasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const { user } = await requireContext();
 
-  const parsed = passwordSchema.safeParse({ current: formData.get("current"), next: formData.get("next") });
+  const parsed = changePasswordSchema.safeParse({ current: formData.get("current"), next: formData.get("next") });
   if (!parsed.success) return { errors: fieldErrors(parsed.error) };
 
   const record = await db.user.findUniqueOrThrow({ where: { id: user.id }, select: { passwordHash: true } });
