@@ -121,7 +121,7 @@ test("reserva pública con equipo: elegir profesional, cualquiera, conflicto sin
   await expect(guest.getByLabel("WhatsApp o teléfono")).toHaveValue("11 5555-0101");
   await guest.getByRole("button", { name: "Confirmar reserva" }).click();
   await expect(guest.getByRole("heading", { name: "¡Turno confirmado!" })).toBeVisible();
-  await expect(guest.getByText("Te atiende Martín")).toBeVisible();
+  await expect(guest.getByText("Te atiende Martín").first()).toBeVisible();
   await shot(guest, "p4-confirmado");
 
   // 5. El turno de Martín no le saca horarios al dueño: «cualquiera» muestra la unión.
@@ -165,9 +165,10 @@ test("quien eligió un profesional lo conserva al reprogramar, y se informa si y
   await guest.getByLabel("Nombre y apellido").fill("Rita Específica");
   await guest.getByLabel("Email").fill(`rita-${Date.now()}@example.com`);
   await guest.getByRole("button", { name: "Confirmar reserva" }).click();
-  await expect(guest.getByText("Te atiende Martín")).toBeVisible();
+  await expect(guest.getByText("Te atiende Martín").first()).toBeVisible();
   await guest.getByRole("link", { name: "Ver mi turno" }).click();
-  await expect(guest.getByText("Te atiende Martín")).toBeVisible();
+  await expect(guest).toHaveURL(/\/turno\//);
+  await expect(guest.getByText("Te atiende Martín", { exact: true })).toBeVisible();
 
   await guest.getByRole("button", { name: "Reprogramar" }).click();
   await expect(guest.getByText("Seguís con Martín: solo ves sus horarios.")).toBeVisible();
