@@ -1,3 +1,4 @@
+import type { Organization, Professional } from "@prisma/client";
 import { db } from "@/lib/db";
 
 /**
@@ -71,3 +72,62 @@ export async function createSchedulableOrganization() {
     },
   };
 }
+
+/**
+ * Equipos: utilidades para las pruebas de varios profesionales.
+ */
+
+/** Enciende el modo equipo del negocio (y, opcionalmente, cupos adicionales) y devuelve la organización actualizada. */
+export async function enableTeam(
+  organizationId: string,
+  options: { extraProfessionals?: number } = {},
+): Promise<Organization> {
+  return db.organization.update({
+    where: { id: organizationId },
+    data: { teamModeEnabled: true, extraProfessionals: options.extraProfessionals ?? 0 },
+  });
+}
+
+export const refreshOrganization = (organizationId: string) =>
+  db.organization.findUniqueOrThrow({ where: { id: organizationId } });
+
+/**
+ * Agrega un profesional directamente (sin pasar por los cupos del plan, que
+ * se prueban aparte), con horario de lunes a domingo de 09:00 a 18:00 salvo
+ * que se indique otro.
+ */
+export async function addProfessional(
+  organizationId: string,
+  options: {
+    displayName: string;
+    active?: boolean;
+    bookableOnline?: boolean;
+    sortOrder?: number;
+    /** Franjas [desdeMinuto, hastaMinuto] de todos los días. `[]` = sin horario. */
+    hours?: Array<[number, number]>;
+    weekdays?: number[];
+  },
+): Promise<Professional> {
+  const last = await db.professional.aggregate({ where: { organizationId }, _max: { sortOrder: true } });
+  const professional = await db.professional.create({
+    data: {
+      organizationId,
+      displayName: options.displayName,
+      active: options.active ?? true,
+      bookableOnline: options.bookableOnline ?? true,
+      sortOrder: options.sortOrder ?? (last._max.sortOrder ?? -1) + 1,
+    },
+  });
+  const hours = options.hours ?? [[9 * 60, 18 * 60]];
+  const weekdays = options.weekdays ?? [0, 1, 2, 3, 4, 5, 6];
+  await db.availabilityRule.createMany({
+    data: weekdays.flatMap((weekday) =>
+      hours.map(([startMinute, endMinute]) => ({ organizationId, professionalId: professional.id, weekday, startMinute, endMinute })),
+    ),
+  });
+  return professional;
+}
+
+/** El profesional que crea el registro (el dueño). */
+export const ownerProfessional = (organizationId: string) =>
+  db.professional.findFirstOrThrow({ where: { organizationId }, orderBy: { createdAt: "asc" } });

@@ -276,6 +276,8 @@ test("reserva pública: si el horario se ocupa, se elige otro sin volver a escri
     await guest.getByRole("radiogroup", { name: "Horario" }).getByRole("radio").first().click();
   }
   const time = (await slow.getByRole("radio", { checked: true }).textContent())!.trim();
+  // «martes 17 de noviembre» (sin la cantidad de horarios libres, que cambia al ocuparse uno).
+  const chosenDay = (await slow.getByRole("tab", { selected: true }).getAttribute("aria-label"))!.split(",")[0];
 
   // La primera persona completa despacio…
   await slow.getByLabel("Nombre y apellido").fill("Lenta Pérez");
@@ -291,9 +293,10 @@ test("reserva pública: si el horario se ocupa, se elige otro sin volver a escri
 
   await slow.getByRole("button", { name: "Confirmar reserva" }).click();
   await expect(slow.getByText(/Tus datos quedaron guardados: solo tenés que elegir otro horario/)).toBeVisible();
-  // El horario ocupado ya no se ofrece; el servicio y el día siguen elegidos.
+  // El servicio sigue elegido y el selector vuelve a cargar: en el día que se había elegido, el horario ocupado ya no se ofrece.
   const slots = slow.getByRole("radiogroup", { name: "Horario" }).getByRole("radio");
   await expect(slots.first()).toBeVisible();
+  await slow.getByRole("tab", { name: new RegExp(`^${chosenDay}`) }).click();
   await expect(slow.getByRole("radio", { name: time, exact: true })).toHaveCount(0);
   await shot(slow, "04-horario-ocupado");
 
