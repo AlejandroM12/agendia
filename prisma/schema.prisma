@@ -17,7 +17,7 @@ enum DeploymentMode {
 }
 
 enum OrganizationStatus {
-  trial // prueba gratuita activa (7 días)
+  trial // prueba gratuita activa (trialPolicy.trialDays, hoy 14)
   trial_readonly // prueba vencida, acceso de solo lectura (30 días)
   locked // período de solo lectura agotado, sin acceso operativo
   active // suscripción vigente

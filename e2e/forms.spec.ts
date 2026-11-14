@@ -26,16 +26,16 @@ const guestPage = async (browser: Browser) => {
 
 const NETWORK_ERROR = /No pudimos conectarnos/;
 
-test("no quedan mensajes comerciales sobre tarjetas, y la prueba de 7 días se sigue comunicando", async ({ page }) => {
+test("no quedan mensajes comerciales sobre tarjetas, y la prueba de 14 días se sigue comunicando", async ({ page }) => {
   for (const path of ["/", "/precios", "/registro", "/login", "/licencia"]) {
     await page.goto(path);
     const text = (await page.locator("body").innerText()).toLowerCase();
     expect(text, path).not.toMatch(/sin tarjeta|no requiere tarjeta|tarjeta de crédito|ninguna tarjeta|no necesitás (una )?tarjeta/);
   }
   await page.goto("/");
-  await expect(page.getByText(/7 días gratis/).first()).toBeVisible();
+  await expect(page.getByText(/14 días gratis/).first()).toBeVisible();
   await page.goto("/registro");
-  await expect(page.getByText(/gratis durante 7 días/)).toBeVisible();
+  await expect(page.getByText(/gratis durante 14 días/)).toBeVisible();
 });
 
 test("registro: requisitos de contraseña a la vista, validación sin enviar y datos que no se pierden", async ({ page }) => {
@@ -50,7 +50,7 @@ test("registro: requisitos de contraseña a la vista, validación sin enviar y d
 
   await page.goto("/registro");
   await expect(page.getByRole("heading", { level: 1, name: "Tu agenda, más simple." })).toBeVisible();
-  await expect(page.getByText("Creá tu cuenta y empezá a organizar tus turnos. Probá Agendia gratis durante 7 días.")).toBeVisible();
+  await expect(page.getByText("Creá tu cuenta y empezá a organizar tus turnos. Probá Agendia gratis durante 14 días.")).toBeVisible();
   // Beneficios: en el panel lateral (escritorio) o debajo del formulario (celular).
   await expect(page.getByText("Reservas online con tu marca").filter({ visible: true })).toHaveCount(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);

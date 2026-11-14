@@ -12,7 +12,7 @@ Agendia es una agenda online para profesionales independientes y pequeños negoc
 
 Sirve para peluquerías, barberías, estética, consultorios, psicología, kinesiología, clases particulares y cualquier trabajo que se organice con turnos.
 
-Probala gratis durante 7 días 👉 agendia.atajolab.dev (link en la bio).
+Probala gratis durante 14 días 👉 agendia.atajolab.dev (link en la bio).
 
 ¿Tenés dudas o querés que te contemos cómo empezar? Comentá «AGENDA» o escribinos por mensaje y te respondemos.
 

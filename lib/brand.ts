@@ -20,7 +20,7 @@ export const brand = {
 
 /** Prueba gratuita y período de solo lectura posterior (docs/DECISIONS.md, D-07). */
 export const trialPolicy = {
-  trialDays: 7,
+  trialDays: 14,
   readonlyGraceDays: 30,
 } as const;
 
@@ -31,8 +31,20 @@ export const trialPolicy = {
  */
 export const pricing = {
   currency: "ARS",
-  monthly: Number(process.env.PRICE_MONTHLY ?? 14000),
-  oneTime: Number(process.env.PRICE_ONE_TIME ?? 199000),
+  monthly: Number(process.env.PRICE_MONTHLY ?? 9900),
+  oneTime: Number(process.env.PRICE_ONE_TIME ?? 149000),
+} as const;
+
+/**
+ * Oferta multiprofesional FUTURA. Está definida acá para que la fuente de
+ * verdad sea una sola, pero NO se publica ni se cobra: ninguna página, correo
+ * ni integración de pago la usa hasta completar las etapas 3 a 5 de
+ * docs/MULTI_PROFESSIONAL.md. Todos los importes en ARS.
+ */
+export const futurePricing = {
+  teamMonthly: 19900,
+  licenseProfessional: 149000,
+  licenseTeam: 249000,
 } as const;
 
 /** Nombres comerciales de las dos modalidades. */
@@ -43,8 +55,9 @@ export const offers = {
 
 /**
  * Condiciones de la licencia independiente. La licencia de uso es
- * permanente; hosting, dominio y soporte están incluidos el primer año y
- * después se renuevan por año. El valor de esa renovación se publica con
+ * permanente; hosting, dominio y soporte están incluidos los primeros 12
+ * meses y desde el segundo año se renuevan por separado. El valor de esa
+ * renovación todavía no está definido: solo se publica si se carga
  * PRICE_LICENSE_RENEWAL; sin ese dato se informa por escrito antes de la compra.
  */
 const renewalPrice = Number(process.env.PRICE_LICENSE_RENEWAL ?? 0);
@@ -53,12 +66,13 @@ export const licenseTerms = {
   renewalPrice: Number.isFinite(renewalPrice) && renewalPrice > 0 ? renewalPrice : null,
 } as const;
 
+/** Aclaración visible de lo que incluye el primer año y de lo que se renueva después. */
 export function licenseRenewalText(): string {
   const months = licenseTerms.includedServiceMonths;
   const value = licenseTerms.renewalPrice
-    ? `tiene un valor de ${formatMoney(licenseTerms.renewalPrice)} por año`
-    : "se hace al valor vigente en ese momento, que te informamos por escrito antes de que compres";
-  return `La licencia de uso no vence. Hosting, dominio y soporte están incluidos durante los primeros ${months} meses; a partir del mes ${months + 1} su renovación es anual y ${value}.`;
+    ? `Su valor es de ${formatMoney(licenseTerms.renewalPrice)} por año.`
+    : "Te informamos el valor por escrito antes de que compres.";
+  return `Desde el segundo año, el alojamiento, dominio y soporte se renuevan por separado. La licencia de uso no vence y esos servicios están incluidos durante los primeros ${months} meses. ${value}`;
 }
 
 export function formatMoney(amount: number, currency: string = pricing.currency): string {

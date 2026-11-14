@@ -13,8 +13,8 @@ export default function PricingPage() {
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="font-display text-4xl font-semibold sm:text-5xl">Precios</h1>
         <p className="mt-4 text-lg text-muted-foreground">
-          Dos formas de tener {brand.name}: por mes, con {trialPolicy.trialDays} días de prueba gratis, o con una
-          licencia de pago único.
+          Probá {brand.name} {trialPolicy.trialDays} días gratis y seguí por mes, o quedate con tu propio sistema
+          con una licencia de pago único. Todos los importes están en pesos argentinos.
         </p>
       </div>
 

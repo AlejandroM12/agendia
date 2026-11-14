@@ -27,7 +27,7 @@ export type RegisterOrganizationResult =
 
 /**
  * Crea la organización, el usuario propietario y la membresía en una sola
- * transacción, y activa la prueba gratuita de 7 días (ver docs/DECISIONS.md
+ * transacción, y activa la prueba gratuita (trialPolicy.trialDays) (ver docs/DECISIONS.md
  * D-07 y D-09: el ciclo de prueba se implementa junto con el registro,
  * independientemente de que el cobro real todavía no exista).
  */

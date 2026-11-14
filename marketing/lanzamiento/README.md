@@ -32,7 +32,7 @@ La historia es la misma en las dos redes, contada con otro ritmo:
 
 1. **Problema reconocible:** coordinar turnos por mensajes, a cualquier hora (conversaciones sueltas en Instagram; notificaciones de madrugada en TikTok, más directo y con humor «POV»).
 2. **Diferencial concreto:** no es «una agenda más»: es **tu propia página de reservas**, con tu logo, tus colores, tu enlace y tu QR. Es lo que Agendia hace distinto y lo que se ve en la interfaz real.
-3. **Acción simple:** probar 7 días gratis.
+3. **Acción simple:** probar 14 días gratis.
 
 Decisiones de diseño:
 - **Interfaz real como protagonista.** Todas las pantallas son capturas de la aplicación real corriendo en un entorno local con datos de ejemplo; no hay maquetas inventadas.
@@ -65,7 +65,7 @@ Agendia es una agenda online para profesionales independientes y pequeños negoc
 
 Sirve para peluquerías, barberías, estética, consultorios, psicología, kinesiología, clases particulares y cualquier trabajo que se organice con turnos.
 
-Probala gratis durante 7 días 👉 agendia.atajolab.dev (link en la bio).
+Probala gratis durante 14 días 👉 agendia.atajolab.dev (link en la bio).
 
 ¿Tenés dudas o querés que te contemos cómo empezar? Comentá «AGENDA» o escribinos por mensaje y te respondemos.
 
@@ -88,7 +88,7 @@ Hashtags: el texto usa **cinco**. Las fuentes consultadas recomiendan pocos hash
 
 Con Agendia tus clientes reservan solos, desde tu propia página con tu logo, tus colores y tu enlace. Vos solo atendés.
 
-Probala gratis durante 7 días. Encontrá el enlace en nuestro perfil 👆
+Probala gratis durante 14 días. Encontrá el enlace en nuestro perfil 👆
 
 #Agendia #TurnosOnline #EmprendedoresArgentinos #Formosa #NEA
 ```

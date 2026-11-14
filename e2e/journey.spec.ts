@@ -16,7 +16,7 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Tu agenda");
   await expect(page.getByRole("link", { name: "AtajoLab" })).toHaveAttribute("href", "https://atajolab.dev");
   await shot(page, "01-landing");
-  await page.getByRole("link", { name: /Probar 7 días gratis/ }).click();
+  await page.getByRole("link", { name: "Empezar gratis" }).first().click();
 
   // 2. Registro: tres campos.
   await expect(page).toHaveURL(/\/registro/);
@@ -130,7 +130,7 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   await shot(page, "15-recordatorios");
 
   await page.goto("/dashboard/facturacion");
-  await expect(page.getByText(/Prueba gratuita · 7 días restantes/)).toBeVisible();
+  await expect(page.getByText(/Prueba gratuita · 14 días restantes/)).toBeVisible();
   await shot(page, "16-plan");
 
   // 11. Sin sesión, el panel no es accesible.

@@ -7,18 +7,22 @@ test("la landing presenta las dos modalidades con sus precios y condiciones", as
   const monthly = page.locator("div", { has: page.getByRole("heading", { name: "Plan Profesional" }) }).last();
   const license = page.locator("div", { has: page.getByRole("heading", { name: "Licencia independiente" }) }).last();
 
-  await expect(monthly).toContainText("14.000");
-  await expect(monthly).toContainText("7 días gratis");
-  await expect(monthly).toContainText("Hosting y soporte incluidos");
-  await expect(license).toContainText("199.000");
+  await expect(monthly).toContainText("9.900");
+  await expect(monthly).toContainText("14 días gratis");
+  await expect(monthly).toContainText("Soporte incluido");
+  await expect(monthly).toContainText("Te ayudamos a configurar tu agenda");
+  await expect(license).toContainText("149.000");
   await expect(license).toContainText("Licencia de uso permanente");
-  await expect(license).toContainText("Hosting, dominio y soporte incluidos durante 12 meses");
+  await expect(license).toContainText("Primer año de alojamiento, dominio y soporte incluido");
   await expect(license).toContainText("no incluye el código fuente");
   // Las condiciones de renovación están a la vista antes de contratar.
-  await expect(page.getByText(/a partir del mes 13 su renovación es anual/).first()).toBeVisible();
+  await expect(page.getByText(/Desde el segundo año, el alojamiento, dominio y soporte se renuevan por separado/).first()).toBeVisible();
+  // Lo que todavía no se ofrece no se anuncia.
+  const body = (await page.locator("body").innerText()).toLowerCase();
+  expect(body).not.toMatch(/19\.900|24\.900|249\.000|plan equipo|google calendar|whatsapp automático|recordatorios automáticos por whatsapp/);
   await expect(page.getByText(/ctualizaciones/)).toHaveCount(0);
 
-  await license.getByRole("link", { name: "Comprar la licencia" }).click();
+  await license.getByRole("link", { name: "Consultar por mi licencia" }).click();
   await expect(page).toHaveURL(/\/licencia$/);
   await expect(page.getByRole("heading", { level: 1, name: "Licencia independiente" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Condiciones, antes de comprar" })).toBeVisible();

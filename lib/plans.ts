@@ -19,7 +19,7 @@ export const PLAN_CAPABILITIES: Record<PlanTier, { name: string; maxActiveProfes
   equipo: { name: "Plan Equipo", maxActiveProfessionals: 5 },
 };
 
-/** Durante la prueba gratuita de 7 días se permiten los mismos cupos que el Plan Profesional. */
+/** Durante la prueba gratuita de 14 días se permiten los mismos cupos que el Plan Profesional. */
 export const TRIAL_MAX_PROFESSIONALS = PLAN_CAPABILITIES.profesional.maxActiveProfessionals;
 
 /**
