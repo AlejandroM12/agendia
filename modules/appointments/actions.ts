@@ -107,7 +107,7 @@ function revalidateAgenda() {
 }
 
 export async function createAppointmentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("appointments.manage");
   if (!access.ok) return { message: access.message };
   const { organization } = access.context;
 
@@ -154,7 +154,7 @@ export async function rescheduleAppointmentAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("appointments.manage");
   if (!access.ok) return { message: access.message };
   const { organization } = access.context;
 
@@ -175,7 +175,7 @@ export async function rescheduleAppointmentAction(
 }
 
 export async function cancelAppointmentAction(appointmentId: string): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("appointments.manage");
   if (!access.ok) return { message: access.message };
 
   const result = await cancelAppointment({
@@ -191,7 +191,7 @@ export async function setOutcomeAction(
   appointmentId: string,
   status: "confirmed" | "completed" | "no_show",
 ): Promise<void> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("appointments.manage");
   if (!access.ok) return;
   await setAppointmentOutcome({ organizationId: access.context.organization.id, appointmentId, status });
   revalidateAgenda();
@@ -202,7 +202,7 @@ export async function updateNotesAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("appointments.manage");
   if (!access.ok) return { message: access.message };
 
   await db.appointment.updateMany({

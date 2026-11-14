@@ -11,7 +11,7 @@ import { createAvailabilityException, saveProfessionalHours } from "@/modules/te
 import { parseJsonField, weeklyRulesSchema } from "./rules";
 
 export async function saveWeeklyHoursAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("schedule.manage");
   if (!access.ok) return { message: access.message };
   const parsed = parseJsonField(weeklyRulesSchema, formData.get("rules"));
   if (!parsed.success) {
@@ -38,7 +38,7 @@ const settingsSchema = z.object({
 });
 
 export async function saveBookingSettingsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("schedule.manage");
   if (!access.ok) return { message: access.message };
 
   const parsed = settingsSchema.safeParse(Object.fromEntries(formData));
@@ -51,7 +51,7 @@ export async function saveBookingSettingsAction(_prev: ActionState, formData: Fo
 }
 
 export async function addExceptionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("schedule.manage");
   if (!access.ok) return { message: access.message };
   const { organization } = access.context;
 
@@ -87,7 +87,7 @@ export async function addExceptionAction(_prev: ActionState, formData: FormData)
 }
 
 export async function deleteExceptionAction(exceptionId: string): Promise<void> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("schedule.manage");
   if (!access.ok) return;
   await db.availabilityException.deleteMany({
     where: { id: exceptionId, organizationId: access.context.organization.id },

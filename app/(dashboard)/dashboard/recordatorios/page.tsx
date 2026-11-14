@@ -16,6 +16,7 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   booking_confirmation: "Confirmación de turno",
   reminder: "Recordatorio",
   reschedule: "Aviso de cambio de horario",
+  professional_change: "Aviso de cambio de profesional",
   cancellation: "Aviso de cancelación",
   booking_received_owner: "Aviso de nueva reserva (para vos)",
   cancellation_owner: "Aviso de cancelación (para vos)",

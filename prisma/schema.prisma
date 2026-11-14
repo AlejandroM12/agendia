@@ -307,6 +307,7 @@ enum NotificationType {
   reminder
   cancellation
   reschedule
+  professional_change // el negocio le cambió el profesional al turno
   cancellation_owner
   reschedule_owner
 }
@@ -542,6 +543,7 @@ model OrganizationSlugAlias {
 enum OrganizationImageKind {
   logo
   cover
+  professional // foto de un profesional (Professional.photoImageId): puede haber varias por negocio
 }
 
 // Logo y portada de la página pública. Se guardan ya optimizados (WebP) en
@@ -561,7 +563,9 @@ model OrganizationImage {
   organization       Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   professionalPhotos Professional[]
 
-  @@unique([organizationId, kind])
+  // Unicidad (organizationId, kind) solo para logo y portada: índice parcial
+  // `organization_images_org_kind_unique`, creado en SQL (Prisma no modela índices parciales).
+  @@index([organizationId, kind])
   @@map("organization_images")
 }
 

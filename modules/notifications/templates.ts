@@ -142,6 +142,22 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
           footer: customerFooter,
         }),
       };
+    case "professional_change":
+      return {
+        subject: `Cambió el profesional de tu turno en ${ctx.organizationName} — ${when}`,
+        ...renderEmail({
+          business,
+          heading: "Cambió quién te atiende",
+          paragraphs: [
+            ctx.professionalName
+              ? `Hola ${ctx.customerName}, tu turno en ${ctx.organizationName} sigue en el mismo día y horario, pero ahora te va a atender ${ctx.professionalName}.`
+              : `Hola ${ctx.customerName}, tu turno en ${ctx.organizationName} sigue en el mismo día y horario, pero cambió el profesional que te va a atender.`,
+          ],
+          details,
+          action: manage,
+          footer: customerFooter,
+        }),
+      };
     case "cancellation":
       return {
         subject: `Turno cancelado en ${ctx.organizationName}`,

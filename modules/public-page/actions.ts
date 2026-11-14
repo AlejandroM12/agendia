@@ -1,12 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { OrganizationImageKind } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
-import { MAX_UPLOAD_BYTES, removeOrganizationImage, saveOrganizationImage } from "./images";
+import { type BusinessImageKind, MAX_UPLOAD_BYTES, removeOrganizationImage, saveOrganizationImage } from "./images";
 import { publicPageSchema, readPublicPageInput } from "./settings";
 import { changeOrganizationSlug } from "./slug";
 
@@ -38,11 +37,11 @@ export async function updatePublicPageAction(_prev: PublicPageState, formData: F
   return { ok: true, message: "Cambios guardados. Tu página ya está actualizada.", slug };
 }
 
-const isImageKind = (value: unknown): value is OrganizationImageKind => value === "logo" || value === "cover";
+const isImageKind = (value: unknown): value is BusinessImageKind => value === "logo" || value === "cover";
 
 export type ImageActionState = { ok: true; id: string | null } | { ok: false; message: string };
 
-export async function uploadPublicImageAction(kind: OrganizationImageKind, formData: FormData): Promise<ImageActionState> {
+export async function uploadPublicImageAction(kind: BusinessImageKind, formData: FormData): Promise<ImageActionState> {
   const access = await requireWriteContext();
   if (!access.ok) return { ok: false, message: access.message };
   const { organization } = access.context;
@@ -64,7 +63,7 @@ export async function uploadPublicImageAction(kind: OrganizationImageKind, formD
   return { ok: true, id: result.id };
 }
 
-export async function removePublicImageAction(kind: OrganizationImageKind): Promise<ImageActionState> {
+export async function removePublicImageAction(kind: BusinessImageKind): Promise<ImageActionState> {
   const access = await requireWriteContext();
   if (!access.ok) return { ok: false, message: access.message };
   if (!isImageKind(kind)) return { ok: false, message: "Tipo de imagen desconocido." };

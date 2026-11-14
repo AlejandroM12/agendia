@@ -34,7 +34,7 @@ async function findDuplicate(
 }
 
 export async function createCustomerAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("customers.manage");
   if (!access.ok) return { message: access.message };
   const organizationId = access.context.organization.id;
 
@@ -57,7 +57,7 @@ export async function updateCustomerAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("customers.manage");
   if (!access.ok) return { message: access.message };
   const organizationId = access.context.organization.id;
 
@@ -78,7 +78,7 @@ export async function updateCustomerAction(
 }
 
 export async function deleteCustomerAction(customerId: string): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("customers.manage");
   if (!access.ok) return { message: access.message };
   const organizationId = access.context.organization.id;
 

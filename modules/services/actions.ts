@@ -17,7 +17,7 @@ function parse(formData: FormData) {
 }
 
 export async function createServiceAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("services.manage");
   if (!access.ok) return { message: access.message };
   const organizationId = access.context.organization.id;
 
@@ -38,7 +38,7 @@ export async function updateServiceAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("services.manage");
   if (!access.ok) return { message: access.message };
 
   const parsed = parse(formData);
@@ -56,7 +56,7 @@ export async function updateServiceAction(
 }
 
 export async function setServiceActiveAction(serviceId: string, active: boolean): Promise<void> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("services.manage");
   if (!access.ok) return;
   await db.service.updateMany({
     where: { id: serviceId, organizationId: access.context.organization.id },
@@ -66,7 +66,7 @@ export async function setServiceActiveAction(serviceId: string, active: boolean)
 }
 
 export async function moveServiceAction(serviceId: string, direction: "up" | "down"): Promise<void> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("services.manage");
   if (!access.ok) return;
   const organizationId = access.context.organization.id;
 
@@ -89,7 +89,7 @@ export async function moveServiceAction(serviceId: string, direction: "up" | "do
 }
 
 export async function deleteServiceAction(serviceId: string): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("services.manage");
   if (!access.ok) return { message: access.message };
   const organizationId = access.context.organization.id;
 

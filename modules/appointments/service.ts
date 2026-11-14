@@ -141,10 +141,13 @@ async function freeProfessionalsAt(params: {
   durationMinutes: number;
   startsAt: Date;
   ignoreAppointmentId?: string;
+  /** Agenda interna: sin anticipación mínima ni límite de días hacia adelante (igual que `loadSlotsAction`). */
+  internal?: boolean;
 }): Promise<TeamProfessional[]> {
   const { dateStr } = toZoned(params.startsAt, params.organization.timezone);
   const [day] = await getTeamAvailability({
-    organization: params.organization,
+    organization: params.internal ? { ...params.organization, maxAdvanceDays: 730 } : params.organization,
+    applyNotice: !params.internal,
     professionalIds: params.candidates.map((p) => p.id),
     durationMinutes: params.durationMinutes,
     fromDateStr: dateStr,
@@ -528,6 +531,92 @@ export async function rescheduleAppointment(params: {
     };
   } catch (error) {
     if (isOverlapError(error) || isTransientConflict(error)) return SLOT_TAKEN;
+    throw error;
+  }
+}
+
+/**
+ * Pasa un turno futuro a otro profesional, en el mismo día y horario.
+ *
+ * Es una decisión explícita del administrador: nunca se reasigna solo. Se
+ * valida en el servidor que el turno sea de este negocio y esté confirmado y
+ * por venir (el historial no se toca), que el profesional destino esté
+ * activo y realice el servicio, y que tenga ese horario libre (atiende ese
+ * día, sin bloqueos ni otro turno). Se avisa al cliente por correo.
+ */
+export async function reassignAppointment(params: {
+  organization: Organization;
+  appointmentId: string;
+  professionalId: string;
+  userId?: string | null;
+  now?: Date;
+}): Promise<AppointmentResult> {
+  const { organization } = params;
+  const now = params.now ?? new Date();
+
+  const current = await findOwnedAppointment(organization.id, params.appointmentId);
+  if (!current) return fail("not_found", "No encontramos ese turno.");
+  if (current.status !== "confirmed") return fail("invalid", "Solo se pueden reasignar turnos confirmados.");
+  if (current.startsAt.getTime() <= now.getTime()) return fail("invalid", "Este turno ya pasó: no se reasigna.");
+  if (current.professionalId === params.professionalId) return { ok: true, appointment: current };
+
+  const eligible = await resolveEligibleProfessionals(db, {
+    organization,
+    serviceId: current.serviceId,
+    audience: "internal",
+    choice: params.professionalId,
+  });
+  if (!eligible.ok) {
+    return fail("unavailable", "Ese profesional no está activo o no realiza este servicio.");
+  }
+
+  const durationMinutes = Math.round((current.endsAt.getTime() - current.startsAt.getTime()) / 60000);
+  const free = await freeProfessionalsAt({
+    organization,
+    candidates: eligible.professionals,
+    durationMinutes,
+    startsAt: current.startsAt,
+    ignoreAppointmentId: current.id,
+    internal: true,
+  });
+  if (free.length === 0) {
+    return fail("unavailable", `${eligible.professionals[0].displayName} no tiene libre ese horario.`);
+  }
+
+  try {
+    const placed = await firstThatFits(free, (professional) =>
+      db.$transaction(async (tx) => {
+        await lockProfessionalAgenda(tx, professional.id);
+        const updated = await tx.appointment.update({
+          where: { id: current.id },
+          data: { professionalId: professional.id, professionalSelection: "specific", requestedProfessionalId: professional.id },
+        });
+        await enqueueAppointmentNotifications(tx, {
+          event: "reassigned",
+          actor: "professional",
+          appointment: updated,
+          customerEmail: current.customer.email,
+          settings: organization,
+        });
+        await tx.auditLog.create({
+          data: {
+            organizationId: organization.id,
+            userId: params.userId ?? null,
+            action: "team.appointment.reassign",
+            entityType: "appointment",
+            entityId: current.id,
+            metadata: { from: current.professionalId, to: professional.id },
+          },
+        });
+        return updated;
+      }, TX_OPTIONS),
+    );
+    if (!placed.ok) return fail("slot_taken", "Ese profesional acaba de ocupar ese horario.");
+    return { ok: true, appointment: placed.value, previousProfessionalId: current.professionalId };
+  } catch (error) {
+    if (isOverlapError(error) || isTransientConflict(error)) {
+      return fail("slot_taken", "Ese profesional acaba de ocupar ese horario.");
+    }
     throw error;
   }
 }

@@ -17,7 +17,7 @@ type OrgNotificationSettings = {
   notifyOwnerOnBooking: boolean;
 };
 
-export type AppointmentEvent = "created" | "rescheduled" | "canceled";
+export type AppointmentEvent = "created" | "rescheduled" | "reassigned" | "canceled";
 
 /**
  * Encola (outbox) las notificaciones de un cambio de turno, dentro de la
@@ -65,6 +65,7 @@ export async function enqueueAppointmentNotifications(
   if (customerEmail) {
     if (event === "created") push("booking_confirmation", customerEmail, now);
     if (event === "rescheduled") push("reschedule", customerEmail, now);
+    if (event === "reassigned") push("professional_change", customerEmail, now);
     if (event === "canceled") push("cancellation", customerEmail, now);
 
     if (event !== "canceled" && settings.remindersEnabled) {
@@ -77,7 +78,8 @@ export async function enqueueAppointmentNotifications(
     }
   }
 
-  if (actor === "customer" && settings.notifyOwnerOnBooking) {
+  // Una reasignación la decide el negocio: no hay a quién avisarle del lado del negocio.
+  if (actor === "customer" && event !== "reassigned" && settings.notifyOwnerOnBooking) {
     const owners = await tx.membership.findMany({
       where: { organizationId: appointment.organizationId },
       select: { user: { select: { email: true } } },

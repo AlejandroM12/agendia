@@ -6,6 +6,7 @@ import type { Organization } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { canPerformWriteActions, getOrganizationWithSyncedStatus } from "@/lib/organization-access";
+import { can, FORBIDDEN_MESSAGE, type Permission } from "@/lib/permissions";
 
 /**
  * Data Access Layer: el único lugar donde se resuelve "quién es el usuario
@@ -100,10 +101,23 @@ export const READ_ONLY_MESSAGE =
  * mensaje de error si la cuenta está en solo lectura. La restricción se
  * aplica acá, en el servidor, no solo ocultando botones.
  */
-export async function requireWriteContext(): Promise<
-  { ok: true; context: AppContext } | { ok: false; message: string }
-> {
+export async function requireWriteContext(
+  permission?: Permission,
+): Promise<{ ok: true; context: AppContext } | { ok: false; message: string }> {
   const context = await requireContext();
+  // El rol se lee de la membresía en la base de datos en cada request, nunca de lo que envía el cliente.
+  if (permission && !can(context.role, permission)) return { ok: false, message: FORBIDDEN_MESSAGE };
   if (!context.canWrite) return { ok: false, message: READ_ONLY_MESSAGE };
   return { ok: true, context };
+}
+
+/**
+ * Para acciones administrativas: la sesión, el modo de solo lectura y que el
+ * rol del usuario tenga el permiso (lib/permissions.ts). Un usuario
+ * autenticado no alcanza.
+ */
+export async function requirePermission(
+  permission: Permission,
+): Promise<{ ok: true; context: AppContext } | { ok: false; message: string }> {
+  return requireWriteContext(permission);
 }

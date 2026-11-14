@@ -27,11 +27,13 @@ const MAX_INPUT_PIXELS = 50_000_000;
 const RULES: Record<OrganizationImageKind, { minWidth: number; minHeight: number; label: string }> = {
   logo: { minWidth: 96, minHeight: 96, label: "El logo" },
   cover: { minWidth: 600, minHeight: 240, label: "La portada" },
+  professional: { minWidth: 160, minHeight: 160, label: "La foto" },
 };
 
 const LOGO_SIZE = 512;
 const COVER_WIDTH = 1600;
 const COVER_RATIO = 2; // ancho : alto
+const PROFESSIONAL_PHOTO_SIZE = 512; // recorte cuadrado centrado en la cara o lo más relevante
 
 type SniffedFormat = "jpeg" | "png" | "webp";
 
@@ -83,6 +85,9 @@ export async function processImage(kind: OrganizationImageKind, input: Uint8Arra
     const pipeline = source.rotate();
     if (kind === "logo") {
       pipeline.resize(LOGO_SIZE, LOGO_SIZE, { fit: "inside", withoutEnlargement: true });
+    } else if (kind === "professional") {
+      const side = Math.min(PROFESSIONAL_PHOTO_SIZE, width, height);
+      pipeline.resize(side, side, { fit: "cover", position: "attention" });
     } else {
       // Recorte 2:1 centrado en lo más relevante, sin agrandar imágenes chicas.
       const targetWidth = Math.min(COVER_WIDTH, width, Math.floor(height * COVER_RATIO));
@@ -90,13 +95,16 @@ export async function processImage(kind: OrganizationImageKind, input: Uint8Arra
     }
 
     const { data, info } = await pipeline
-      .webp({ quality: kind === "logo" ? 90 : 80 })
+      .webp({ quality: kind === "cover" ? 80 : 88 })
       .toBuffer({ resolveWithObject: true });
     return { ok: true, image: { bytes: data, width: info.width, height: info.height, contentType: "image/webp" } };
   } catch {
     return { ok: false, message: "No pudimos leer la imagen. Probá con otro archivo JPG, PNG o WebP." };
   }
 }
+
+/** Logo y portada: una por negocio. Las fotos de profesionales tienen sus propias funciones. */
+export type BusinessImageKind = Exclude<OrganizationImageKind, "professional">;
 
 export type SaveImageResult = { ok: true; id: string } | { ok: false; message: string };
 
@@ -107,7 +115,7 @@ export type SaveImageResult = { ok: true; id: string } | { ok: false; message: s
  */
 export async function saveOrganizationImage(
   organizationId: string,
-  kind: OrganizationImageKind,
+  kind: BusinessImageKind,
   input: Uint8Array,
 ): Promise<SaveImageResult> {
   const processed = await processImage(kind, input);
@@ -124,7 +132,63 @@ export async function saveOrganizationImage(
   return { ok: true, id: created.id };
 }
 
-export async function removeOrganizationImage(organizationId: string, kind: OrganizationImageKind): Promise<void> {
+export type ProfessionalPhotoResult = { ok: true; id: string } | { ok: false; message: string };
+
+/**
+ * Guarda (o reemplaza) la foto de un profesional. Se valida que el
+ * profesional sea del negocio, se procesa igual que el resto de las imágenes
+ * y la foto anterior se borra en la misma transacción.
+ */
+export async function saveProfessionalPhoto(
+  organizationId: string,
+  professionalId: string,
+  input: Uint8Array,
+): Promise<ProfessionalPhotoResult> {
+  const professional = await db.professional.findFirst({
+    where: { id: professionalId, organizationId },
+    select: { id: true },
+  });
+  if (!professional) return { ok: false, message: "No encontramos a ese profesional." };
+
+  const processed = await processImage("professional", input);
+  if (!processed.ok) return processed;
+
+  const { bytes, width, height, contentType } = processed.image;
+  const id = await db.$transaction(async (tx) => {
+    // El UPDATE toma el lock de la fila: dos cambios de foto simultáneos se serializan.
+    const current = await tx.professional.findUniqueOrThrow({
+      where: { id: professionalId },
+      select: { photoImageId: true },
+    });
+    const created = await tx.organizationImage.create({
+      data: { organizationId, kind: "professional", contentType, width, height, bytes: new Uint8Array(bytes) },
+      select: { id: true },
+    });
+    await tx.professional.update({ where: { id: professionalId }, data: { photoImageId: created.id } });
+    if (current.photoImageId) {
+      await tx.organizationImage.deleteMany({ where: { id: current.photoImageId, organizationId } });
+    }
+    return created.id;
+  });
+  return { ok: true, id };
+}
+
+export async function removeProfessionalPhoto(organizationId: string, professionalId: string): Promise<boolean> {
+  return db.$transaction(async (tx) => {
+    const professional = await tx.professional.findFirst({
+      where: { id: professionalId, organizationId },
+      select: { photoImageId: true },
+    });
+    if (!professional) return false;
+    await tx.professional.update({ where: { id: professionalId }, data: { photoImageId: null } });
+    if (professional.photoImageId) {
+      await tx.organizationImage.deleteMany({ where: { id: professional.photoImageId, organizationId } });
+    }
+    return true;
+  });
+}
+
+export async function removeOrganizationImage(organizationId: string, kind: BusinessImageKind): Promise<void> {
   await db.organizationImage.deleteMany({ where: { organizationId, kind } });
 }
 
