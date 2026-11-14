@@ -1,52 +1,81 @@
 "use client";
 
-import { useActionState } from "react";
 import Link from "next/link";
 import { registerAction } from "@/app/(auth)/actions";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
+import { PasswordField } from "@/components/form/password-field";
 import { SubmitButton } from "@/components/form/submit-button";
-import { trialPolicy } from "@/lib/brand";
+import { useForm } from "@/components/form/use-form";
+import { firstFieldErrors } from "@/lib/action-state";
+import { brand, trialPolicy } from "@/lib/brand";
+import { registerSchema } from "@/modules/auth/schemas";
+import { AuthBenefits } from "./benefits";
 import { AuthCard } from "./auth-card";
 
-export function RegisterForm() {
-  const [state, action] = useActionState(registerAction, undefined);
-  const error = (field: string) => state?.errors?.[field]?.[0];
+/** `trial`: la cuenta empieza con la prueba gratuita (no aplica a una instalación independiente). */
+export function RegisterForm({ trial }: { trial: boolean }) {
+  const form = useForm(registerAction, {
+    // El mismo esquema con el que valida el servidor.
+    validate: (data) => {
+      const parsed = registerSchema.safeParse(Object.fromEntries(data));
+      return parsed.success ? null : firstFieldErrors(parsed.error);
+    },
+  });
 
   return (
-    <AuthCard
-      title="Creá tu cuenta"
-      description={`${trialPolicy.trialDays} días gratis. Sin tarjeta.`}
-      footer={
-        <>
-          ¿Ya tenés cuenta?{" "}
-          <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-            Ingresar
-          </Link>
-        </>
-      }
-    >
-      <form action={action} className="space-y-4">
-        <FormMessage message={state?.message} />
-        <Field label="Tu nombre" htmlFor="name" error={error("name")}>
-          <Input id="name" name="name" autoComplete="name" required />
-        </Field>
-        <Field label="Email" htmlFor="email" error={error("email")}>
-          <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" required />
-        </Field>
-        <Field
-          label="Contraseña"
-          htmlFor="password"
-          error={error("password")}
-          hint="Al menos 8 caracteres, con letras y números."
-        >
-          <Input id="password" name="password" type="password" autoComplete="new-password" minLength={8} required />
-        </Field>
-        <SubmitButton className="w-full" pendingLabel="Creando tu cuenta…">
-          Empezar gratis
-        </SubmitButton>
-      </form>
-    </AuthCard>
+    <>
+      <AuthCard
+        title="Tu agenda, más simple."
+        description={
+          trial
+            ? `Creá tu cuenta y empezá a organizar tus turnos. Probá ${brand.name} gratis durante ${trialPolicy.trialDays} días.`
+            : "Creá tu cuenta y empezá a organizar tus turnos."
+        }
+        footer={
+          <>
+            ¿Ya tenés cuenta?{" "}
+            <Link href="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+              Ingresar
+            </Link>
+          </>
+        }
+      >
+        <form {...form.formProps} className="space-y-4">
+          <FormMessage message={form.message} />
+          <Field label="Tu nombre" htmlFor="name" error={form.error("name")}>
+            <Input id="name" name="name" autoComplete="name" maxLength={120} required />
+          </Field>
+          <Field
+            label="Email"
+            htmlFor="email"
+            hint="Lo usás para ingresar. Te enviamos un enlace para confirmarlo."
+            error={form.error("email")}
+          >
+            <Input id="email" name="email" type="email" autoComplete="email" inputMode="email" autoCapitalize="none" required />
+          </Field>
+          <PasswordField
+            id="password"
+            name="password"
+            label="Contraseña"
+            autoComplete="new-password"
+            showRules
+            error={form.error("password")}
+          />
+          <SubmitButton size="lg" className="w-full" pending={form.pending} pendingLabel="Creando tu cuenta…">
+            {trial ? "Crear mi cuenta gratis" : "Crear mi cuenta"}
+          </SubmitButton>
+          {trial && (
+            <p className="text-center text-sm text-muted-foreground">
+              {trialPolicy.trialDays} días de prueba con todas las funciones.
+            </p>
+          )}
+        </form>
+      </AuthCard>
+
+      {/* En el celular no hay panel lateral: los beneficios van debajo. */}
+      <AuthBenefits className="mt-8 px-1 lg:hidden" />
+    </>
   );
 }

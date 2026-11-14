@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { AuthCard } from "@/components/auth/auth-card";
 import { RegisterForm } from "@/components/auth/register-form";
 import { brand } from "@/lib/brand";
+import { isStandalone } from "@/lib/deployment";
 import { getRegistrationStatus } from "@/modules/auth/registration";
 
 export const metadata: Metadata = { title: "Crear cuenta" };
@@ -14,7 +15,7 @@ export default async function RegisterPage() {
   await connection();
   const status = await getRegistrationStatus();
 
-  if (status.open) return <RegisterForm />;
+  if (status.open) return <RegisterForm trial={!isStandalone()} />;
 
   const footer = (
     <>
