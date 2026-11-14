@@ -5,6 +5,7 @@ import { AccountBanner } from "@/components/dashboard/account-banner";
 import { MobileTabBar, SidebarNav } from "@/components/dashboard/navigation";
 import { requireOrganization } from "@/lib/dal";
 import { isStandalone } from "@/lib/deployment";
+import { isTeamModeEnabled } from "@/lib/features";
 
 // Todo el panel depende de la sesión: se renderiza por request.
 export const instant = false;
@@ -25,7 +26,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
               </ButtonLink>
         )}
         <div className="mt-6 flex-1 overflow-y-auto">
-          <SidebarNav showBilling={!isStandalone()} />
+          <SidebarNav showBilling={!isStandalone()} showTeam={isTeamModeEnabled(organization)} />
         </div>
         <div className="border-t border-sidebar-border pt-3">
           <p className="truncate px-3 text-sm font-medium text-foreground">{organization.name}</p>

@@ -3,6 +3,7 @@ import "server-only";
 import sharp from "sharp";
 import type { OrganizationImageKind } from "@prisma/client";
 import { db } from "@/lib/db";
+import { imageUrl } from "./images-client";
 
 /**
  * Logo y portada de la página pública.
@@ -195,7 +196,7 @@ export async function removeOrganizationImage(organizationId: string, kind: Busi
 export type OrganizationImages = { logoUrl: string | null; coverUrl: string | null; logoId: string | null; coverId: string | null };
 
 /** URL pública de una imagen. Cambia cada vez que se reemplaza, así que se puede cachear para siempre. */
-export const imageUrl = (id: string) => `/api/media/${id}`;
+export { imageUrl } from "./images-client";
 
 /** Identificadores de las imágenes de un negocio, sin traer su contenido. */
 export async function getOrganizationImages(organizationId: string): Promise<OrganizationImages> {

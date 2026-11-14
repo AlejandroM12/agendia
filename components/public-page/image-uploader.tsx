@@ -17,7 +17,7 @@ const SHRINK_MAX_SIDE = 2400;
  * la subida sea rápida con datos móviles. Es solo una cortesía; el servidor
  * valida y vuelve a procesar la imagen igual (modules/public-page/images.ts).
  */
-async function shrink(file: File, keepTransparency: boolean): Promise<File> {
+export async function shrinkImage(file: File, keepTransparency: boolean): Promise<File> {
   if (file.size <= SHRINK_ABOVE_BYTES) return file;
   try {
     const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -75,7 +75,7 @@ export function ImageUploader({
       return;
     }
     startTransition(async () => {
-      const prepared = await shrink(file, kind === "logo");
+      const prepared = await shrinkImage(file, kind === "logo");
       if (prepared.size > MAX_BYTES) {
         setError("La imagen pesa demasiado. El máximo es 8 MB.");
         return;

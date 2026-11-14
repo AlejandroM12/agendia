@@ -14,6 +14,7 @@ import {
   Settings,
   Sun,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,8 @@ const SETUP: Item[] = [
   { href: "/dashboard/configuracion", label: "Configuración", icon: Settings },
 ];
 
+const TEAM: Item = { href: "/dashboard/equipo", label: "Equipo", icon: UsersRound };
+
 const BILLING: Item = { href: "/dashboard/facturacion", label: "Mi plan", icon: CreditCard };
 
 function useIsActive() {
@@ -41,7 +44,7 @@ function useIsActive() {
   return (item: Item) => (item.exact ? pathname === item.href : pathname.startsWith(item.href));
 }
 
-export function SidebarNav({ showBilling }: { showBilling: boolean }) {
+export function SidebarNav({ showBilling, showTeam = false }: { showBilling: boolean; showTeam?: boolean }) {
   const isActive = useIsActive();
   const pathname = usePathname();
   const agendaActive = pathname.startsWith("/dashboard/turnos");
@@ -70,7 +73,9 @@ export function SidebarNav({ showBilling }: { showBilling: boolean }) {
       <p className="mt-5 mb-1 px-3 text-xs font-semibold tracking-wide text-muted-foreground/80 uppercase">
         Mi negocio
       </p>
-      {SETUP.map(link)}
+      {SETUP.slice(0, 2).map(link)}
+      {showTeam && link(TEAM)}
+      {SETUP.slice(2).map(link)}
       {showBilling && link(BILLING)}
     </nav>
   );
@@ -93,7 +98,7 @@ export function MobileTabBar({ canWrite }: { canWrite: boolean }) {
       label: "Más",
       icon: Ellipsis,
       match: (p) =>
-        ["/dashboard/mas", "/dashboard/pagina", "/dashboard/servicios", "/dashboard/disponibilidad", "/dashboard/recordatorios", "/dashboard/configuracion", "/dashboard/facturacion"].some(
+        ["/dashboard/mas", "/dashboard/pagina", "/dashboard/servicios", "/dashboard/equipo", "/dashboard/disponibilidad", "/dashboard/recordatorios", "/dashboard/configuracion", "/dashboard/facturacion"].some(
           (prefix) => p.startsWith(prefix),
         ),
     },

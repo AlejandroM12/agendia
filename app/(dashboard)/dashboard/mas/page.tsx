@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bell, ChevronRight, Clock, CreditCard, Globe, LogOut, Scissors, Search, Settings, type LucideIcon } from "lucide-react";
+import { Bell, ChevronRight, Clock, CreditCard, Globe, LogOut, Scissors, Search, Settings, UsersRound, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { requireOrganization } from "@/lib/dal";
 import { isStandalone } from "@/lib/deployment";
+import { isTeamModeEnabled } from "@/lib/features";
 
 export const metadata: Metadata = { title: "Más" };
 
@@ -13,6 +14,9 @@ export default async function MorePage() {
   const items: Array<{ href: string; label: string; description: string; icon: LucideIcon }> = [
     { href: "/dashboard/pagina", label: "Mi página pública", description: "Tu marca, tu enlace y tu código QR", icon: Globe },
     { href: "/dashboard/servicios", label: "Servicios", description: "Qué ofrecés, duración y precios", icon: Scissors },
+    ...(isTeamModeEnabled(organization)
+      ? [{ href: "/dashboard/equipo", label: "Equipo", description: "Profesionales, fotos y servicios", icon: UsersRound }]
+      : []),
     { href: "/dashboard/disponibilidad", label: "Horarios", description: "Días de atención y bloqueos", icon: Clock },
     { href: "/dashboard/recordatorios", label: "Recordatorios", description: "Avisos automáticos a tus clientes", icon: Bell },
     { href: "/dashboard/turnos", label: "Buscar turnos", description: "Por cliente, fecha o estado", icon: Search },
