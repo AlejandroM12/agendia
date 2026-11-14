@@ -73,7 +73,7 @@ test("sin confirmar el email no se puede usar la cuenta; el enlace la habilita",
 test("un cliente reprograma su turno desde su enlace", async ({ page, browser }) => {
   const suffix = `${test.info().project.name}-${Date.now()}`;
   await registerAndOnboard(page, `e2e-move-${suffix}@example.com`, `Reprograma E2E ${suffix}`);
-  await page.goto("/dashboard/configuracion");
+  await page.goto("/dashboard/pagina");
   const slug = await page.locator("#slug").inputValue();
 
   const guestContext = await browser.newContext({ ...test.info().project.use, storageState: undefined });

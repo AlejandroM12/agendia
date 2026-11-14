@@ -6,7 +6,7 @@ test("prueba vencida: la cuenta queda en solo lectura y la página pública deja
   const email = `e2e-trial-${suffix}@example.com`;
   await registerAndOnboard(page, email, `Vencida E2E ${suffix}`);
 
-  await page.goto("/dashboard/configuracion");
+  await page.goto("/dashboard/pagina");
   const slug = await page.locator("#slug").inputValue();
 
   // Se simula el paso del tiempo: la prueba venció ayer.

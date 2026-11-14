@@ -73,7 +73,7 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   await shot(page, "08-agenda");
 
   // 6. Reserva pública, como un cliente sin sesión.
-  await page.goto("/dashboard/configuracion");
+  await page.goto("/dashboard/pagina");
   const slug = await page.locator("#slug").inputValue();
   expect(slug.length).toBeGreaterThan(2);
 
