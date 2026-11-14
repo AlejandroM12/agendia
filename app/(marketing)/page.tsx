@@ -19,13 +19,13 @@ const MORE_FEATURES: Array<{ icon: LucideIcon; title: string; text: string }> = 
 ];
 
 const STEPS = [
-  { title: "Creá tu cuenta", text: "Nombre, email y contraseña. Sin tarjeta." },
+  { title: "Creá tu cuenta", text: "Nombre, email y contraseña. En un minuto estás adentro." },
   { title: "Contanos cómo trabajás", text: "Tus servicios, cuánto duran y en qué horarios atendés. Son tres pasos cortos." },
   { title: "Compartí tu enlace", text: "Pegalo en tu Instagram o WhatsApp y empezá a recibir reservas en tu agenda." },
 ];
 
 const FAQS = [
-  { q: "¿Cómo funciona la prueba gratuita?", a: `Al registrarte tenés ${trialPolicy.trialDays} días con todas las funciones, sin cargar ninguna tarjeta. No se cobra nada automáticamente.` },
+  { q: "¿Cómo funciona la prueba gratuita?", a: `Al registrarte tenés ${trialPolicy.trialDays} días con todas las funciones. No se cobra nada automáticamente: al terminar, vos decidís si seguís.` },
   { q: "¿Qué pasa cuando termina la prueba?", a: `Tu cuenta queda en modo de solo lectura durante ${trialPolicy.readonlyGraceDays} días: seguís viendo tus turnos y clientes, pero no podés crear turnos nuevos ni recibir reservas hasta activar el plan. Nunca borramos tus datos automáticamente.` },
   { q: "¿Mis clientes tienen que registrarse o instalar algo?", a: "No. Entran a tu enlace, eligen servicio, día y horario, dejan su nombre y un contacto, y listo." },
   { q: "¿Cómo me entero de una reserva nueva?", a: "Aparece al instante en tu agenda y, si querés, también te avisamos por email." },
@@ -105,7 +105,7 @@ export default function LandingPage() {
               <ButtonLink size="lg" href="/registro">Probar {trialPolicy.trialDays} días gratis</ButtonLink>
               <ButtonLink size="lg" variant="outline" href="#como-funciona">Ver cómo funciona</ButtonLink>
             </div>
-            <p className="mt-4 text-sm text-muted-foreground">Sin tarjeta. Sin instalar nada. Cancelás cuando quieras.</p>
+            <p className="mt-4 text-sm text-muted-foreground">{trialPolicy.trialDays} días gratis. Sin instalar nada. Cancelás cuando quieras.</p>
           </div>
 
           <div className="relative mx-auto w-full max-w-md lg:max-w-none">
