@@ -342,6 +342,7 @@ model Notification {
   sentAt         DateTime?
   idempotencyKey String              @unique
   lockedUntil    DateTime? // reclamada por un worker hasta este instante
+  payload        Json? // datos extra del aviso (p. ej. { previousProfessionalId })
   createdAt      DateTime            @default(now())
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

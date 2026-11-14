@@ -18,6 +18,8 @@ export type AppointmentEmailContext = {
   organizationColor?: string;
   /** Quién atiende. Solo se informa en negocios con varios profesionales. */
   professionalName?: string | null;
+  /** Reprogramación que cambió al profesional: quién atendía antes. */
+  previousProfessionalName?: string | null;
 };
 
 type Rendered = { subject: string; html: string; text: string };
@@ -132,11 +134,18 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
       };
     case "reschedule":
       return {
-        subject: `Tu turno en ${ctx.organizationName} cambió de horario — ${when}`,
+        subject: ctx.previousProfessionalName
+          ? `Tu turno en ${ctx.organizationName} cambió de horario y de profesional — ${when}`
+          : `Tu turno en ${ctx.organizationName} cambió de horario — ${when}`,
         ...renderEmail({
           business,
           heading: "Tu turno fue reprogramado",
-          paragraphs: [`Hola ${ctx.customerName}, este es el nuevo horario de tu turno en ${ctx.organizationName}.`],
+          paragraphs: [
+            `Hola ${ctx.customerName}, este es el nuevo horario de tu turno en ${ctx.organizationName}.`,
+            ...(ctx.previousProfessionalName && ctx.professionalName
+              ? [`Con este horario, cambia quién te atiende: antes era ${ctx.previousProfessionalName} y ahora te atiende ${ctx.professionalName}.`]
+              : []),
+          ],
           details,
           action: manage,
           footer: customerFooter,

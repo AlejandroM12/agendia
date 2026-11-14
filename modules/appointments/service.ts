@@ -519,6 +519,7 @@ export async function rescheduleAppointment(params: {
           appointment: updated,
           customerEmail: current.customer.email,
           settings: organization,
+          previousProfessionalId: professional.id !== current.professionalId ? current.professionalId : undefined,
         });
         return updated;
       }, TX_OPTIONS),
@@ -589,7 +590,12 @@ export async function reassignAppointment(params: {
         await lockProfessionalAgenda(tx, professional.id);
         const updated = await tx.appointment.update({
           where: { id: current.id },
-          data: { professionalId: professional.id, professionalSelection: "specific", requestedProfessionalId: professional.id },
+          // Se respeta lo que el cliente pidió: quien eligió a alguien pasa a «elegir al nuevo»
+          // (no se restaura silenciosamente al anterior); quien eligió «cualquiera» sigue así.
+          data: {
+            professionalId: professional.id,
+            ...(current.professionalSelection === "specific" ? { requestedProfessionalId: professional.id } : {}),
+          },
         });
         await enqueueAppointmentNotifications(tx, {
           event: "reassigned",

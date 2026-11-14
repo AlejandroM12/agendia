@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { brand } from "@/lib/brand";
 import { isTeamModeEnabled } from "@/lib/features";
+import { usesTeam } from "@/modules/team/eligibility";
 import { isEmailConfigured, sendEmail } from "./email";
 import { renderAppointmentEmail } from "./templates";
 
@@ -21,9 +22,25 @@ async function showsProfessional(organization: { id: string; teamModeEnabled: bo
   if (!isTeamModeEnabled(organization)) return false;
   const cached = teamCache.get(organization.id);
   if (cached && Date.now() - cached.at < 60_000) return cached.value;
-  const value = (await db.professional.count({ where: { organizationId: organization.id, active: true } })) > 1;
+  const value = await usesTeam(db, organization);
   teamCache.set(organization.id, { value, at: Date.now() });
   return value;
+}
+
+/** Quién atendía antes, si este aviso de reprogramación lo registró (solo del mismo negocio). */
+async function previousProfessionalName(notification: {
+  type: string;
+  organizationId: string;
+  payload: unknown;
+}): Promise<string | null> {
+  if (notification.type !== "reschedule") return null;
+  const id = (notification.payload as { previousProfessionalId?: unknown } | null)?.previousProfessionalId;
+  if (typeof id !== "string") return null;
+  const previous = await db.professional.findFirst({
+    where: { id, organizationId: notification.organizationId },
+    select: { displayName: true },
+  });
+  return previous?.displayName ?? null;
 }
 
 export type ProcessSummary = { claimed: number; sent: number; failed: number; retried: number; skipped: number; canceled: number };
@@ -112,6 +129,7 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
       dashboardUrl: `${brand.url}/dashboard/turnos/${appointment.id}`,
       organizationColor: organization.themePrimary,
       professionalName: (await showsProfessional(organization)) ? appointment.professional.displayName : null,
+      previousProfessionalName: await previousProfessionalName(notification),
     });
 
     // Los avisos al cliente salen con el nombre del negocio como remitente.

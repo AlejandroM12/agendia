@@ -13,13 +13,14 @@ import { addDays, formatDateLong, formatTime, todayInTz, toZoned } from "@/lib/t
  * `discreet` tampoco nombra al profesional.
  */
 
-export type WhatsAppKind = "contact" | "confirmation" | "reminder" | "reschedule" | "cancellation";
+export type WhatsAppKind = "contact" | "confirmation" | "reminder" | "reschedule" | "professional_change" | "cancellation";
 
 export const WHATSAPP_KIND_LABEL: Record<WhatsAppKind, string> = {
   contact: "Escribir un mensaje",
   confirmation: "Enviar confirmación",
   reminder: "Enviar recordatorio",
   reschedule: "Avisar el cambio de horario",
+  professional_change: "Avisar el cambio de profesional",
   cancellation: "Avisar la cancelación",
 };
 
@@ -126,6 +127,20 @@ export function buildWhatsAppMessage(kind: WhatsAppKind, input: MessageInput): s
         "Disculpá las molestias.",
       ].join("\n");
 
+    case "professional_change":
+      return [
+        `${greeting} Te escribimos de ${input.businessName} para avisarte que tu turno sigue ${when.relative} a las ${when.time}, pero cambió quién te atiende${input.professionalName && !input.discreet ? `: ahora te atiende ${input.professionalName}` : ""}.`,
+        "",
+        ...detailLines(input),
+        "",
+        "Podés consultarlo o gestionarlo desde el siguiente enlace:",
+        "",
+        input.manageUrl,
+        ...(contactLine(input).length ? ["", ...contactLine(input)] : []),
+        "",
+        "Disculpá las molestias.",
+      ].join("\n");
+
     case "cancellation":
       return [
         `${greeting} Te escribimos de ${input.businessName} para avisarte que tu turno ${when.relative} a las ${when.time} fue cancelado.`,
@@ -145,9 +160,16 @@ export function buildWhatsAppMessage(kind: WhatsAppKind, input: MessageInput): s
  * cancelación solo en turnos cancelados; confirmación, recordatorio y aviso
  * de cambio, solo en turnos confirmados que todavía no pasaron.
  */
-export function availableKinds(appointment: { status: string; startsAt: Date }, now: Date = new Date()): WhatsAppKind[] {
+export function availableKinds(
+  appointment: { status: string; startsAt: Date },
+  now: Date = new Date(),
+  /** El negocio trabaja con varios profesionales: tiene sentido avisar un cambio de profesional. */
+  team = false,
+): WhatsAppKind[] {
   const upcoming = appointment.startsAt.getTime() > now.getTime();
   if (appointment.status === "canceled") return upcoming ? ["contact", "cancellation"] : ["contact"];
-  if (appointment.status === "confirmed" && upcoming) return ["confirmation", "reminder", "reschedule", "contact"];
+  if (appointment.status === "confirmed" && upcoming) {
+    return team ? ["confirmation", "reminder", "reschedule", "professional_change", "contact"] : ["confirmation", "reminder", "reschedule", "contact"];
+  }
   return ["contact"];
 }

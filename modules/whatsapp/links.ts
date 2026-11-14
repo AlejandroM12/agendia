@@ -44,7 +44,7 @@ export function buildWhatsAppActions(params: {
     now: params.now,
   };
 
-  const options = availableKinds(appointment, params.now).map((kind) => ({
+  const options = availableKinds(appointment, params.now, Boolean(params.professionalName)).map((kind) => ({
     kind,
     label: WHATSAPP_KIND_LABEL[kind],
     url: whatsAppUrl(number.digits, buildWhatsAppMessage(kind, base)),

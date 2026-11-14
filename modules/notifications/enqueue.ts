@@ -36,6 +36,8 @@ export async function enqueueAppointmentNotifications(
     appointment: AppointmentRef;
     customerEmail: string | null;
     settings: OrgNotificationSettings;
+    /** Reprogramación que cambió al profesional: el aviso al cliente lo dice expresamente. */
+    previousProfessionalId?: string;
     now?: Date;
   },
 ): Promise<void> {
@@ -60,6 +62,9 @@ export async function enqueueAppointmentNotifications(
       recipient,
       scheduledFor,
       idempotencyKey: `${appointment.id}:${type}:${recipient}:${revision}`,
+      ...(type === "reschedule" && params.previousProfessionalId
+        ? { payload: { previousProfessionalId: params.previousProfessionalId } }
+        : {}),
     });
 
   if (customerEmail) {

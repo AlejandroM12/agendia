@@ -64,6 +64,77 @@ export async function getOrCreatePrimaryProfessional(client: Client, organizatio
   });
 }
 
+/**
+ * Quiénes pueden atender un servicio entre los profesionales activos (en el
+ * orden del equipo). Es la única regla de elegibilidad: la usan la reserva, la
+ * agenda interna y lo que la página pública muestra.
+ */
+export function eligiblePool(
+  service: { allProfessionals: boolean; professionals: Array<{ professionalId: string }> },
+  active: TeamProfessional[],
+  organization: OrgRef,
+  audience: "public" | "internal",
+): TeamProfessional[] {
+  const linked = new Set(service.professionals.map((link) => link.professionalId));
+  let pool = active.filter((p) => service.allProfessionals || linked.has(p.id));
+  if (audience === "public") pool = pool.filter((p) => p.bookableOnline);
+  if (!isTeamModeEnabled(organization)) pool = pool.filter((p) => p.id === active[0]?.id);
+  return pool;
+}
+
+/** Lo único de un profesional que la página pública puede mostrar: nada de contacto ni de configuración interna. */
+export type PublicProfessional = {
+  id: string;
+  displayName: string;
+  description: string | null;
+  photoImageId: string | null;
+};
+
+export type PublicTeam = {
+  /** Profesionales que atienden al menos un servicio online, en el orden definido por el negocio. */
+  professionals: PublicProfessional[];
+  /** Para cada servicio activo, quiénes lo atienden online (en orden). Vacío = no se puede reservar. */
+  byService: Record<string, string[]>;
+};
+
+/**
+ * Equipo visible en la reserva pública. Se calcula con la misma regla que
+ * valida la reserva en el servidor (`eligiblePool`), así que la página nunca
+ * ofrece a alguien que la reserva después rechazaría.
+ */
+export async function listPublicTeam(client: Client, organization: OrgRef): Promise<PublicTeam> {
+  const [active, services] = await Promise.all([
+    listActiveProfessionals(client, organization.id),
+    client.service.findMany({
+      where: { organizationId: organization.id, active: true },
+      select: { id: true, allProfessionals: true, professionals: { select: { professionalId: true } } },
+    }),
+  ]);
+  const byService: Record<string, string[]> = {};
+  const used = new Set<string>();
+  for (const service of services) {
+    const pool = eligiblePool(service, active, organization, "public");
+    byService[service.id] = pool.map((p) => p.id);
+    for (const p of pool) used.add(p.id);
+  }
+  return {
+    professionals: active
+      .filter((p) => used.has(p.id))
+      .map((p) => ({ id: p.id, displayName: p.displayName, description: p.description, photoImageId: p.photoImageId })),
+    byService,
+  };
+}
+
+/**
+ * ¿El negocio trabaja con equipo? Modo equipo encendido y más de un
+ * profesional activo. Solo entonces se nombra al profesional en correos,
+ * mensajes y pantallas; con uno solo todo queda como siempre.
+ */
+export async function usesTeam(client: Client, organization: OrgRef): Promise<boolean> {
+  if (!isTeamModeEnabled(organization)) return false;
+  return (await client.professional.count({ where: { organizationId: organization.id, active: true } })) > 1;
+}
+
 export type ProfessionalChoice = string | "any" | null | undefined;
 
 export type EligibleResult =
@@ -102,10 +173,7 @@ export async function resolveEligibleProfessionals(
   if (!service) return { ok: false, reason: "service_not_found" };
 
   const active = await listActiveProfessionals(client, organization.id);
-  const linked = new Set(service.professionals.map((link) => link.professionalId));
-  let pool = active.filter((p) => service.allProfessionals || linked.has(p.id));
-  if (audience === "public") pool = pool.filter((p) => p.bookableOnline);
-  if (!isTeamModeEnabled(organization)) pool = pool.filter((p) => p.id === active[0]?.id);
+  const pool = eligiblePool(service, active, organization, audience);
 
   if (pool.length === 0) return { ok: false, reason: "none_eligible" };
 

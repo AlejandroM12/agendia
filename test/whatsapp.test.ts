@@ -201,7 +201,7 @@ describe("acciones de WhatsApp de un turno", () => {
     const actions = buildWhatsAppActions({ organization, appointment, customer: { name: "Nicolás", phone: "11 5555-0000" }, professionalName: "Lucas", now });
     expect(actions.status).toBe("ok");
     if (actions.status !== "ok") return;
-    expect(actions.options.map((o) => o.kind)).toEqual(["confirmation", "reminder", "reschedule", "contact"]);
+    expect(actions.options.map((o) => o.kind)).toEqual(["confirmation", "reminder", "reschedule", "professional_change", "contact"]); // con equipo se suma el aviso de cambio de profesional
     for (const option of actions.options) {
       expect(option.url.startsWith("https://wa.me/5491155550000?text=")).toBe(true);
       expect(option.discreetUrl.startsWith("https://wa.me/5491155550000?text=")).toBe(true);
