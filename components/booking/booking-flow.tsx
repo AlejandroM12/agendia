@@ -26,6 +26,18 @@ export type BookableService = {
   price: number | null;
 };
 
+/**
+ * Identifica este formulario: un reintento o un doble clic envía la misma
+ * clave y el servidor devuelve la misma reserva en lugar de crear otra.
+ * Reservas distintas (dos formularios) tienen claves distintas.
+ */
+function newSubmissionKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export function BookingFlow({
   slug,
   businessName,
@@ -45,6 +57,7 @@ export function BookingFlow({
   // elegido se ocupa y hay que elegir otro, el paso «Tus datos» desaparece
   // un momento de la pantalla, pero lo escrito no se pierde.
   const [contact, setContact] = useState({ name: "", email: "", phone: "" });
+  const [submissionKey] = useState(newSubmissionKey);
   const [conflict, setConflict] = useState<string | null>(null);
   const form = useForm(bookAppointmentAction, {
     // El mismo esquema con el que valida el servidor.
@@ -198,6 +211,7 @@ export function BookingFlow({
             <input type="hidden" name="slug" value={slug} />
             <input type="hidden" name="serviceId" value={service.id} />
             <input type="hidden" name="slot" value={slot.iso} />
+            <input type="hidden" name="idempotencyKey" value={submissionKey} />
             {/* Campo trampa anti-bots: invisible para personas y lectores de pantalla. */}
             <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
               <label>

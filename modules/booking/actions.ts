@@ -9,11 +9,12 @@ import { canPerformWriteActions } from "@/lib/organization-access";
 import { clientIp, rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
 import { addDays, formatTime, isValidDateStr, todayInTz } from "@/lib/time";
 import { cancelAppointment, createAppointment, rescheduleAppointment } from "@/modules/appointments/service";
-import { getAvailability } from "@/modules/availability/queries";
+import { getTeamAvailability, unionSlots } from "@/modules/availability/queries";
 import { bookingContactSchema } from "@/modules/customers/schema";
 import { isEmailConfigured } from "@/modules/notifications/email";
 import { normalizeLookupEmail, requestAppointmentsLink } from "@/modules/public-page/lookup";
 import { resolvePublicSlug } from "@/modules/public-page/slug";
+import { resolveEligibleProfessionals, type ProfessionalChoice } from "@/modules/team/eligibility";
 
 /**
  * Acciones de la página pública de reservas. No hay sesión: todo se valida
@@ -33,23 +34,38 @@ async function findBookableOrganization(slug: string): Promise<Organization | nu
   return canPerformWriteActions(organization) ? organization : null;
 }
 
+/**
+ * Elección de profesional que llega del navegador: un identificador, «any» o
+ * nada. Es un dato no confiable: acá solo se normaliza; la validación real
+ * (activo, de esta organización, que realice el servicio, que acepte reservas
+ * online) la hace `resolveEligibleProfessionals`.
+ */
+function parseChoice(value: unknown): ProfessionalChoice {
+  if (typeof value !== "string" || value === "") return undefined;
+  return value === "any" ? "any" : value.slice(0, 64);
+}
+
 async function availabilityFor(
   organization: Organization,
   durationMinutes: number,
   fromDateStr: string | undefined,
+  professionalIds: string[],
   ignoreAppointmentId?: string,
 ): Promise<PublicAvailability> {
   const today = todayInTz(organization.timezone);
   const lastDay = addDays(today, organization.maxAdvanceDays);
   const from = isValidDateStr(fromDateStr) && fromDateStr >= today && fromDateStr <= lastDay ? fromDateStr : today;
 
-  const days = await getAvailability({
-    organization,
-    durationMinutes,
-    fromDateStr: from,
-    days: WINDOW_DAYS,
-    ignoreAppointmentId,
-  });
+  const days = unionSlots(
+    await getTeamAvailability({
+      organization,
+      professionalIds,
+      durationMinutes,
+      fromDateStr: from,
+      days: WINDOW_DAYS,
+      ignoreAppointmentId,
+    }),
+  );
 
   return {
     ok: true,
@@ -67,6 +83,7 @@ export async function getPublicAvailabilityAction(
   slug: string,
   serviceId: string,
   fromDateStr?: string,
+  professionalId?: string,
 ): Promise<PublicAvailability> {
   const ip = await clientIp();
   if (!(await rateLimit(`availability:${ip}`, 120, 60)).allowed) return { ok: false, message: TOO_MANY_ATTEMPTS };
@@ -76,11 +93,24 @@ export async function getPublicAvailabilityAction(
 
   const service = await db.service.findFirst({
     where: { id: String(serviceId), organizationId: organization.id, active: true },
-    select: { durationMinutes: true },
+    select: { id: true, durationMinutes: true },
   });
   if (!service) return { ok: false, message: "El servicio ya no está disponible." };
 
-  return availabilityFor(organization, service.durationMinutes, fromDateStr);
+  const eligible = await resolveEligibleProfessionals(db, {
+    organization,
+    serviceId: service.id,
+    audience: "public",
+    choice: parseChoice(professionalId),
+  });
+  if (!eligible.ok) return { ok: false, message: "Ese profesional no está disponible para este servicio." };
+
+  return availabilityFor(
+    organization,
+    service.durationMinutes,
+    fromDateStr,
+    eligible.professionals.map((p) => p.id),
+  );
 }
 
 const bookingSchema = z.object({
@@ -136,6 +166,9 @@ export async function bookAppointmentAction(_prev: BookingState, formData: FormD
     startsAt: new Date(base.data.slot),
     customer: { name: customer.data.name, email: customer.data.email, phone: customer.data.phone },
     actor: "customer",
+    professional: parseChoice(formData.get("professionalId")),
+    // Un reintento o doble envío del mismo formulario no crea un segundo turno.
+    idempotencyKey: typeof formData.get("idempotencyKey") === "string" ? String(formData.get("idempotencyKey")) : null,
   });
 
   if (!result.ok) return { ok: false, message: result.message, refresh: true };
@@ -173,7 +206,21 @@ export async function getRescheduleAvailabilityAction(token: string, fromDateStr
   if (!canPerformWriteActions(appointment.organization)) return { ok: false, message: NOT_BOOKABLE };
 
   const duration = Math.round((appointment.endsAt.getTime() - appointment.startsAt.getTime()) / 60000);
-  return availabilityFor(appointment.organization, duration, fromDateStr, appointment.id);
+  // El cliente que eligió un profesional conserva ese profesional; con «cualquiera», todos los elegibles.
+  const eligible = await resolveEligibleProfessionals(db, {
+    organization: appointment.organization,
+    serviceId: appointment.serviceId,
+    audience: "public",
+    choice: appointment.professionalSelection === "any" ? "any" : (appointment.requestedProfessionalId ?? appointment.professionalId),
+  });
+  if (!eligible.ok) return { ok: false, message: NOT_BOOKABLE };
+  return availabilityFor(
+    appointment.organization,
+    duration,
+    fromDateStr,
+    eligible.professionals.map((p) => p.id),
+    appointment.id,
+  );
 }
 
 export async function rescheduleByTokenAction(token: string, slotIso: string): Promise<ManageState> {
