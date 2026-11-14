@@ -2,6 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { brand } from "@/lib/brand";
+import { isTeamModeEnabled } from "@/lib/features";
 import { isEmailConfigured, sendEmail } from "./email";
 import { renderAppointmentEmail } from "./templates";
 
@@ -9,6 +10,21 @@ const MAX_ATTEMPTS = 5;
 const LOCK_MINUTES = 5;
 /** Espera antes de cada reintento, según la cantidad de intentos ya hechos. */
 const BACKOFF_MINUTES = [1, 5, 15, 60];
+
+/**
+ * ¿Hay que decir quién atiende? Solo en negocios que usan equipos (modo
+ * encendido y más de un profesional activo): con uno solo, los correos
+ * quedan exactamente como siempre.
+ */
+const teamCache = new Map<string, { value: boolean; at: number }>();
+async function showsProfessional(organization: { id: string; teamModeEnabled: boolean }): Promise<boolean> {
+  if (!isTeamModeEnabled(organization)) return false;
+  const cached = teamCache.get(organization.id);
+  if (cached && Date.now() - cached.at < 60_000) return cached.value;
+  const value = (await db.professional.count({ where: { organizationId: organization.id, active: true } })) > 1;
+  teamCache.set(organization.id, { value, at: Date.now() });
+  return value;
+}
 
 export type ProcessSummary = { claimed: number; sent: number; failed: number; retried: number; skipped: number; canceled: number };
 
@@ -45,7 +61,7 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
       where: { id },
       include: {
         organization: true,
-        appointment: { include: { service: true, customer: true } },
+        appointment: { include: { service: true, customer: true, professional: { select: { displayName: true } } } },
       },
     });
     if (!notification || notification.status !== "pending") continue;
@@ -95,6 +111,7 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
       manageUrl: `${brand.url}/turno/${appointment.manageToken}`,
       dashboardUrl: `${brand.url}/dashboard/turnos/${appointment.id}`,
       organizationColor: organization.themePrimary,
+      professionalName: (await showsProfessional(organization)) ? appointment.professional.displayName : null,
     });
 
     // Los avisos al cliente salen con el nombre del negocio como remitente.

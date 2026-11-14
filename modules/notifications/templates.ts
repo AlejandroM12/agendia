@@ -16,6 +16,8 @@ export type AppointmentEmailContext = {
   dashboardUrl: string;
   /** Color principal de la página pública del negocio (hexadecimal validado). */
   organizationColor?: string;
+  /** Quién atiende. Solo se informa en negocios con varios profesionales. */
+  professionalName?: string | null;
 };
 
 type Rendered = { subject: string; html: string; text: string };
@@ -88,12 +90,14 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
     ["Servicio", `${ctx.serviceName} (${formatDuration(ctx.durationMinutes)})`],
     ["Cuándo", when],
   ];
+  if (ctx.professionalName) details.splice(1, 0, ["Profesional", ctx.professionalName]);
   if (ctx.organizationAddress) details.push(["Dónde", ctx.organizationAddress]);
   if (ctx.organizationPhone) details.push(["Contacto", ctx.organizationPhone]);
 
   const ownerDetails: Array<[string, string]> = [
     ["Cliente", ctx.customerName],
     ["Servicio", `${ctx.serviceName} (${formatDuration(ctx.durationMinutes)})`],
+    ...(ctx.professionalName ? ([["Profesional", ctx.professionalName]] as Array<[string, string]>) : []),
     ["Cuándo", when],
   ];
 
