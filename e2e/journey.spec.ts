@@ -22,9 +22,9 @@ test("recorrido completo: registro → onboarding → agenda → reserva públic
   await expect(page).toHaveURL(/\/registro/);
   await page.getByLabel("Tu nombre").fill("Ana Prueba");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Contraseña").fill("Contrasena123");
+  await page.getByLabel("Contraseña", { exact: true }).fill("Contrasena123");
   await shot(page, "02-registro");
-  await page.getByRole("button", { name: "Empezar gratis" }).click();
+  await page.getByRole("button", { name: "Crear mi cuenta gratis" }).click();
 
   // 3. Onboarding en tres pasos.
   await expect(page).toHaveURL(/\/onboarding/);

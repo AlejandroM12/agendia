@@ -26,8 +26,8 @@ export async function registerAndOnboard(page: Page, email: string, business: st
   await page.goto("/registro");
   await page.getByLabel("Tu nombre").fill("Ana Prueba");
   await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Contraseña").fill("Contrasena123");
-  await page.getByRole("button", { name: "Empezar gratis" }).click();
+  await page.getByLabel("Contraseña", { exact: true }).fill("Contrasena123");
+  await page.getByRole("button", { name: "Crear mi cuenta gratis" }).click();
   await expect(page).toHaveURL(/\/onboarding/);
   await page.getByLabel("¿Cómo se llama tu negocio?").fill(business);
   await page.getByLabel("¿A qué te dedicás?").selectOption("otro");
