@@ -14,6 +14,7 @@ import { type AccountOperation, accountOperationAction } from "@/modules/admin/a
 import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
 import { getMonthlyPlan } from "@/modules/billing/subscriptions";
 import { isEmailConfigured } from "@/modules/notifications/email";
+import { getDailyEmailUsage, getUsageByOrganization, monthRange, totalUsage } from "@/modules/system/usage";
 
 export const metadata: Metadata = { title: "Plataforma", robots: { index: false } };
 
@@ -58,7 +59,8 @@ export default async function AdminPage(props: PageProps<"/admin">) {
   weekAgo.setDate(weekAgo.getDate() - 7);
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 80) : "";
 
-  const [organizations, grouped, plan, failedNotifications, failedEvents, audit, licenseOrders] = await Promise.all([
+  const range = monthRange();
+  const [organizations, grouped, plan, failedNotifications, failedEvents, audit, licenseOrders, usage, dailyEmails] = await Promise.all([
     db.organization.findMany({
       where: q
         ? {
@@ -83,7 +85,10 @@ export default async function AdminPage(props: PageProps<"/admin">) {
     db.paymentEvent.count({ where: { processedAt: null } }),
     db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 15 }),
     db.licenseOrder.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
+    getUsageByOrganization(range, 15),
+    getDailyEmailUsage(range),
   ]);
+  const usageTotals = totalUsage(usage);
 
   const total = grouped.reduce((sum, g) => sum + g._count, 0);
   const count = (status: OrganizationStatus) => grouped.find((g) => g.status === status)?._count ?? 0;
@@ -189,6 +194,54 @@ export default async function AdminPage(props: PageProps<"/admin">) {
         description="Es lo que se cobra en las suscripciones que se inicien a partir de ahora. El precio que muestra la landing se define con PRICE_MONTHLY en .env.production y se aplica en el próximo despliegue: mantenelos iguales."
       >
         <PlanPriceForm price={plan.price} currency={plan.currency} />
+      </Section>
+
+      <Section
+        title="Consumo del mes"
+        description="Correos y turnos por negocio en el mes en curso (UTC). Los correos son el único costo variable (Resend); un correo fallido o reintentado cuenta como consumo."
+      >
+        <p className="mb-3 text-sm text-muted-foreground">
+          Total: <strong className="text-foreground">{usageTotals.sent}</strong> correos enviados ·{" "}
+          <strong className="text-foreground">{usageTotals.failed}</strong> fallidos ·{" "}
+          <strong className="text-foreground">{usageTotals.retried}</strong> con reintentos ·{" "}
+          <strong className="text-foreground">{usageTotals.appointments}</strong> turnos creados
+          {dailyEmails.length > 0 && (
+            <>
+              {" "}
+              · último día con envíos: {dailyEmails[dailyEmails.length - 1].day} ({dailyEmails[dailyEmails.length - 1].sent})
+            </>
+          )}
+        </p>
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-border text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">Negocio</th>
+                <th className="px-4 py-3 text-right font-medium">Profesionales activos</th>
+                <th className="px-4 py-3 text-right font-medium">Turnos</th>
+                <th className="px-4 py-3 text-right font-medium">Correos enviados</th>
+                <th className="px-4 py-3 text-right font-medium">Fallidos</th>
+                <th className="px-4 py-3 text-right font-medium">Reintentos</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {usage.map((row) => (
+                <tr key={row.organizationId}>
+                  <td className="px-4 py-3">
+                    <p className="font-medium">{row.name}</p>
+                    <p className="text-xs text-muted-foreground">/{row.slug}</p>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">{row.activeProfessionals}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{row.appointmentsCreated}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{row.emails.sent}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{row.emails.failed}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{row.emails.retried}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {usage.length === 0 && <p className="px-4 py-6 text-sm text-muted-foreground">Todavía no hay consumo este mes.</p>}
+        </div>
       </Section>
 
       <Section

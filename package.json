@@ -12,6 +12,8 @@
     "test:e2e": "playwright test",
     "worker": "node scripts/worker.mjs",
     "admin:grant": "node scripts/grant-admin.mjs",
+    "team:mode": "node scripts/team-mode.mjs",
+    "team:verify": "node scripts/verify-team-data.mjs",
     "support:reset-link": "node scripts/create-reset-link.mjs",
     "email:test": "node scripts/send-test-email.mjs",
     "db:migrate": "prisma migrate dev",
