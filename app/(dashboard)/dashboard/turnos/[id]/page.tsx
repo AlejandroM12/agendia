@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Check, Mail, MessageCircle, Phone, RotateCcw, UserX } from "lucide-react";
+import { Check, Mail, Phone, RotateCcw, UserX } from "lucide-react";
 import {
   CancelAppointmentButton,
   NotesForm,
+  ReassignForm,
   RescheduleForm,
 } from "@/components/appointments/appointment-actions";
+import { WhatsAppMenu } from "@/components/appointments/whatsapp-menu";
 import { StatusBadge } from "@/components/appointments/status";
 import { Button } from "@/components/ui/button";
 import { ButtonLink } from "@/components/ui/button-link";
@@ -14,20 +16,25 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
+import { isTeamModeEnabled } from "@/lib/features";
+import { can } from "@/lib/permissions";
 import { formatMoney } from "@/lib/brand";
 import { formatDateLong, formatDuration, formatTime, toZoned } from "@/lib/time";
 import { setOutcomeAction } from "@/modules/appointments/actions";
+import { listActiveProfessionals } from "@/modules/team/eligibility";
+import { getReassignOptions } from "@/modules/team/team-admin";
+import { buildWhatsAppActions } from "@/modules/whatsapp/links";
 
 export const metadata: Metadata = { title: "Turno" };
 
 export default async function AppointmentPage(props: PageProps<"/dashboard/turnos/[id]">) {
-  const { organization, canWrite } = await requireOrganization();
+  const { organization, canWrite, role } = await requireOrganization();
   const { id } = await props.params;
   const tz = organization.timezone;
 
   const appointment = await db.appointment.findFirst({
     where: { id, organizationId: organization.id },
-    include: { customer: true, service: true },
+    include: { customer: true, service: true, professional: { select: { id: true, displayName: true, color: true } } },
   });
   if (!appointment) notFound();
 
@@ -35,10 +42,17 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
   const dateStr = toZoned(appointment.startsAt, tz).dateStr;
   const duration = Math.round((appointment.endsAt.getTime() - appointment.startsAt.getTime()) / 60000);
   const started = appointment.startsAt <= new Date();
-  const whatsapp = customer.phone
-    ? `https://wa.me/${customer.phone.replace(/\D/g, "")}?text=${encodeURIComponent(
-        `Hola ${customer.name}, te escribo de ${organization.name} por tu turno del ${formatDateLong(dateStr)} a las ${formatTime(appointment.startsAt, tz)}.`,
-      )}`
+  // Con varios profesionales activos se muestra quién atiende y se puede reasignar.
+  const multi = isTeamModeEnabled(organization) && (await listActiveProfessionals(db, organization.id)).length > 1;
+  const upcoming = appointment.status === "confirmed" && appointment.startsAt > new Date();
+  const reassignOptions = multi && upcoming && canWrite ? await getReassignOptions(organization, appointment.id) : [];
+  const whatsapp = can(role, "customers.contact")
+    ? buildWhatsAppActions({
+        organization,
+        appointment,
+        customer,
+        professionalName: multi ? appointment.professional.displayName : null,
+      })
     : null;
 
   return (
@@ -58,6 +72,15 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
           {service.name} · {formatDuration(duration)}
           {appointment.price !== null && ` · ${formatMoney(appointment.price)}`}
         </p>
+        {multi && (
+          <p className="mt-1 flex items-center gap-2 text-sm">
+            <span aria-hidden="true" className="size-2.5 rounded-full" style={{ backgroundColor: appointment.professional.color }} />
+            <span>
+              Atiende <strong className="font-medium">{appointment.professional.displayName}</strong>
+              {appointment.professionalSelection === "any" && <span className="text-muted-foreground"> (asignado automáticamente)</span>}
+            </span>
+          </p>
+        )}
         <p className="mt-1 text-sm text-muted-foreground">
           {appointment.source === "public_booking" ? "Reservado online por el cliente" : "Agendado por vos"}
           {appointment.status === "canceled" &&
@@ -83,7 +106,7 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
                   </form>
                 </>
               )}
-              <RescheduleForm appointmentId={appointment.id} serviceId={service.id} defaultDate={dateStr} />
+              <RescheduleForm appointmentId={appointment.id} serviceId={service.id} defaultDate={dateStr} professionalId={multi ? appointment.professional.id : undefined} />
               <CancelAppointmentButton appointmentId={appointment.id} hasEmail={Boolean(customer.email)} />
             </>
           ) : (
@@ -103,19 +126,11 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
               Ver ficha e historial
             </Link>
             {customer.phone && (
-              <div className="flex flex-wrap gap-2 pt-1">
-                <ButtonLink
-                  variant="outline"
-                  size="sm" href={`tel:${customer.phone}`}>
-                      <Phone aria-hidden="true" /> {customer.phone}
-                    </ButtonLink>
-                {whatsapp && (
-                  <ButtonLink
-                    variant="outline"
-                    size="sm" href={whatsapp} target="_blank" rel="noopener noreferrer">
-                        <MessageCircle aria-hidden="true" /> Escribir por WhatsApp
-                      </ButtonLink>
-                )}
+              <div className="flex flex-wrap items-start gap-2 pt-1">
+                <ButtonLink variant="outline" size="sm" href={`tel:${customer.phone}`}>
+                  <Phone aria-hidden="true" /> {customer.phone}
+                </ButtonLink>
+                {whatsapp && <WhatsAppMenu actions={whatsapp} showDiscreet />}
               </div>
             )}
             {customer.email && (
@@ -130,6 +145,12 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
             )}
           </div>
         </Section>
+
+        {reassignOptions.length > 0 || (multi && upcoming && canWrite) ? (
+          <Section title="Profesional" description="Pasá este turno a otro profesional, en el mismo día y horario.">
+            <ReassignForm appointmentId={appointment.id} options={reassignOptions} />
+          </Section>
+        ) : null}
 
         <Section title="Nota interna">
           <NotesForm appointmentId={appointment.id} notes={appointment.notes} disabled={!canWrite} />

@@ -421,31 +421,37 @@ export type AffectedAppointment = {
   options: Array<{ id: string; displayName: string }>;
 };
 
+type AffectedSource = {
+  id: string;
+  startsAt: Date;
+  endsAt: Date;
+  customer: { name: string; email: string | null };
+  service: { name: string; allProfessionals: boolean; professionals: Array<{ professionalId: string }> };
+};
+
+const AFFECTED_SELECT = {
+  id: true,
+  startsAt: true,
+  endsAt: true,
+  customer: { select: { name: true, email: true } },
+  service: { select: { name: true, allProfessionals: true, professionals: { select: { professionalId: true } } } },
+} as const;
+
 /**
- * Turnos futuros confirmados de un profesional, con a quién se podrían pasar
- * (activos, que realicen el servicio y con ese horario libre). La
- * disponibilidad se calcula agrupada por día y duración: una consulta por
- * grupo, no una por turno ni por profesional.
+ * Arma, para cada turno, a quién se podría pasar (profesionales activos que
+ * realizan el servicio y tienen ese horario libre). La disponibilidad se
+ * calcula agrupada por día y duración: una consulta por grupo, no una por
+ * turno ni por profesional.
  */
-export async function listAffectedAppointments(
+async function withReassignOptions(
   organization: Organization,
-  professionalId: string,
-  now: Date = new Date(),
+  appointments: AffectedSource[],
+  excludeProfessionalId: string,
 ): Promise<AffectedAppointment[]> {
-  const appointments = await db.appointment.findMany({
-    where: { organizationId: organization.id, professionalId, status: "confirmed", startsAt: { gt: now } },
-    orderBy: { startsAt: "asc" },
-    take: 500,
-    select: {
-      id: true, startsAt: true, endsAt: true, serviceId: true,
-      customer: { select: { name: true, email: true } },
-      service: { select: { name: true, allProfessionals: true, professionals: { select: { professionalId: true } } } },
-    },
-  });
   if (appointments.length === 0) return [];
 
   const others = await db.professional.findMany({
-    where: { organizationId: organization.id, active: true, id: { not: professionalId } },
+    where: { organizationId: organization.id, active: true, id: { not: excludeProfessionalId } },
     orderBy: [...PROFESSIONAL_ORDER],
     select: { id: true, displayName: true },
   });
@@ -486,6 +492,36 @@ export async function listAffectedAppointments(
       options: others.filter((o) => free.has(o.id) && (a.service.allProfessionals || performs.has(o.id))),
     };
   });
+}
+
+/** Turnos futuros confirmados de un profesional, con a quién se podrían pasar. */
+export async function listAffectedAppointments(
+  organization: Organization,
+  professionalId: string,
+  now: Date = new Date(),
+): Promise<AffectedAppointment[]> {
+  const appointments = await db.appointment.findMany({
+    where: { organizationId: organization.id, professionalId, status: "confirmed", startsAt: { gt: now } },
+    orderBy: { startsAt: "asc" },
+    take: 500,
+    select: AFFECTED_SELECT,
+  });
+  return withReassignOptions(organization, appointments, professionalId);
+}
+
+/** A quién se puede pasar un turno concreto (vacío si ya pasó o no está confirmado). */
+export async function getReassignOptions(
+  organization: Organization,
+  appointmentId: string,
+  now: Date = new Date(),
+): Promise<Array<{ id: string; displayName: string }>> {
+  const appointment = await db.appointment.findFirst({
+    where: { id: appointmentId, organizationId: organization.id, status: "confirmed", startsAt: { gt: now } },
+    select: { ...AFFECTED_SELECT, professionalId: true },
+  });
+  if (!appointment) return [];
+  const [result] = await withReassignOptions(organization, [appointment], appointment.professionalId);
+  return result?.options ?? [];
 }
 
 export type BulkOutcome = { done: number; failed: Array<{ appointmentId: string; message: string }> };
