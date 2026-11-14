@@ -1,13 +1,13 @@
 import { db } from "@/lib/db";
 
-/** Normaliza un nombre a un slug apto para `/reservar/[slug]`. */
+/** Normaliza un texto a un identificador de URL: sin acentos, en minúsculas y con guiones. */
 export function slugify(value: string): string {
   return value
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "") // quita acentos
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[^a-z0-9\s_-]/g, "")
     .replace(/[\s_-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
@@ -19,10 +19,12 @@ export function slugify(value: string): string {
  */
 export const RESERVED_SLUGS = new Set([
   "admin", "api", "app", "agenda", "ayuda", "blog", "cancelar", "clientes", "configuracion",
-  "contacto", "dashboard", "docs", "facturacion", "favicon.ico", "health", "inicio", "legal",
-  "licencia", "licencias", "verificar-email", "login", "logout", "olvide-contrasena", "onboarding", "pagos", "planes", "precios",
-  "privacidad", "registro", "reprogramar", "reservar", "restablecer-contrasena", "robots.txt",
-  "servicios", "sitemap.xml", "soporte", "static", "terminos", "turno", "turnos", "_next",
+  "contacto", "dashboard", "docs", "facturacion", "favicon.ico", "health", "icon.svg", "inicio",
+  "legal", "licencia", "licencias", "login", "logout", "media", "mis-turnos", "og",
+  "olvide-contrasena", "onboarding", "pagina", "pagos", "planes", "precios", "privacidad",
+  "registro", "reprogramar", "reservar", "restablecer-contrasena", "robots.txt", "servicios",
+  "sitemap.xml", "soporte", "static", "terminos", "turno", "turnos", "verificar-email",
+  "vista-previa", "_next",
 ]);
 
 export function isValidSlugFormat(slug: string): boolean {
@@ -46,7 +48,9 @@ export async function generateUniqueOrganizationSlug(
     (await db.organization.findUnique({
       where: { slug: candidate },
       select: { id: true },
-    }))
+    })) ||
+    // Un enlace anterior de otro negocio sigue reservado para ese negocio.
+    (await db.organizationSlugAlias.findUnique({ where: { slug: candidate }, select: { slug: true } }))
   ) {
     attempt += 1;
     candidate = `${base}-${attempt}`;

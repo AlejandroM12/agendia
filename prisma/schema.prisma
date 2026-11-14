@@ -52,6 +52,21 @@ model Organization {
 
   onboardingCompletedAt DateTime?
 
+  // Página pública personalizable (ver lib/theme.ts y modules/public-page).
+  // Los colores son hexadecimales validados; la tipografía, una de las
+  // opciones predefinidas. Nunca se guarda CSS ni HTML del usuario.
+  specialty      String?
+  whatsapp       String?
+  instagram      String?
+  themePrimary   String  @default("#1f4d3f")
+  themeSecondary String  @default("#c8643c")
+  themeFont      String  @default("clasica")
+  showAddress    Boolean @default(true)
+  showPhone      Boolean @default(true)
+  showWhatsapp   Boolean @default(true)
+  showInstagram  Boolean @default(true)
+  showPrices     Boolean @default(true)
+
   // Reglas de agenda (ver modules/availability)
   slotIntervalMinutes     Int @default(30)
   bufferMinutes           Int @default(0)
@@ -73,6 +88,9 @@ model Organization {
   appointments           Appointment[]
   notifications          Notification[]
   subscription           Subscription?
+  slugAliases            OrganizationSlugAlias[]
+  images                 OrganizationImage[]
+  customerAccessTokens   CustomerAccessToken[]
 
   @@map("organizations")
 }
@@ -425,4 +443,60 @@ model LicenseOrder {
 
   @@index([status, createdAt])
   @@map("license_orders")
+}
+
+// Enlaces anteriores de un negocio que cambió su identificador de URL:
+// siguen funcionando y redirigen al actual. Mientras exista el alias, ningún
+// otro negocio puede usar ese identificador.
+model OrganizationSlugAlias {
+  slug           String   @id
+  organizationId String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("organization_slug_aliases")
+}
+
+enum OrganizationImageKind {
+  logo
+  cover
+}
+
+// Logo y portada de la página pública. Se guardan ya optimizados (WebP) en
+// la base: persisten con los mismos backups que el resto de los datos y no
+// dependen del disco del contenedor. Una fila por negocio y tipo; reemplazar
+// una imagen crea una fila nueva (URL nueva) y borra la anterior.
+model OrganizationImage {
+  id             String                @id @default(uuid())
+  organizationId String
+  kind           OrganizationImageKind
+  contentType    String
+  width          Int
+  height         Int
+  bytes          Bytes
+  createdAt      DateTime              @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind])
+  @@map("organization_images")
+}
+
+// Acceso temporal de un cliente a sus turnos en un negocio ("Consultá tus
+// turnos"). Solo se guarda el hash del token. Vale para un negocio y un
+// email; pedir un enlace nuevo invalida los anteriores.
+model CustomerAccessToken {
+  id             String   @id @default(uuid())
+  organizationId String
+  email          String
+  tokenHash      String   @unique
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, email])
+  @@map("customer_access_tokens")
 }

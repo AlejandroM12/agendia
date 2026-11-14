@@ -42,6 +42,9 @@
   --color-card: var(--card);
   --color-highlight: var(--highlight);
   --color-highlight-soft: var(--highlight-soft);
+  --color-highlight-foreground: var(--highlight-foreground);
+  --color-brand-text: var(--brand-text);
+  --color-brand-border: var(--brand-border);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
   --color-warning: var(--warning);
@@ -93,6 +96,11 @@
   --danger-soft: #f9e7e4;
   --highlight: var(--brand-terracotta);
   --highlight-soft: var(--brand-terracotta-soft);
+  --highlight-foreground: #ffffff;
+  /* Color de marca apto para texto y para bordes. En la página pública de
+     cada negocio los recalcula lib/theme.ts según el color elegido. */
+  --brand-text: var(--brand-pine);
+  --brand-border: var(--brand-pine);
   --success: #2c6e49;
   --success-soft: #e2f0e7;
   --warning: #96650f;

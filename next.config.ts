@@ -14,6 +14,11 @@ const nextConfig: NextConfig = {
   output: process.env.BUILD_STANDALONE === "1" ? "standalone" : undefined,
   poweredByHeader: false,
   cacheComponents: true,
+  experimental: {
+    // Subida de logo y portada (modules/public-page/actions.ts): el tope real,
+    // de 8 MB, lo aplica la acción; esto solo deja pasar el formulario.
+    serverActions: { bodySizeLimit: "10mb" },
+  },
   partialPrefetching: true,
   turbopack: {
     rules: {
@@ -24,7 +29,18 @@ const nextConfig: NextConfig = {
     },
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // La vista previa de «Mi página pública» se muestra en un marco dentro
+      // del propio panel: solo ahí se permite, y solo desde el mismo sitio.
+      {
+        source: "/vista-previa",
+        headers: [
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'; base-uri 'self'; object-src 'none'" },
+        ],
+      },
+    ];
   },
 };
 
