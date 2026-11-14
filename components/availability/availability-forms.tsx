@@ -6,17 +6,15 @@ import { Field } from "@/components/form/field";
 import { FormMessage } from "@/components/form/form-message";
 import { SubmitButton } from "@/components/form/submit-button";
 import { useForm } from "@/components/form/use-form";
-import {
-  addExceptionAction,
-  saveBookingSettingsAction,
-  saveWeeklyHoursAction,
-} from "@/modules/availability/actions";
+import { saveBookingSettingsAction, saveWeeklyHoursAction } from "@/modules/availability/actions";
+import { addBlockAction, saveProfessionalHoursAction } from "@/modules/team/actions";
 import { WeeklyHoursEditor } from "./weekly-hours-editor";
 
 type Rule = { weekday: number; startMinute: number; endMinute: number };
 
-export function WeeklyHoursForm({ rules, disabled }: { rules: Rule[]; disabled: boolean }) {
-  const form = useForm(saveWeeklyHoursAction);
+/** Con `professionalId` guarda el horario de ese profesional; sin él, el del profesional «de siempre». */
+export function WeeklyHoursForm({ rules, disabled, professionalId }: { rules: Rule[]; disabled: boolean; professionalId?: string }) {
+  const form = useForm(professionalId ? saveProfessionalHoursAction.bind(null, professionalId) : saveWeeklyHoursAction);
   return (
     <form {...form.formProps} className="space-y-4">
       <fieldset disabled={disabled} className="space-y-4">
@@ -119,9 +117,23 @@ export function BookingSettingsForm({
   );
 }
 
-export function ExceptionForm({ minDate, disabled }: { minDate: string; disabled: boolean }) {
-  const form = useForm(addExceptionAction);
+/**
+ * Agrega un bloqueo: un día (entero o un rato) o varios días seguidos
+ * (vacaciones, licencia). Con `professionalId` es individual; sin él, un
+ * cierre general del negocio que afecta a todos.
+ */
+export function ExceptionForm({
+  minDate,
+  disabled,
+  professionalId = null,
+}: {
+  minDate: string;
+  disabled: boolean;
+  professionalId?: string | null;
+}) {
+  const form = useForm(addBlockAction.bind(null, professionalId));
   const [fullDay, setFullDay] = useState(true);
+  const [until, setUntil] = useState("");
 
   return (
     <form {...form.formProps}>
@@ -130,21 +142,26 @@ export function ExceptionForm({ minDate, disabled }: { minDate: string; disabled
           <Field label="Fecha" htmlFor="date" error={form.error("date")}>
             <Input id="date" name="date" type="date" min={minDate} required />
           </Field>
-          <Field label="Motivo" htmlFor="reason" optional error={form.error("reason")}>
+          <Field label="Hasta" htmlFor="until" optional hint="Para bloquear varios días seguidos, como vacaciones." error={form.error("until")}>
+            <Input id="until" name="until" type="date" min={minDate} value={until} onChange={(e) => setUntil(e.target.value)} />
+          </Field>
+          <Field label="Motivo" htmlFor="reason" optional error={form.error("reason")} className="sm:col-span-2">
             <Input id="reason" name="reason" maxLength={120} placeholder="Feriado, vacaciones, trámite…" />
           </Field>
         </div>
-        <label className="flex cursor-pointer items-center gap-3 text-sm font-medium">
-          <input
-            type="checkbox"
-            name="fullDay"
-            className="size-5 accent-[var(--primary)]"
-            checked={fullDay}
-            onChange={(e) => setFullDay(e.target.checked)}
-          />
-          Todo el día
-        </label>
-        {!fullDay && (
+        {!until && (
+          <label className="flex cursor-pointer items-center gap-3 text-sm font-medium">
+            <input
+              type="checkbox"
+              name="fullDay"
+              className="size-5 accent-[var(--primary)]"
+              checked={fullDay}
+              onChange={(e) => setFullDay(e.target.checked)}
+            />
+            Todo el día
+          </label>
+        )}
+        {!until && !fullDay && (
           <div className="flex items-center gap-2">
             <input type="time" name="start" aria-label="Desde" className="field w-auto" defaultValue="12:00" required />
             <span className="text-sm text-muted-foreground">a</span>

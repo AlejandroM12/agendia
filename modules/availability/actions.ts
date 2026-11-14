@@ -5,9 +5,9 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
-import { dateStrToDbDate, isValidDateStr, labelToMinutes, todayInTz } from "@/lib/time";
 import { getOrCreatePrimaryProfessional } from "@/modules/team/eligibility";
-import { createAvailabilityException, saveProfessionalHours } from "@/modules/team/professionals";
+import { saveProfessionalHours } from "@/modules/team/professionals";
+import { deleteAvailabilityException } from "@/modules/team/team-admin";
 import { parseJsonField, weeklyRulesSchema } from "./rules";
 
 export async function saveWeeklyHoursAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -50,47 +50,10 @@ export async function saveBookingSettingsAction(_prev: ActionState, formData: Fo
   return { ok: true, message: "Reglas de reserva guardadas." };
 }
 
-export async function addExceptionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext("schedule.manage");
-  if (!access.ok) return { message: access.message };
-  const { organization } = access.context;
-
-  const date = formData.get("date");
-  if (!isValidDateStr(date)) return { message: "Elegí una fecha." };
-  if (date < todayInTz(organization.timezone)) return { message: "La fecha ya pasó." };
-
-  const fullDay = formData.get("fullDay") === "on";
-  let startMinute: number | null = null;
-  let endMinute: number | null = null;
-  if (!fullDay) {
-    startMinute = labelToMinutes(String(formData.get("start") ?? ""));
-    endMinute = labelToMinutes(String(formData.get("end") ?? ""));
-    if (startMinute === null || endMinute === null || endMinute <= startMinute) {
-      return { message: "Indicá un horario válido para el bloqueo." };
-    }
-  }
-
-  const reason = String(formData.get("reason") ?? "").trim().slice(0, 120) || null;
-
-  // Bloqueo general del negocio (sin profesional): afecta a todos, como siempre.
-  const created = await createAvailabilityException(organization, {
-    professionalId: null,
-    date: dateStrToDbDate(date),
-    startMinute,
-    endMinute,
-    reason,
-  });
-  if (!created.ok) return { message: created.message };
-
-  revalidatePath("/dashboard/disponibilidad");
-  return { ok: true, message: "Bloqueo agregado." };
-}
-
+/** Quita un cierre general del negocio. Los bloqueos individuales se quitan desde el profesional (modules/team/actions.ts). */
 export async function deleteExceptionAction(exceptionId: string): Promise<void> {
   const access = await requireWriteContext("schedule.manage");
   if (!access.ok) return;
-  await db.availabilityException.deleteMany({
-    where: { id: exceptionId, organizationId: access.context.organization.id },
-  });
+  await deleteAvailabilityException(access.context.organization, exceptionId, { professionalId: null });
   revalidatePath("/dashboard/disponibilidad");
 }
