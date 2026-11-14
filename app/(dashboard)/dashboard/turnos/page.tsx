@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
+import { appointmentScope } from "@/modules/access/scope";
 import { addDays, isValidDateStr, zonedTimeToUtc } from "@/lib/time";
 
 export const metadata: Metadata = { title: "Buscar turnos" };
@@ -15,7 +16,8 @@ const STATUSES = Object.keys(STATUS_LABEL) as AppointmentStatus[];
 const PAGE_SIZE = 60;
 
 export default async function AppointmentsSearchPage(props: PageProps<"/dashboard/turnos">) {
-  const { organization } = await requireOrganization();
+  const context = await requireOrganization();
+  const { organization } = context;
   const tz = organization.timezone;
   const params = await props.searchParams;
 
@@ -26,7 +28,8 @@ export default async function AppointmentsSearchPage(props: PageProps<"/dashboar
   const hasFilters = Boolean(q || status || from || to);
 
   const where: Prisma.AppointmentWhereInput = {
-    organizationId: organization.id,
+    // Un profesional solo busca entre SUS turnos.
+    ...appointmentScope(context),
     ...(status ? { status } : {}),
     ...(from || to
       ? {
@@ -65,7 +68,7 @@ export default async function AppointmentsSearchPage(props: PageProps<"/dashboar
 
   return (
     <>
-      <PageHeader title="Buscar turnos" back={{ href: "/dashboard/agenda", label: "Agenda" }} />
+      <PageHeader title={context.restrictedProfessionalId ? "Mis turnos" : "Buscar turnos"} back={{ href: "/dashboard/agenda", label: "Agenda" }} />
 
       <form className="mb-6 grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto_auto]" role="search">
         <Input name="q" type="search" defaultValue={q} placeholder="Cliente, teléfono o servicio" aria-label="Buscar" />

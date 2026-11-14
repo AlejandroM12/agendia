@@ -17,7 +17,7 @@ import { changeOrganizationSlug } from "./slug";
 export type PublicPageState = (NonNullable<ActionState> & { slug?: string }) | undefined;
 
 export async function updatePublicPageAction(_prev: PublicPageState, formData: FormData): Promise<PublicPageState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("publicpage.manage");
   if (!access.ok) return { message: access.message };
   const { organization } = access.context;
 
@@ -42,7 +42,7 @@ const isImageKind = (value: unknown): value is BusinessImageKind => value === "l
 export type ImageActionState = { ok: true; id: string | null } | { ok: false; message: string };
 
 export async function uploadPublicImageAction(kind: BusinessImageKind, formData: FormData): Promise<ImageActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("publicpage.manage");
   if (!access.ok) return { ok: false, message: access.message };
   const { organization } = access.context;
 
@@ -64,7 +64,7 @@ export async function uploadPublicImageAction(kind: BusinessImageKind, formData:
 }
 
 export async function removePublicImageAction(kind: BusinessImageKind): Promise<ImageActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("publicpage.manage");
   if (!access.ok) return { ok: false, message: access.message };
   if (!isImageKind(kind)) return { ok: false, message: "Tipo de imagen desconocido." };
 

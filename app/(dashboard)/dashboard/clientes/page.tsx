@@ -6,13 +6,19 @@ import { Input } from "@/components/ui/input";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
+import { redirect } from "next/navigation";
+import { customerScope } from "@/modules/access/scope";
 
 export const metadata: Metadata = { title: "Clientes" };
 
 const PAGE_SIZE = 100;
 
 export default async function CustomersPage(props: PageProps<"/dashboard/clientes">) {
-  const { organization, canWrite } = await requireOrganization();
+  const context = await requireOrganization();
+  const { canWrite, permissions } = context;
+  const restricted = context.restrictedProfessionalId;
+  // Un profesional ve «Mis clientes» solo si el negocio le permite tratar con ellos.
+  if (restricted && !permissions.has("own.customers.contact")) redirect("/dashboard");
   const params = await props.searchParams;
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 80) : "";
   const digits = q.replace(/\D/g, "");
@@ -20,7 +26,7 @@ export default async function CustomersPage(props: PageProps<"/dashboard/cliente
   const [customers, total] = await Promise.all([
     db.customer.findMany({
       where: {
-        organizationId: organization.id,
+        ...customerScope(context),
         ...(q
           ? {
               OR: [
@@ -33,12 +39,18 @@ export default async function CustomersPage(props: PageProps<"/dashboard/cliente
       },
       orderBy: { name: "asc" },
       take: PAGE_SIZE,
-      select: { id: true, name: true, phone: true, email: true, _count: { select: { appointments: true } } },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        _count: { select: { appointments: restricted ? { where: { professionalId: restricted } } : true } },
+      },
     }),
-    db.customer.count({ where: { organizationId: organization.id } }),
+    db.customer.count({ where: customerScope(context) }),
   ]);
 
-  const newButton = canWrite && (
+  const newButton = canWrite && permissions.has("customers.manage") && (
     <ButtonLink href="/dashboard/clientes/nuevo">
           <Plus aria-hidden="true" /> Nuevo cliente
         </ButtonLink>
@@ -47,7 +59,7 @@ export default async function CustomersPage(props: PageProps<"/dashboard/cliente
   return (
     <>
       <PageHeader
-        title="Clientes"
+        title={restricted ? "Mis clientes" : "Clientes"}
         description={total > 0 ? `${total} ${total === 1 ? "persona" : "personas"} en tu agenda.` : undefined}
         action={newButton}
       />
@@ -76,7 +88,7 @@ export default async function CustomersPage(props: PageProps<"/dashboard/cliente
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{customer.name}</span>
                       <span className="block truncate text-sm text-muted-foreground">
-                        {customer.phone ?? customer.email ?? "Sin contacto"}
+                        {restricted ? (customer.phone ?? "Sin teléfono") : (customer.phone ?? customer.email ?? "Sin contacto")}
                       </span>
                     </span>
                     <span className="shrink-0 text-sm text-muted-foreground">

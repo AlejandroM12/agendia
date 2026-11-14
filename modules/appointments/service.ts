@@ -236,6 +236,8 @@ export async function createAppointment(params: {
   notes?: string | null;
   professional?: ProfessionalChoice;
   idempotencyKey?: string | null;
+  /** La persona con sesión que lo agenda (para no avisarle a ella misma). */
+  actorUserId?: string | null;
 }): Promise<AppointmentResult> {
   const { organization, actor } = params;
   const audience = actor === "customer" ? "public" : "internal";
@@ -354,6 +356,7 @@ export async function createAppointment(params: {
         await enqueueAppointmentNotifications(tx, {
           event: "created",
           actor,
+          actorUserId: params.actorUserId ?? null,
           appointment: created,
           customerEmail: customer.email,
           settings: organization,
@@ -429,6 +432,7 @@ export async function rescheduleAppointment(params: {
   startsAt: Date;
   actor: Actor;
   professional?: ProfessionalChoice;
+  actorUserId?: string | null;
 }): Promise<AppointmentResult> {
   const { organization, actor } = params;
   if (Number.isNaN(params.startsAt.getTime())) return fail("invalid", "La fecha u hora no es válida.");
@@ -516,6 +520,7 @@ export async function rescheduleAppointment(params: {
         await enqueueAppointmentNotifications(tx, {
           event: "rescheduled",
           actor,
+          actorUserId: params.actorUserId ?? null,
           appointment: updated,
           customerEmail: current.customer.email,
           settings: organization,
@@ -600,6 +605,7 @@ export async function reassignAppointment(params: {
         await enqueueAppointmentNotifications(tx, {
           event: "reassigned",
           actor: "professional",
+          actorUserId: params.userId ?? null,
           appointment: updated,
           customerEmail: current.customer.email,
           settings: organization,
@@ -631,6 +637,7 @@ export async function cancelAppointment(params: {
   organization: Organization;
   appointmentId: string;
   actor: Actor;
+  actorUserId?: string | null;
 }): Promise<AppointmentResult> {
   const { organization, actor } = params;
 
@@ -651,6 +658,7 @@ export async function cancelAppointment(params: {
     await enqueueAppointmentNotifications(tx, {
       event: "canceled",
       actor,
+      actorUserId: params.actorUserId ?? null,
       appointment: updated,
       customerEmail: current.customer.email,
       settings: organization,

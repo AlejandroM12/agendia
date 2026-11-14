@@ -4,13 +4,13 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { ConfirmButton } from "@/components/form/confirm-button";
 import { ServiceForm } from "@/components/services/service-form";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { deleteServiceAction, updateServiceAction } from "@/modules/services/actions";
 
 export const metadata: Metadata = { title: "Editar servicio" };
 
 export default async function EditServicePage(props: PageProps<"/dashboard/servicios/[id]">) {
-  const { organization, canWrite } = await requireOrganization();
+  const { organization, canWrite } = await requirePagePermission("services.manage");
   const { id } = await props.params;
 
   const service = await db.service.findFirst({ where: { id, organizationId: organization.id } });

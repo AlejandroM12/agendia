@@ -6,7 +6,7 @@ import { ProfessionalAvatar } from "@/components/team/professional-avatar";
 import { ButtonLink } from "@/components/ui/button-link";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { isTeamModeEnabled } from "@/lib/features";
 import { brand } from "@/lib/brand";
 import { getTeamOverview, type TeamMember } from "@/modules/team/team-admin";
@@ -78,7 +78,7 @@ function MemberCard({
 }
 
 export default async function TeamPage() {
-  const { organization, user, canWrite } = await requireOrganization();
+  const { organization, user, canWrite } = await requirePagePermission("team.manage");
 
   if (!isTeamModeEnabled(organization)) {
     return (

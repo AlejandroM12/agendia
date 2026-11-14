@@ -8,6 +8,7 @@ type Tx = Prisma.TransactionClient;
 type AppointmentRef = {
   id: string;
   organizationId: string;
+  professionalId: string;
   startsAt: Date;
 };
 
@@ -33,6 +34,8 @@ export async function enqueueAppointmentNotifications(
   params: {
     event: AppointmentEvent;
     actor: "professional" | "customer";
+    /** Quién hizo el cambio en el panel (si fue alguien con sesión): no se le avisa a él mismo. */
+    actorUserId?: string | null;
     appointment: AppointmentRef;
     customerEmail: string | null;
     settings: OrgNotificationSettings;
@@ -84,19 +87,72 @@ export async function enqueueAppointmentNotifications(
   }
 
   // Una reasignación la decide el negocio: no hay a quién avisarle del lado del negocio.
-  if (actor === "customer" && event !== "reassigned" && settings.notifyOwnerOnBooking) {
-    const owners = await tx.membership.findMany({
-      where: { organizationId: appointment.organizationId },
-      select: { user: { select: { email: true } } },
-    });
-    const ownerType: NotificationType =
-      event === "created"
-        ? "booking_received_owner"
-        : event === "rescheduled"
-          ? "reschedule_owner"
-          : "cancellation_owner";
-    for (const owner of owners) push(ownerType, owner.user.email, now);
+  // Avisos internos: a quien corresponde, sin duplicados (ver resolveInternalRecipients).
+  const internalType: NotificationType =
+    event === "created" || event === "reassigned"
+      ? "booking_received_owner"
+      : event === "rescheduled"
+        ? "reschedule_owner"
+        : "cancellation_owner";
+  for (const email of await resolveInternalRecipients(tx, {
+    organizationId: appointment.organizationId,
+    professionalId: appointment.professionalId,
+    event,
+    actor,
+    actorUserId: params.actorUserId ?? null,
+    notifyAdmins: settings.notifyOwnerOnBooking,
+  })) {
+    push(internalType, email, now);
   }
 
   if (rows.length) await tx.notification.createMany({ data: rows });
 }
+
+/**
+ * A quién se le avisa de un turno DENTRO del negocio. Una sola regla:
+ *
+ * - **Propietario y administradores** (los avisos «de todo el negocio»): cuando
+ *   un cliente reserva, reprograma o cancela por su cuenta, si el negocio tiene
+ *   activos esos avisos y la persona no los desactivó. Los administradores
+ *   empiezan sin ellos (se activan a propósito).
+ * - **El profesional asignado**, si tiene cuenta vinculada y no desactivó sus avisos:
+ *   de lo que le pasa a SUS turnos —sea el cliente o el negocio quien lo cambia— y
+ *   cuando le asignan uno. No se le avisa de un cambio que hizo él mismo.
+ * - **Nadie más**: los otros profesionales no reciben datos de turnos ajenos.
+ * - Sin duplicados: si el propietario también es el profesional asignado, recibe uno solo.
+ * - Un profesional sin cuenta no genera avisos propios: el negocio sigue funcionando como siempre.
+ */
+export async function resolveInternalRecipients(
+  tx: Tx,
+  params: {
+    organizationId: string;
+    professionalId: string;
+    event: AppointmentEvent;
+    actor: "professional" | "customer";
+    actorUserId: string | null;
+    notifyAdmins: boolean;
+  },
+): Promise<string[]> {
+  const [members, professional] = await Promise.all([
+    tx.membership.findMany({
+      where: { organizationId: params.organizationId },
+      select: { userId: true, role: true, notifyBookings: true, user: { select: { email: true } } },
+    }),
+    tx.professional.findFirst({ where: { id: params.professionalId, organizationId: params.organizationId }, select: { userId: true } }),
+  ]);
+
+  const emails = new Map<string, string>();
+  const add = (email: string) => emails.set(email.trim().toLowerCase(), email);
+
+  if (params.actor === "customer" && params.event !== "reassigned" && params.notifyAdmins) {
+    for (const member of members) {
+      if ((member.role === "owner" || member.role === "admin") && member.notifyBookings) add(member.user.email);
+    }
+  }
+
+  const assigned = professional?.userId ? members.find((m) => m.userId === professional.userId) : undefined;
+  if (assigned && assigned.notifyBookings && assigned.userId !== params.actorUserId) add(assigned.user.email);
+
+  return [...emails.values()];
+}
+

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { PublicPage } from "@/components/booking/public-page";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { getOrganizationImages } from "@/modules/public-page/images";
 import { loadPublicTeamView } from "@/modules/public-page/team";
 import { publicPageSchema, readPublicPageInput, toPublicProfile } from "@/modules/public-page/settings";
@@ -19,7 +19,7 @@ export const instant = false;
  * muestra lo guardado.
  */
 export default async function PublicPagePreview(props: PageProps<"/vista-previa">) {
-  const { organization, canWrite } = await requireOrganization();
+  const { organization, canWrite } = await requirePagePermission("publicpage.manage");
   const params = await props.searchParams;
 
   const saved = toPublicProfile(organization);

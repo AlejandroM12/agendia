@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button-link";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { formatMoney } from "@/lib/brand";
 import { formatDuration } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ import { moveServiceAction, setServiceActiveAction } from "@/modules/services/ac
 export const metadata: Metadata = { title: "Servicios" };
 
 export default async function ServicesPage() {
-  const { organization, canWrite } = await requireOrganization();
+  const { organization, canWrite } = await requirePagePermission("services.manage");
   const services = await db.service.findMany({
     where: { organizationId: organization.id },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],

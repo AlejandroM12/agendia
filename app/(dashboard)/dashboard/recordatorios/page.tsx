@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { RemindersForm } from "@/components/settings/settings-forms";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { formatDateShort, formatTime, toZoned } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { isEmailConfigured } from "@/modules/notifications/email";
@@ -32,7 +32,7 @@ const STATUS: Record<NotificationStatus, { label: string; className: string }> =
 };
 
 export default async function RemindersPage() {
-  const { organization, canWrite } = await requireOrganization();
+  const { organization, canWrite } = await requirePagePermission("settings.manage");
   const tz = organization.timezone;
   const emailReady = isEmailConfigured();
 

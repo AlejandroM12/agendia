@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireContext, requireWriteContext } from "@/lib/dal";
+import { requireContext, requireScopedWrite } from "@/lib/dal";
+import { appointmentScope, customerScope, findAppointmentFor } from "@/modules/access/scope";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { formatTime, isValidDateStr, labelToMinutes, toZoned, zonedTimeToUtc } from "@/lib/time";
 import { getTeamAvailability, unionSlots } from "@/modules/availability/queries";
@@ -25,8 +26,11 @@ export async function loadSlotsAction(
   ignoreAppointmentId?: string,
   professionalId?: string,
 ): Promise<SlotOption[]> {
-  const { organization } = await requireContext();
+  const context = await requireContext();
+  const { organization } = context;
   if (!isValidDateStr(dateStr)) return [];
+  // Un profesional solo ve los horarios de SU agenda, pida lo que pida el navegador.
+  if (context.restrictedProfessionalId) professionalId = context.restrictedProfessionalId;
 
   const service = await db.service.findFirst({
     where: { id: serviceId, organizationId: organization.id },
@@ -47,7 +51,7 @@ export async function loadSlotsAction(
   let durationMinutes = service.durationMinutes;
   if (ignoreAppointmentId) {
     const current = await db.appointment.findFirst({
-      where: { id: ignoreAppointmentId, organizationId: organization.id },
+      where: { ...appointmentScope(context), id: ignoreAppointmentId },
       select: { startsAt: true, endsAt: true },
     });
     if (current) durationMinutes = Math.round((current.endsAt.getTime() - current.startsAt.getTime()) / 60000);
@@ -70,13 +74,16 @@ export async function loadSlotsAction(
 export async function searchCustomersAction(
   query: string,
 ): Promise<Array<{ id: string; name: string; detail: string }>> {
-  const { organization } = await requireContext();
+  const context = await requireContext();
   const q = query.trim().slice(0, 80);
   if (q.length < 2) return [];
+  // Un profesional solo encuentra a quienes ya tienen turnos con él.
+  const sees = context.restrictedProfessionalId === null || context.permissions.has("own.appointments.create");
+  if (!sees) return [];
 
   const customers = await db.customer.findMany({
     where: {
-      organizationId: organization.id,
+      ...customerScope(context),
       OR: [
         { name: { contains: q, mode: "insensitive" } },
         { email: { contains: q, mode: "insensitive" } },
@@ -87,7 +94,8 @@ export async function searchCustomersAction(
     take: 8,
     select: { id: true, name: true, email: true, phone: true },
   });
-  return customers.map((c) => ({ id: c.id, name: c.name, detail: c.phone ?? c.email ?? "" }));
+  const showContact = context.restrictedProfessionalId === null || context.permissions.has("own.customers.contact");
+  return customers.map((c) => ({ id: c.id, name: c.name, detail: showContact ? (c.phone ?? c.email ?? "") : "" }));
 }
 
 function parseStart(formData: FormData, timeZone: string): Date | null {
@@ -107,9 +115,9 @@ function revalidateAgenda() {
 }
 
 export async function createAppointmentAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext("appointments.manage");
+  const access = await requireScopedWrite("appointments.manage", "own.appointments.create");
   if (!access.ok) return { message: access.message };
-  const { organization } = access.context;
+  const { organization, restrictedProfessionalId } = access.context;
 
   const serviceId = String(formData.get("serviceId") ?? "");
   if (!serviceId) return { message: "Elegí un servicio." };
@@ -120,6 +128,10 @@ export async function createAppointmentAction(_prev: ActionState, formData: Form
   const customerId = String(formData.get("customerId") ?? "");
   let customer: Parameters<typeof createAppointment>[0]["customer"];
   if (customerId) {
+    // Un profesional solo puede usar a sus propios clientes: un identificador ajeno no alcanza.
+    if (restrictedProfessionalId && !(await db.customer.findFirst({ where: { ...customerScope(access.context), id: customerId.slice(0, 64) }, select: { id: true } }))) {
+      return { message: "No encontramos ese cliente." };
+    }
     customer = { id: customerId };
   } else {
     const parsed = customerInputSchema.safeParse({
@@ -141,7 +153,9 @@ export async function createAppointmentAction(_prev: ActionState, formData: Form
     customer,
     actor: "professional",
     notes: String(formData.get("notes") ?? "").slice(0, 2000),
-    professional: String(formData.get("professionalId") ?? "") || undefined,
+    // Un profesional agenda SIEMPRE en su propia agenda, ignorando lo que diga el formulario.
+    professional: restrictedProfessionalId ?? (String(formData.get("professionalId") ?? "") || undefined),
+    actorUserId: access.context.user.id,
   });
   if (!result.ok) return { message: result.message };
 
@@ -154,9 +168,10 @@ export async function rescheduleAppointmentAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requireWriteContext("appointments.manage");
+  const access = await requireScopedWrite("appointments.manage", "own.appointments.reschedule");
   if (!access.ok) return { message: access.message };
-  const { organization } = access.context;
+  const { organization, restrictedProfessionalId } = access.context;
+  if (!(await findAppointmentFor(access.context, appointmentId))) return { message: "No encontramos ese turno." };
 
   const startsAt = parseStart(formData, organization.timezone);
   if (!startsAt) return { message: "Elegí un día y un horario." };
@@ -166,7 +181,9 @@ export async function rescheduleAppointmentAction(
     appointmentId,
     startsAt,
     actor: "professional",
-    professional: String(formData.get("professionalId") ?? "") || undefined,
+    // Un profesional conserva su agenda: no puede pasarse el turno a otro.
+    professional: restrictedProfessionalId ? undefined : String(formData.get("professionalId") ?? "") || undefined,
+    actorUserId: access.context.user.id,
   });
   if (!result.ok) return { message: result.message };
 
@@ -175,13 +192,15 @@ export async function rescheduleAppointmentAction(
 }
 
 export async function cancelAppointmentAction(appointmentId: string): Promise<ActionState> {
-  const access = await requireWriteContext("appointments.manage");
+  const access = await requireScopedWrite("appointments.manage", "own.appointments.cancel");
   if (!access.ok) return { message: access.message };
+  if (!(await findAppointmentFor(access.context, appointmentId))) return { message: "No encontramos ese turno." };
 
   const result = await cancelAppointment({
     organization: access.context.organization,
     appointmentId,
     actor: "professional",
+    actorUserId: access.context.user.id,
   });
   revalidateAgenda();
   return result.ok ? { ok: true } : { message: result.message };
@@ -191,8 +210,9 @@ export async function setOutcomeAction(
   appointmentId: string,
   status: "confirmed" | "completed" | "no_show",
 ): Promise<void> {
-  const access = await requireWriteContext("appointments.manage");
+  const access = await requireScopedWrite("appointments.manage", "own.appointments.outcome");
   if (!access.ok) return;
+  if (!(await findAppointmentFor(access.context, appointmentId))) return;
   await setAppointmentOutcome({ organizationId: access.context.organization.id, appointmentId, status });
   revalidateAgenda();
 }
@@ -202,7 +222,8 @@ export async function updateNotesAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requireWriteContext("appointments.manage");
+  // Las notas internas son del negocio: un profesional no las ve ni las edita.
+  const access = await requireScopedWrite("appointments.manage", "appointments.manage");
   if (!access.ok) return { message: access.message };
 
   await db.appointment.updateMany({

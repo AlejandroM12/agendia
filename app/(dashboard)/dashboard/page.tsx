@@ -6,6 +6,7 @@ import { ShareLink } from "@/components/dashboard/share-link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
+import { appointmentScope } from "@/modules/access/scope";
 import { brand } from "@/lib/brand";
 import { addDays, formatDateLong, formatTime, todayInTz, toZoned, zonedTimeToUtc } from "@/lib/time";
 
@@ -21,7 +22,12 @@ const appointmentSelect = {
 } as const;
 
 export default async function TodayPage(props: PageProps<"/dashboard">) {
-  const { organization, user, canWrite } = await requireOrganization();
+  const context = await requireOrganization();
+  const { organization, user, canWrite, permissions } = context;
+  // Un profesional ve su propio día (y nada del resto del negocio).
+  const own = context.restrictedProfessionalId !== null;
+  const scope = appointmentScope(context);
+  const canCreate = canWrite && (permissions.has("appointments.manage") || permissions.has("own.appointments.create"));
   const tz = organization.timezone;
   const now = new Date();
   const today = todayInTz(tz, now);
@@ -31,19 +37,19 @@ export default async function TodayPage(props: PageProps<"/dashboard">) {
 
   const [todayAppointments, next, upcomingCount, activeServices] = await Promise.all([
     db.appointment.findMany({
-      where: { organizationId: organization.id, startsAt: { gte: dayStart, lt: dayEnd } },
+      where: { ...scope, startsAt: { gte: dayStart, lt: dayEnd } },
       orderBy: { startsAt: "asc" },
       select: appointmentSelect,
     }),
     db.appointment.findFirst({
-      where: { organizationId: organization.id, status: "confirmed", endsAt: { gt: now } },
+      where: { ...scope, status: "confirmed", endsAt: { gt: now } },
       orderBy: { startsAt: "asc" },
       select: appointmentSelect,
     }),
     db.appointment.count({
-      where: { organizationId: organization.id, status: "confirmed", startsAt: { gte: dayEnd } },
+      where: { ...scope, status: "confirmed", startsAt: { gte: dayEnd } },
     }),
-    db.service.count({ where: { organizationId: organization.id, active: true } }),
+    own ? Promise.resolve(1) : db.service.count({ where: { organizationId: organization.id, active: true } }),
   ]);
 
   const hour = Math.floor(toZoned(now, tz).minutes / 60);
@@ -62,7 +68,34 @@ export default async function TodayPage(props: PageProps<"/dashboard">) {
         <h1 className="font-display text-3xl font-semibold sm:text-4xl">
           {greeting}, {user.name.split(" ")[0]}
         </h1>
+        {own && <p className="mt-1 text-sm text-muted-foreground">Tu agenda en {organization.name}</p>}
       </header>
+
+      {own && context.professional && !context.professional.active && (
+        <div className="rounded-2xl bg-warning-soft p-4 text-sm text-warning">
+          Tu perfil está desactivado en este negocio: no recibís turnos nuevos. Consultá con quien administra el negocio.
+        </div>
+      )}
+      {own && !context.professional && (
+        <div className="rounded-2xl bg-warning-soft p-4 text-sm text-warning">
+          Tu cuenta todavía no está vinculada a un perfil de profesional. Consultá con quien administra el negocio.
+        </div>
+      )}
+
+      {own && (
+        <dl className="grid grid-cols-3 gap-3 text-center" aria-label="Resumen de hoy">
+          {[
+            ["Turnos hoy", active.length],
+            ["Atendidos", active.filter((a) => a.status === "completed").length],
+            ["Pendientes", remaining],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-2xl border border-border bg-card px-2 py-3">
+              <dd className="font-display text-2xl font-semibold tabular-nums">{value}</dd>
+              <dt className="text-xs text-muted-foreground">{label}</dt>
+            </div>
+          ))}
+        </dl>
+      )}
 
       {welcome && (
         <div className="rounded-2xl bg-accent p-5">
@@ -132,7 +165,7 @@ export default async function TodayPage(props: PageProps<"/dashboard">) {
                 ? `Tenés ${upcomingCount} ${upcomingCount === 1 ? "turno agendado" : "turnos agendados"} para los próximos días.`
                 : "Compartí tu enlace de reservas o agendá uno a mano."}
             </p>
-            {canWrite && (
+            {canCreate && (
               <ButtonLink
                 className="mt-4" href={`/dashboard/turnos/nuevo?fecha=${today}`}>
                     <Plus aria-hidden="true" /> Agendar turno
@@ -144,7 +177,7 @@ export default async function TodayPage(props: PageProps<"/dashboard">) {
         )}
       </section>
 
-      <ShareLink url={publicUrl} businessName={organization.name} />
+      {!own && permissions.has("publicpage.manage") && <ShareLink url={publicUrl} businessName={organization.name} />}
     </div>
   );
 }

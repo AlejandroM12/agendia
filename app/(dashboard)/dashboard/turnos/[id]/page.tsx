@@ -17,7 +17,7 @@ import { Section } from "@/components/dashboard/section";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
 import { isTeamModeEnabled } from "@/lib/features";
-import { can } from "@/lib/permissions";
+import { findAppointmentFor } from "@/modules/access/scope";
 import { formatMoney } from "@/lib/brand";
 import { formatDateLong, formatDuration, formatTime, toZoned } from "@/lib/time";
 import { setOutcomeAction } from "@/modules/appointments/actions";
@@ -28,13 +28,17 @@ import { buildWhatsAppActions } from "@/modules/whatsapp/links";
 export const metadata: Metadata = { title: "Turno" };
 
 export default async function AppointmentPage(props: PageProps<"/dashboard/turnos/[id]">) {
-  const { organization, canWrite, role } = await requireOrganization();
+  const context = await requireOrganization();
+  const { organization, canWrite, permissions } = context;
+  const restricted = context.restrictedProfessionalId !== null;
   const { id } = await props.params;
   const tz = organization.timezone;
 
-  const appointment = await db.appointment.findFirst({
-    where: { id, organizationId: organization.id },
-    include: { customer: true, service: true, professional: { select: { id: true, displayName: true, color: true } } },
+  // Un identificador de turno no alcanza: un profesional solo accede a los suyos.
+  const appointment = await findAppointmentFor(context, id, {
+    customer: true,
+    service: true,
+    professional: { select: { id: true, displayName: true, color: true } },
   });
   if (!appointment) notFound();
 
@@ -45,8 +49,10 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
   // Con varios profesionales activos se muestra quién atiende y se puede reasignar.
   const multi = isTeamModeEnabled(organization) && (await listActiveProfessionals(db, organization.id)).length > 1;
   const upcoming = appointment.status === "confirmed" && appointment.startsAt > new Date();
-  const reassignOptions = multi && upcoming && canWrite ? await getReassignOptions(organization, appointment.id) : [];
-  const whatsapp = can(role, "customers.contact")
+  const canReassign = permissions.has("appointments.manage");
+  const reassignOptions = multi && upcoming && canWrite && canReassign ? await getReassignOptions(organization, appointment.id) : [];
+  // El teléfono y los enlaces de WhatsApp solo se arman si la persona tiene permiso sobre ESTE turno.
+  const whatsapp = permissions.has("customers.contact") || (restricted && permissions.has("own.customers.contact"))
     ? buildWhatsAppActions({
         organization,
         appointment,
@@ -92,7 +98,7 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
         <div className="mt-4 flex flex-wrap gap-3">
           {appointment.status === "confirmed" ? (
             <>
-              {started && (
+              {started && permissions.has(restricted ? "own.appointments.outcome" : "appointments.manage") && (
                 <>
                   <form action={setOutcomeAction.bind(null, appointment.id, "completed")}>
                     <Button type="submit">
@@ -106,15 +112,21 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
                   </form>
                 </>
               )}
-              <RescheduleForm appointmentId={appointment.id} serviceId={service.id} defaultDate={dateStr} professionalId={multi ? appointment.professional.id : undefined} />
-              <CancelAppointmentButton appointmentId={appointment.id} hasEmail={Boolean(customer.email)} />
+              {permissions.has(restricted ? "own.appointments.reschedule" : "appointments.manage") && (
+                <RescheduleForm appointmentId={appointment.id} serviceId={service.id} defaultDate={dateStr} professionalId={multi || restricted ? appointment.professional.id : undefined} />
+              )}
+              {permissions.has(restricted ? "own.appointments.cancel" : "appointments.manage") && (
+                <CancelAppointmentButton appointmentId={appointment.id} hasEmail={Boolean(customer.email)} />
+              )}
             </>
           ) : (
-            <form action={setOutcomeAction.bind(null, appointment.id, "confirmed")}>
-              <Button type="submit" variant="outline">
-                <RotateCcw aria-hidden="true" /> Deshacer
-              </Button>
-            </form>
+            permissions.has(restricted ? "own.appointments.outcome" : "appointments.manage") && (
+              <form action={setOutcomeAction.bind(null, appointment.id, "confirmed")}>
+                <Button type="submit" variant="outline">
+                  <RotateCcw aria-hidden="true" /> Deshacer
+                </Button>
+              </form>
+            )
           )}
         </div>
       )}
@@ -122,10 +134,12 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
       <div className="mt-10 grid gap-10 md:grid-cols-2">
         <Section title="Cliente">
           <div className="space-y-2">
-            <Link href={`/dashboard/clientes/${customer.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
-              Ver ficha e historial
-            </Link>
-            {customer.phone && (
+            {(!restricted || permissions.has("own.customers.contact")) && (
+              <Link href={`/dashboard/clientes/${customer.id}`} className="font-medium text-primary underline-offset-4 hover:underline">
+                {restricted ? "Ver cliente" : "Ver ficha e historial"}
+              </Link>
+            )}
+            {customer.phone && (!restricted || permissions.has("own.customers.contact")) && (
               <div className="flex flex-wrap items-start gap-2 pt-1">
                 <ButtonLink variant="outline" size="sm" href={`tel:${customer.phone}`}>
                   <Phone aria-hidden="true" /> {customer.phone}
@@ -133,28 +147,31 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
                 {whatsapp && <WhatsAppMenu actions={whatsapp} showDiscreet />}
               </div>
             )}
-            {customer.email && (
+            {customer.email && !restricted && (
               <ButtonLink
                 variant="outline"
                 size="sm" href={`mailto:${customer.email}`}>
                     <Mail aria-hidden="true" /> {customer.email}
                   </ButtonLink>
             )}
-            {!customer.phone && !customer.email && (
+            {!customer.phone && !customer.email && !restricted && (
               <p className="text-sm text-muted-foreground">Sin datos de contacto cargados.</p>
             )}
           </div>
         </Section>
 
-        {reassignOptions.length > 0 || (multi && upcoming && canWrite) ? (
+        {reassignOptions.length > 0 || (multi && upcoming && canWrite && canReassign) ? (
           <Section title="Profesional" description="Pasá este turno a otro profesional, en el mismo día y horario.">
             <ReassignForm appointmentId={appointment.id} options={reassignOptions} />
           </Section>
         ) : null}
 
-        <Section title="Nota interna">
-          <NotesForm appointmentId={appointment.id} notes={appointment.notes} disabled={!canWrite} />
-        </Section>
+        {/* Las notas internas son del negocio: un profesional no las ve. */}
+        {!restricted && (
+          <Section title="Nota interna">
+            <NotesForm appointmentId={appointment.id} notes={appointment.notes} disabled={!canWrite} />
+          </Section>
+        )}
       </div>
     </>
   );

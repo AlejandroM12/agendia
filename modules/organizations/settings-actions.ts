@@ -28,7 +28,7 @@ const businessSchema = z.object({
  * parte de «Mi página pública» (modules/public-page/actions.ts).
  */
 export async function updateBusinessAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("settings.manage");
   if (!access.ok) return { message: access.message };
 
   const parsed = businessSchema.safeParse({ industry: formData.get("industry"), timezone: formData.get("timezone") });
@@ -47,7 +47,7 @@ const remindersSchema = z.object({
 });
 
 export async function updateRemindersAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("settings.manage");
   if (!access.ok) return { message: access.message };
 
   const parsed = remindersSchema.safeParse({

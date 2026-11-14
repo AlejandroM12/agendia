@@ -8,7 +8,7 @@ import { ActivateButton, DeactivateButton, IsMeToggle } from "@/components/team/
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { isTeamModeEnabled } from "@/lib/features";
 import { updateProfessionalAction } from "@/modules/team/actions";
 import { getProfessionalServices, getTeamOverview } from "@/modules/team/team-admin";
@@ -16,7 +16,7 @@ import { getProfessionalServices, getTeamOverview } from "@/modules/team/team-ad
 export const metadata: Metadata = { title: "Profesional" };
 
 export default async function ProfessionalPage(props: PageProps<"/dashboard/equipo/[id]">) {
-  const { organization, user, canWrite } = await requireOrganization();
+  const { organization, user, canWrite } = await requirePagePermission("team.manage");
   if (!isTeamModeEnabled(organization)) redirect("/dashboard/equipo");
   const { id } = await props.params;
 

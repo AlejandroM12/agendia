@@ -47,7 +47,9 @@ function partialBlocks(blocks: Block[]): string[] {
 }
 
 export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) {
-  const { organization, canWrite } = await requireOrganization();
+  const context = await requireOrganization();
+  const { organization, canWrite, permissions } = context;
+  const restricted = context.restrictedProfessionalId;
   const tz = organization.timezone;
   const now = new Date();
   const today = todayInTz(tz, now);
@@ -62,13 +64,25 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
 
   // Con un solo profesional (o con el modo equipo apagado) la agenda es la de siempre.
   const active = await listActiveProfessionals(db, organization.id);
-  const multi = isTeamModeEnabled(organization) && active.length > 1;
-  const filter = multi && typeof params.profesional === "string" ? active.find((p) => p.id === params.profesional) ?? null : null;
+  const teamMode = isTeamModeEnabled(organization) && active.length > 1;
+  const requestedProfessional = typeof params.profesional === "string" ? params.profesional : "";
+  // Un profesional ve SU agenda; la de un compañero solo como ocupación (sin datos de clientes) y si el negocio se lo permite.
+  const viewTeam = restricted !== null && teamMode && permissions.has("team.availability.view");
+  const colleague = viewTeam ? (active.find((p) => p.id === requestedProfessional && p.id !== restricted) ?? null) : null;
+  const busyOnly = colleague !== null;
+  const multi = restricted === null && teamMode;
+  const filter = restricted !== null
+    ? (colleague ?? active.find((p) => p.id === restricted) ?? null)
+    : multi
+      ? (active.find((p) => p.id === requestedProfessional) ?? null)
+      : null;
+  const targetId = restricted !== null ? (colleague?.id ?? restricted) : (filter?.id ?? null);
+  const showChips = multi || viewTeam;
 
-  const scheduleIds = multi ? (filter ? [filter.id] : active.map((p) => p.id)) : await schedulingProfessionalIds(db, organization);
+  const scheduleIds = restricted !== null ? [targetId!] : multi ? (filter ? [filter.id] : active.map((p) => p.id)) : await schedulingProfessionalIds(db, organization);
   const [weekAppointments, rules, exceptions] = await Promise.all([
     db.appointment.findMany({
-      where: { organizationId: organization.id, startsAt: { gte: weekStart, lt: weekEnd }, ...(filter ? { professionalId: filter.id } : {}) },
+      where: { organizationId: organization.id, startsAt: { gte: weekStart, lt: weekEnd }, ...(targetId ? { professionalId: targetId } : {}) },
       orderBy: { startsAt: "asc" },
       select: {
         id: true,
@@ -111,10 +125,10 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
 
   // Horario del día: del profesional filtrado, o el de siempre cuando hay uno solo.
   const blocksFor = (professionalId: string | null) => exceptions.filter((e) => e.professionalId === null || e.professionalId === professionalId);
-  const singleId = filter?.id ?? scheduleIds[0] ?? null;
+  const singleId = targetId ?? filter?.id ?? scheduleIds[0] ?? null;
   const singleRules = rules.filter((r) => r.professionalId === singleId);
-  const singleBlocks = multi ? blocksFor(singleId) : exceptions;
-  const headline = multi && !filter ? null : hoursLabel(date, singleRules, singleBlocks, multi ? "Atiende" : "Atendés");
+  const singleBlocks = multi || restricted !== null ? blocksFor(singleId) : exceptions;
+  const headline = multi && !filter ? null : hoursLabel(date, singleRules, singleBlocks, multi || busyOnly ? "Atiende" : "Atendés");
   const singleWindows = workingWindows({ dateStr: date, rules: singleRules, exceptions: singleBlocks });
 
   // Una columna por profesional activo (y por quien tenga turnos ese día aunque ya esté desactivado).
@@ -129,8 +143,9 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
       ]
     : [];
 
-  const query = (day: string) => `/dashboard/agenda?fecha=${day}${filter ? `&profesional=${filter.id}` : ""}`;
-  const newHref = `/dashboard/turnos/nuevo?fecha=${date}${filter ? `&profesional=${filter.id}` : ""}`;
+  const query = (day: string) => `/dashboard/agenda?fecha=${day}${(multi || busyOnly) && filter ? `&profesional=${filter.id}` : ""}`;
+  const canCreate = canWrite && !busyOnly && (permissions.has("appointments.manage") || permissions.has("own.appointments.create"));
+  const newHref = `/dashboard/turnos/nuevo?fecha=${date}${filter && restricted === null ? `&profesional=${filter.id}` : ""}`;
   const showColumns = columns.length > 0;
 
   return (
@@ -142,27 +157,27 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
           {headline && <p className="mt-1 text-sm text-muted-foreground">{headline}</p>}
         </div>
         <div className="flex items-center gap-2">
-          {date !== today && <ButtonLink variant="outline" href={filter ? `/dashboard/agenda?profesional=${filter.id}` : "/dashboard/agenda"}>Hoy</ButtonLink>}
-          <DateJump value={date} professionalId={filter?.id} />
+          {date !== today && <ButtonLink variant="outline" href={colleague ? `/dashboard/agenda?profesional=${colleague.id}` : filter && multi ? `/dashboard/agenda?profesional=${filter.id}` : "/dashboard/agenda"}>Hoy</ButtonLink>}
+          <DateJump value={date} professionalId={multi || busyOnly ? filter?.id : undefined} />
           <ButtonLink variant="outline" size="icon" aria-label="Buscar turnos" href="/dashboard/turnos">
             <Search aria-hidden="true" />
           </ButtonLink>
         </div>
       </header>
 
-      {multi && (
+      {showChips && (
         <nav aria-label="Profesional" className="-mx-1 mb-4 flex gap-1 overflow-x-auto px-1 pb-1">
           <Link
             href={`/dashboard/agenda?fecha=${date}`}
-            aria-current={!filter ? "page" : undefined}
+            aria-current={(restricted ? !busyOnly : !filter) ? "page" : undefined}
             className={cn(
               "shrink-0 rounded-full border px-3.5 py-2 text-sm font-medium transition-colors",
-              !filter ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted",
+              (restricted ? !busyOnly : !filter) ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-muted",
             )}
           >
-            Todo el equipo
+            {restricted ? "Mi agenda" : "Todo el equipo"}
           </Link>
-          {active.map((professional) => {
+          {active.filter((p) => p.id !== restricted).map((professional) => {
             const selected = filter?.id === professional.id;
             return (
               <Link
@@ -241,7 +256,7 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
               : "Los turnos que agendes o que reserven tus clientes van a aparecer acá."
           }
           action={
-            canWrite && (
+            canCreate && (
               <ButtonLink href={newHref}>
                 <Plus aria-hidden="true" /> Agendar turno
               </ButtonLink>
@@ -316,8 +331,24 @@ export default async function AgendaPage(props: PageProps<"/dashboard/agenda">) 
           {multi && partialBlocks(singleBlocks).map((text) => (
             <p key={text} className="mb-3 rounded-md bg-secondary px-3 py-2 text-sm text-muted-foreground">{text}</p>
           ))}
-          <AppointmentList appointments={dayAppointments.map(toItem)} timeZone={tz} now={date === today ? now : undefined} />
-          {canWrite && (
+          {busyOnly ? (
+            // Solo ocupación: horarios tomados, sin nombres, teléfonos ni servicios de los clientes del compañero.
+            <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card" aria-label={`Horarios ocupados de ${colleague?.displayName}`}>
+              {dayAppointments
+                .filter((a) => a.status !== "canceled")
+                .map((a) => (
+                  <li key={a.id} className="flex items-center gap-3 px-4 py-3.5">
+                    <span className="w-24 shrink-0 font-semibold tabular-nums">
+                      {minutesToLabel(toZoned(a.startsAt, tz).minutes)} – {minutesToLabel(toZoned(a.endsAt, tz).minutes)}
+                    </span>
+                    <span className="text-muted-foreground">Ocupado</span>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <AppointmentList appointments={dayAppointments.map(toItem)} timeZone={tz} now={date === today ? now : undefined} />
+          )}
+          {canCreate && (
             <ButtonLink variant="outline" className="mt-4 hidden lg:inline-flex" href={newHref}>
               <Plus aria-hidden="true" /> Agendar otro turno
             </ButtonLink>

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireContext } from "@/lib/dal";
+import { FORBIDDEN_MESSAGE } from "@/lib/permissions";
 import { type ActionState } from "@/lib/action-state";
 import { brand } from "@/lib/brand";
 import { isStandalone } from "@/lib/deployment";
@@ -17,7 +18,10 @@ import { applyPreapprovalState, getMonthlyPlan } from "./subscriptions";
  * Mercado Pago confirma la autorización (webhook o reconciliación).
  */
 export async function startSubscriptionAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { organization, user } = await requireContext();
+  const context = await requireContext();
+  // Solo el propietario contrata o cancela: ni un administrador ni un profesional.
+  if (!context.permissions.has("billing.manage")) return { message: FORBIDDEN_MESSAGE };
+  const { organization, user } = context;
   if (isStandalone()) return { message: "Esta instalación no usa suscripción." };
   if (!isMercadoPagoConfigured()) {
     return { message: "El pago online todavía no está habilitado. Escribinos y activamos tu plan." };
@@ -64,7 +68,9 @@ export async function startSubscriptionAction(_prev: ActionState, formData: Form
 }
 
 export async function cancelSubscriptionAction(): Promise<ActionState> {
-  const { organization, user } = await requireContext();
+  const context = await requireContext();
+  if (!context.permissions.has("billing.manage")) return { message: FORBIDDEN_MESSAGE };
+  const { organization, user } = context;
 
   const subscription = await db.subscription.findUnique({ where: { organizationId: organization.id } });
   if (!subscription?.providerSubscriptionId || subscription.status === "canceled") {

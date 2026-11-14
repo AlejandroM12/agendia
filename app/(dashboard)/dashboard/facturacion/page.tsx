@@ -6,7 +6,7 @@ import { CancelSubscriptionButton, SubscribeButton } from "@/components/billing/
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { brand, formatMoney, licenseTerms, offers, pricing, trialPolicy } from "@/lib/brand";
 import { isStandalone } from "@/lib/deployment";
 import { daysRemainingInTrial, getEffectiveStatus } from "@/lib/organization-access";
@@ -27,7 +27,7 @@ const INCLUDED = [
 export default async function BillingPage(props: PageProps<"/dashboard/facturacion">) {
   if (isStandalone()) notFound();
 
-  const { organization, user } = await requireOrganization();
+  const { organization, user } = await requirePagePermission("billing.manage");
   const [plan, subscription] = await Promise.all([
     getMonthlyPlan(),
     db.subscription.findUnique({ where: { organizationId: organization.id } }),

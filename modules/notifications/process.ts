@@ -43,6 +43,27 @@ async function previousProfessionalName(notification: {
   return previous?.displayName ?? null;
 }
 
+/**
+ * Revalida, al enviar, a quién va un aviso interno: el negocio pudo revocar el
+ * acceso, el profesional pudo desactivar sus avisos o el turno pudo pasar a otro.
+ */
+async function internalRecipientAllowed(
+  notification: { organizationId: string; recipient: string },
+  appointment: { professionalId: string },
+): Promise<boolean> {
+  const member = await db.membership.findFirst({
+    where: { organizationId: notification.organizationId, user: { email: { equals: notification.recipient, mode: "insensitive" } } },
+    select: { userId: true, role: true, notifyBookings: true },
+  });
+  if (!member || !member.notifyBookings) return false;
+  if (member.role === "owner" || member.role === "admin") return true;
+  const assigned = await db.professional.findFirst({
+    where: { id: appointment.professionalId, organizationId: notification.organizationId, userId: member.userId },
+    select: { id: true },
+  });
+  return Boolean(assigned);
+}
+
 export type ProcessSummary = { claimed: number; sent: number; failed: number; retried: number; skipped: number; canceled: number };
 
 /**
@@ -94,7 +115,10 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
         notification.type !== "cancellation_owner") ||
       (notification.type === "reminder" &&
         (appointment.status !== "confirmed" || appointment.startsAt <= new Date()));
-    if (obsolete) {
+    // Un aviso interno solo sale si hoy su destinatario sigue teniendo derecho a recibirlo
+    // (membresía vigente y avisos activos, y —si es profesional— que el turno siga siendo suyo).
+    const stillAllowed = obsolete || !notification.type.endsWith("_owner") || (await internalRecipientAllowed(notification, appointment));
+    if (obsolete || !stillAllowed) {
       await db.notification.update({ where: { id }, data: { status: "canceled", lockedUntil: null } });
       summary.canceled++;
       continue;

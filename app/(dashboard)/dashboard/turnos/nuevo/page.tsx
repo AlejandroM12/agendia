@@ -5,6 +5,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
+import { findCustomerFor } from "@/modules/access/scope";
 import { isTeamModeEnabled } from "@/lib/features";
 import { isValidDateStr, todayInTz } from "@/lib/time";
 import { listActiveProfessionals } from "@/modules/team/eligibility";
@@ -12,8 +13,11 @@ import { listActiveProfessionals } from "@/modules/team/eligibility";
 export const metadata: Metadata = { title: "Nuevo turno" };
 
 export default async function NewAppointmentPage(props: PageProps<"/dashboard/turnos/nuevo">) {
-  const { organization, canWrite } = await requireOrganization();
-  if (!canWrite) redirect("/dashboard/facturacion");
+  const context = await requireOrganization();
+  const { organization, canWrite, permissions } = context;
+  const restricted = context.restrictedProfessionalId;
+  if (!permissions.has("appointments.manage") && !permissions.has("own.appointments.create")) redirect("/dashboard");
+  if (!canWrite) redirect(restricted ? "/dashboard" : "/dashboard/facturacion");
 
   const params = await props.searchParams;
   const requestedDate = typeof params.fecha === "string" ? params.fecha : "";
@@ -25,19 +29,14 @@ export default async function NewAppointmentPage(props: PageProps<"/dashboard/tu
       orderBy: [{ active: "desc" }, { sortOrder: "asc" }],
       select: { id: true, name: true, durationMinutes: true, active: true, allProfessionals: true, professionals: { select: { professionalId: true } } },
     }),
-    customerId
-      ? db.customer.findFirst({
-          where: { id: customerId, organizationId: organization.id },
-          select: { id: true, name: true, phone: true, email: true },
-        })
-      : null,
+    customerId ? findCustomerFor(context, customerId) : null,
     listActiveProfessionals(db, organization.id),
   ]);
 
   // Con varios profesionales activos, el turno se agenda eligiendo con quién (o «cualquiera»).
   const requestedProfessional = typeof params.profesional === "string" ? params.profesional : "";
   const team =
-    isTeamModeEnabled(organization) && professionals.length > 1
+    !restricted && isTeamModeEnabled(organization) && professionals.length > 1
       ? {
           professionals: professionals.map((p) => ({ id: p.id, displayName: p.displayName })),
           performedBy: Object.fromEntries(
@@ -61,10 +60,13 @@ export default async function NewAppointmentPage(props: PageProps<"/dashboard/tu
         />
       ) : (
         <AppointmentForm
-          services={services.map(({ id, name, durationMinutes, active }) => ({ id, name, durationMinutes, active }))}
+          services={services
+            // Un profesional solo agenda los servicios que realiza.
+            .filter((s) => !restricted || s.allProfessionals || s.professionals.some((l) => l.professionalId === restricted))
+            .map(({ id, name, durationMinutes, active }) => ({ id, name, durationMinutes, active }))}
           team={team}
           defaultDate={isValidDateStr(requestedDate) ? requestedDate : todayInTz(organization.timezone)}
-          customer={customer ? { id: customer.id, name: customer.name, detail: customer.phone ?? customer.email ?? "" } : null}
+          customer={customer ? { id: customer.id, name: customer.name, detail: restricted ? (customer.phone ?? "") : (customer.phone ?? customer.email ?? "") } : null}
         />
       )}
     </>

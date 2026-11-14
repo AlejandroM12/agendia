@@ -19,8 +19,8 @@ const STEPS = [
 ];
 
 export default async function OnboardingPage(props: PageProps<"/onboarding">) {
-  const { organization } = await requireContext();
-  if (organization.onboardingCompletedAt) redirect("/dashboard");
+  const { organization, permissions } = await requireContext();
+  if (organization.onboardingCompletedAt || !permissions.has("settings.manage")) redirect("/dashboard");
 
   const primaryId = await primaryProfessionalId(db, organization.id);
   const [services, rules] = await Promise.all([

@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requirePermission } from "@/lib/dal";
+import { requirePermission, requireScopedWrite } from "@/lib/dal";
+import { FORBIDDEN_MESSAGE } from "@/lib/permissions";
+import { canActOnProfessional } from "@/modules/access/scope";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
 import { dateStrToDbDate, isValidDateStr, labelToMinutes, todayInTz } from "@/lib/time";
@@ -258,8 +260,10 @@ export async function saveProfessionalHoursAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requirePermission("schedule.manage");
+  // El propietario y el administrador editan los horarios de cualquiera; un profesional, solo los suyos y si se lo permitieron.
+  const access = await requireScopedWrite("schedule.manage", "own.hours.manage");
   if (!access.ok) return { message: access.message };
+  if (!canActOnProfessional(access.context, professionalId)) return { message: FORBIDDEN_MESSAGE };
   const parsed = parseJsonField(weeklyRulesSchema, formData.get("rules"));
   if (!parsed.success) return { message: parsed.error.issues[0]?.message ?? "Revisá los horarios ingresados." };
 
@@ -292,8 +296,13 @@ export async function addBlockAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const access = await requirePermission("schedule.manage");
+  // Un cierre general del negocio es del propietario/administrador; un bloqueo individual,
+  // también del profesional dueño de esa agenda si el negocio se lo permite.
+  const access = professionalId === null
+    ? await requirePermission("schedule.manage")
+    : await requireScopedWrite("schedule.manage", "own.blocks.manage");
   if (!access.ok) return { message: access.message };
+  if (professionalId !== null && !canActOnProfessional(access.context, professionalId)) return { message: FORBIDDEN_MESSAGE };
   const { organization } = access.context;
   const today = todayInTz(organization.timezone);
 
@@ -333,8 +342,11 @@ export async function addBlockAction(
 }
 
 export async function deleteBlockAction(professionalId: string | null, exceptionId: string): Promise<void> {
-  const access = await requirePermission("schedule.manage");
+  const access = professionalId === null
+    ? await requirePermission("schedule.manage")
+    : await requireScopedWrite("schedule.manage", "own.blocks.manage");
   if (!access.ok) return;
+  if (professionalId !== null && !canActOnProfessional(access.context, professionalId)) return;
   await deleteAvailabilityException(access.context.organization, exceptionId, { professionalId });
   revalidatePath("/dashboard/disponibilidad");
 }

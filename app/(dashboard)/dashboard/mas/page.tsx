@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bell, ChevronRight, Clock, CreditCard, Globe, LogOut, Scissors, Search, Settings, UsersRound, type LucideIcon } from "lucide-react";
+import { Bell, ChevronRight, CircleUserRound, Clock, CreditCard, Globe, LogOut, Scissors, Search, Settings, Users, UsersRound, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { requireOrganization } from "@/lib/dal";
 import { isStandalone } from "@/lib/deployment";
@@ -9,22 +9,42 @@ import { isTeamModeEnabled } from "@/lib/features";
 export const metadata: Metadata = { title: "Más" };
 
 export default async function MorePage() {
-  const { organization, user } = await requireOrganization();
+  const { organization, user, permissions, role } = await requireOrganization();
 
-  const items: Array<{ href: string; label: string; description: string; icon: LucideIcon }> = [
+  type Entry = { href: string; label: string; description: string; icon: LucideIcon };
+  const businessItems: Entry[] = [
     { href: "/dashboard/pagina", label: "Mi página pública", description: "Tu marca, tu enlace y tu código QR", icon: Globe },
     { href: "/dashboard/servicios", label: "Servicios", description: "Qué ofrecés, duración y precios", icon: Scissors },
     ...(isTeamModeEnabled(organization)
-      ? [{ href: "/dashboard/equipo", label: "Equipo", description: "Profesionales, fotos y servicios", icon: UsersRound }]
+      ? [{ href: "/dashboard/equipo", label: "Equipo", description: "Profesionales, accesos, fotos y servicios", icon: UsersRound }]
       : []),
     { href: "/dashboard/disponibilidad", label: "Horarios", description: "Días de atención y bloqueos", icon: Clock },
     { href: "/dashboard/recordatorios", label: "Recordatorios", description: "Avisos automáticos a tus clientes", icon: Bell },
     { href: "/dashboard/turnos", label: "Buscar turnos", description: "Por cliente, fecha o estado", icon: Search },
     { href: "/dashboard/configuracion", label: "Configuración", description: "Actividad, zona horaria y tu cuenta", icon: Settings },
-    ...(isStandalone()
-      ? []
-      : [{ href: "/dashboard/facturacion", label: "Mi plan", description: "Prueba gratuita y suscripción", icon: CreditCard }]),
+    ...(isStandalone() ? [] : [{ href: "/dashboard/facturacion", label: "Mi plan", description: "Prueba gratuita y suscripción", icon: CreditCard }]),
+    { href: "/dashboard/perfil", label: "Mi cuenta", description: "Tus datos, tu contraseña y tus avisos", icon: CircleUserRound },
   ];
+  const professionalItems: Entry[] = [
+    { href: "/dashboard/disponibilidad", label: "Mis horarios", description: "Tus días de atención y bloqueos", icon: Clock },
+    ...(permissions.has("own.customers.contact")
+      ? [{ href: "/dashboard/clientes", label: "Mis clientes", description: "Quienes tienen turnos con vos", icon: Users }]
+      : []),
+    { href: "/dashboard/perfil", label: "Mi perfil", description: "Tus datos, tu contraseña y tus avisos", icon: CircleUserRound },
+  ];
+  // Cada persona ve solo las secciones que su rol le permite.
+  const items = (role === "professional" ? professionalItems : businessItems).filter((item) => {
+    const needs: Record<string, Parameters<typeof permissions.has>[0] | undefined> = {
+      "/dashboard/pagina": "publicpage.manage",
+      "/dashboard/servicios": "services.manage",
+      "/dashboard/equipo": "team.manage",
+      "/dashboard/recordatorios": "settings.manage",
+      "/dashboard/configuracion": "settings.manage",
+      "/dashboard/facturacion": "billing.manage",
+    };
+    const needed = needs[item.href];
+    return !needed || permissions.has(needed);
+  });
 
   return (
     <>

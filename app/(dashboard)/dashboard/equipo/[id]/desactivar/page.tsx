@@ -5,7 +5,7 @@ import { DeactivateButton } from "@/components/team/team-actions-buttons";
 import { ButtonLink } from "@/components/ui/button-link";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { isTeamModeEnabled } from "@/lib/features";
 import { formatTime, toZoned } from "@/lib/time";
 import { listAffectedAppointments } from "@/modules/team/team-admin";
@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Resolver turnos" };
  * reasigna ni se cancela solo.
  */
 export default async function DeactivateProfessionalPage(props: PageProps<"/dashboard/equipo/[id]/desactivar">) {
-  const { organization, canWrite } = await requireOrganization();
+  const { organization, canWrite } = await requirePagePermission("team.manage");
   if (!isTeamModeEnabled(organization)) redirect("/dashboard/equipo");
   const { id } = await props.params;
 

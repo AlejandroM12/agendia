@@ -9,19 +9,24 @@ import { Section } from "@/components/dashboard/section";
 import { ConfirmButton } from "@/components/form/confirm-button";
 import { db } from "@/lib/db";
 import { requireOrganization } from "@/lib/dal";
+import { appointmentScope, findCustomerFor } from "@/modules/access/scope";
 import { deleteCustomerAction, updateCustomerAction } from "@/modules/customers/actions";
 
 export const metadata: Metadata = { title: "Cliente" };
 
 export default async function CustomerPage(props: PageProps<"/dashboard/clientes/[id]">) {
-  const { organization, canWrite } = await requireOrganization();
+  const context = await requireOrganization();
+  const { organization, canWrite, permissions } = context;
   const { id } = await props.params;
 
-  const customer = await db.customer.findFirst({ where: { id, organizationId: organization.id } });
+  // Un identificador de cliente no alcanza: un profesional solo accede a quienes tienen turnos con él.
+  const customer = await findCustomerFor(context, id);
   if (!customer) notFound();
+  const restricted = context.restrictedProfessionalId !== null;
+  if (restricted && !permissions.has("own.customers.contact")) notFound();
 
   const appointments = await db.appointment.findMany({
-    where: { customerId: customer.id, organizationId: organization.id },
+    where: { ...appointmentScope(context), customerId: customer.id },
     orderBy: { startsAt: "desc" },
     take: 50,
     select: {
@@ -38,9 +43,9 @@ export default async function CustomerPage(props: PageProps<"/dashboard/clientes
     <>
       <PageHeader
         title={customer.name}
-        back={{ href: "/dashboard/clientes", label: "Clientes" }}
+        back={{ href: "/dashboard/clientes", label: restricted ? "Mis clientes" : "Clientes" }}
         action={
-          canWrite && (
+          canWrite && (permissions.has("appointments.manage") || permissions.has("own.appointments.create")) && (
             <ButtonLink href={`/dashboard/turnos/nuevo?cliente=${customer.id}`}>
                   <Plus aria-hidden="true" /> Agendar turno
                 </ButtonLink>
@@ -49,16 +54,24 @@ export default async function CustomerPage(props: PageProps<"/dashboard/clientes
       />
 
       <div className="space-y-10">
-        <Section title="Datos">
-          <CustomerForm
-            action={updateCustomerAction.bind(null, customer.id)}
-            customer={customer}
-            submitLabel="Guardar cambios"
-            disabled={!canWrite}
-          />
-        </Section>
+        {restricted ? (
+          // Un profesional ve lo mínimo para atender: nombre y teléfono. Sin email, sin notas del negocio.
+          <Section title="Contacto">
+            <p className="font-medium">{customer.name}</p>
+            <p className="text-muted-foreground">{customer.phone ?? "Sin teléfono cargado"}</p>
+          </Section>
+        ) : (
+          <Section title="Datos">
+            <CustomerForm
+              action={updateCustomerAction.bind(null, customer.id)}
+              customer={customer}
+              submitLabel="Guardar cambios"
+              disabled={!canWrite || !permissions.has("customers.manage")}
+            />
+          </Section>
+        )}
 
-        <Section title="Historial de turnos">
+        <Section title={restricted ? "Tus turnos con este cliente" : "Historial de turnos"}>
           {appointments.length === 0 ? (
             <p className="text-sm text-muted-foreground">Todavía no tiene turnos.</p>
           ) : (
@@ -66,7 +79,7 @@ export default async function CustomerPage(props: PageProps<"/dashboard/clientes
           )}
         </Section>
 
-        {canWrite && appointments.length === 0 && (
+        {canWrite && !restricted && permissions.has("customers.manage") && appointments.length === 0 && (
           <ConfirmButton
             action={deleteCustomerAction.bind(null, customer.id)}
             confirmMessage={`¿Eliminar a ${customer.name}?`}

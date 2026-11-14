@@ -24,7 +24,7 @@ const businessSchema = z.object({
  * reenviar el paso 2 reemplazaría toda la lista de servicios.
  */
 async function requireOnboardingContext() {
-  const access = await requireWriteContext();
+  const access = await requireWriteContext("settings.manage");
   if (access.ok && access.context.organization.onboardingCompletedAt) redirect("/dashboard");
   return access;
 }

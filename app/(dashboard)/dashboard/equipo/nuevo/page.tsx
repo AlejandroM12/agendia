@@ -4,7 +4,7 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { ProfessionalForm } from "@/components/team/team-forms";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { isTeamModeEnabled } from "@/lib/features";
 import { PROFESSIONAL_COLORS } from "@/lib/team-colors";
 import { createProfessionalAction } from "@/modules/team/actions";
@@ -13,7 +13,7 @@ import { getProfessionalQuota } from "@/modules/team/professionals";
 export const metadata: Metadata = { title: "Nuevo profesional" };
 
 export default async function NewProfessionalPage() {
-  const { organization, user, canWrite } = await requireOrganization();
+  const { organization, user, canWrite } = await requirePagePermission("team.manage");
   if (!isTeamModeEnabled(organization)) redirect("/dashboard/equipo");
   if (!canWrite) redirect("/dashboard/equipo");
 

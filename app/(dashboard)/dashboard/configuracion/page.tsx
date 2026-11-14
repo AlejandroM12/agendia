@@ -4,12 +4,12 @@ import { ChevronRight, Globe } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { BusinessForm, PasswordForm } from "@/components/settings/settings-forms";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 
 export const metadata: Metadata = { title: "Configuración" };
 
 export default async function SettingsPage() {
-  const { organization, user, canWrite } = await requireOrganization();
+  const { organization, user, canWrite } = await requirePagePermission("settings.manage");
 
   return (
     <>

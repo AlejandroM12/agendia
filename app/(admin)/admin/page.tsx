@@ -74,7 +74,7 @@ export default async function AdminPage(props: PageProps<"/admin">) {
       orderBy: { createdAt: "desc" },
       take: 100,
       include: {
-        memberships: { take: 1, orderBy: { createdAt: "asc" }, select: { user: { select: { email: true } } } },
+        memberships: { where: { role: "owner" }, take: 1, orderBy: { createdAt: "asc" }, select: { user: { select: { email: true } } } },
         subscription: { select: { status: true, currentPeriodEnd: true } },
         _count: { select: { appointments: true } },
       },

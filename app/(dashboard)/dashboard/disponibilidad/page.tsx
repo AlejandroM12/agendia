@@ -14,6 +14,7 @@ import { requireOrganization } from "@/lib/dal";
 import { isTeamModeEnabled } from "@/lib/features";
 import { dateStrToDbDate, dbDateToDateStr, formatDateLong, minutesToLabel, todayInTz } from "@/lib/time";
 import { cn } from "@/lib/utils";
+import { redirect } from "next/navigation";
 import { listActiveProfessionals } from "@/modules/team/eligibility";
 import { deleteBlockAction } from "@/modules/team/actions";
 
@@ -57,14 +58,23 @@ function BlockList({ rows, canWrite }: { rows: BlockRow[]; canWrite: boolean }) 
 }
 
 export default async function AvailabilityPage(props: PageProps<"/dashboard/disponibilidad">) {
-  const { organization, canWrite } = await requireOrganization();
+  const context = await requireOrganization();
+  const { organization, permissions } = context;
+  const restricted = context.restrictedProfessionalId;
+  if (restricted === null && !permissions.has("schedule.manage")) redirect("/dashboard");
+  // Un profesional ve sus horarios y solo los edita si el negocio se lo permitió.
+  const canWrite = context.canWrite && (restricted === null || permissions.has("own.hours.manage"));
+  const canBlock = context.canWrite && (restricted === null || permissions.has("own.blocks.manage"));
   const today = todayInTz(organization.timezone);
   const requested = (await props.searchParams).profesional;
 
   const active = await listActiveProfessionals(db, organization.id);
   // Con un solo profesional (o con el modo equipo apagado) la pantalla es la de siempre.
-  const multi = isTeamModeEnabled(organization) && active.length > 1;
-  const selected = (multi && typeof requested === "string" ? active.find((p) => p.id === requested) : null) ?? active[0] ?? null;
+  const multi = restricted === null && isTeamModeEnabled(organization) && active.length > 1;
+  const selected =
+    restricted !== null
+      ? (active.find((p) => p.id === restricted) ?? null)
+      : ((multi && typeof requested === "string" ? active.find((p) => p.id === requested) : null) ?? active[0] ?? null);
 
   const upcoming = { gte: dateStrToDbDate(today) };
   const order = [{ date: "asc" as const }, { startMinute: "asc" as const }];
@@ -93,7 +103,7 @@ export default async function AvailabilityPage(props: PageProps<"/dashboard/disp
   return (
     <>
       <PageHeader
-        title="Horarios"
+        title={restricted !== null ? "Mis horarios" : "Horarios"}
         description={multi ? "Los horarios de cada profesional y los cierres de todo el negocio." : "Cuándo atendés y cómo se pueden reservar tus turnos."}
       />
 
@@ -124,7 +134,7 @@ export default async function AvailabilityPage(props: PageProps<"/dashboard/disp
           title={multi && selected ? `Horario semanal de ${selected.displayName}` : "Horario semanal"}
           description={multi ? "Sus días y horarios de atención. Para un descanso, cargá dos franjas el mismo día." : "Tus días y horarios habituales."}
         >
-          <WeeklyHoursForm key={selected?.id ?? "none"} rules={rules} disabled={!canWrite} professionalId={multi ? selected?.id : undefined} />
+          <WeeklyHoursForm key={selected?.id ?? "none"} rules={rules} disabled={!canWrite} professionalId={multi || restricted !== null ? selected?.id : undefined} />
           {multi && selected && (
             <CopyHoursForm
               key={`copy-${selected.id}`}
@@ -135,7 +145,16 @@ export default async function AvailabilityPage(props: PageProps<"/dashboard/disp
           )}
         </Section>
 
-        {multi && selected ? (
+        {restricted !== null ? (
+          selected ? (
+            <Section title="Mis bloqueos y ausencias" description="Días u horarios en los que no atendés. No cancelan turnos que ya tenés: esos se resuelven aparte.">
+              <BlockList rows={individual} canWrite={canBlock} />
+              <ExceptionForm key={`block-${selected.id}`} minDate={today} disabled={!canBlock} professionalId={selected.id} />
+            </Section>
+          ) : (
+            <p className="text-sm text-muted-foreground">Tu perfil está desactivado o todavía no está vinculado: no hay agenda para editar.</p>
+          )
+        ) : multi && selected ? (
           <>
             <Section
               title={`Vacaciones y ausencias de ${selected.displayName}`}
@@ -157,9 +176,11 @@ export default async function AvailabilityPage(props: PageProps<"/dashboard/disp
           </Section>
         )}
 
-        <Section title="Reglas de reserva online" description="Cómo se ofrecen los horarios en tu página pública.">
-          <BookingSettingsForm settings={organization} disabled={!canWrite} />
-        </Section>
+        {restricted === null && (
+          <Section title="Reglas de reserva online" description="Cómo se ofrecen los horarios en tu página pública.">
+            <BookingSettingsForm settings={organization} disabled={!canWrite} />
+          </Section>
+        )}
       </div>
     </>
   );

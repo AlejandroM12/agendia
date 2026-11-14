@@ -1,6 +1,6 @@
 import QRCode from "qrcode";
 import { brand } from "@/lib/brand";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 
 /**
  * Código QR de la página pública del negocio de la sesión, para descargar e
@@ -10,7 +10,7 @@ import { requireOrganization } from "@/lib/dal";
  *   ?formato=png (por defecto, 1024 px) | svg     &descargar=1 → como archivo
  */
 export async function GET(request: Request) {
-  const { organization } = await requireOrganization();
+  const { organization } = await requirePagePermission("publicpage.manage");
   const params = new URL(request.url).searchParams;
   const url = `${brand.url}/${organization.slug}`;
   const options = { margin: 2, errorCorrectionLevel: "M" as const, color: { dark: "#000000", light: "#ffffff" } };

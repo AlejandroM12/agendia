@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { PublicPageEditor } from "@/components/public-page/editor";
 import { SharePanel } from "@/components/public-page/share-panel";
 import { brand } from "@/lib/brand";
-import { requireOrganization } from "@/lib/dal";
+import { requirePagePermission } from "@/lib/dal";
 import { presetForIndustry } from "@/lib/theme";
 import { getOrganizationImages } from "@/modules/public-page/images";
 import { toPublicProfile } from "@/modules/public-page/settings";
@@ -11,7 +11,7 @@ import { toPublicProfile } from "@/modules/public-page/settings";
 export const metadata: Metadata = { title: "Mi página pública" };
 
 export default async function PublicPageSettings() {
-  const { organization, canWrite } = await requireOrganization();
+  const { organization, canWrite } = await requirePagePermission("publicpage.manage");
   const images = await getOrganizationImages(organization.id);
 
   return (
