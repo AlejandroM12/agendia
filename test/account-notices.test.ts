@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
+import { ensurePlan } from "@/modules/billing/catalog";
 import { enqueueAccountNotice, renderAccountNotice, scanAccountNotices } from "@/modules/notifications/account-notices";
 import { processDueNotifications } from "@/modules/notifications/process";
 import { createSchedulableOrganization } from "./helpers";
@@ -37,7 +38,7 @@ describe("avisos de la cuenta", () => {
     expect(await notices()).toHaveLength(0);
 
     await setTrialEnd(1 * DAY);
-    const plan = await db.plan.findFirstOrThrow({ where: { code: "mensual" } });
+    const plan = await ensurePlan("profesional");
     await db.subscription.create({ data: { organizationId: ctx.organization.id, planId: plan.id, status: "pending" } });
     await scanAccountNotices();
     expect(await notices()).toHaveLength(0);

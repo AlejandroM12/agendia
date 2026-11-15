@@ -62,7 +62,7 @@ describe("negocios de demostración", () => {
   });
 
   it("se niega a correr contra una base que no es local o en producción", () => {
-    for (const env of [{ DATABASE_URL: "postgresql://u:p@db.ejemplo.com:5432/x" }, { NODE_ENV: "production" }]) {
+    for (const env of [{ DATABASE_URL: "postgresql://u:p@db.ejemplo.com:5432/x" }, { NODE_ENV: "production" }] as Array<Record<string, string>>) {
       let failed = false;
       try {
         run([], env);

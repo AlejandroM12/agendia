@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppContext } from "@/lib/dal";
 import { db } from "@/lib/db";
+import { ensurePlan } from "@/modules/billing/catalog";
 import { createSchedulableOrganization, fakeContext } from "./helpers";
 
 const session = vi.hoisted(() => ({ current: null as unknown }));
@@ -74,8 +75,8 @@ describe("panel de plataforma: vista de un negocio", () => {
   });
 
   it("detecta una suscripción con cambio de plan sin confirmar y un importe distinto del de lista", async () => {
-    const pro = await db.plan.findFirstOrThrow({ where: { code: "mensual" } });
-    const team = await db.plan.findFirstOrThrow({ where: { code: "equipo" } });
+    const pro = await ensurePlan("profesional");
+    const team = await ensurePlan("equipo");
     await db.subscription.create({
       data: {
         organizationId: target.organization.id,

@@ -9,6 +9,13 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
+    // Cada ejecución crea su propia base a partir de una plantilla migrada y la borra al terminar
+    // (test/global-setup.ts): las ejecuciones simultáneas no comparten datos ni conexiones con la base de desarrollo.
+    globalSetup: ["test/global-setup.ts"],
+    // Con la máquina cargada (varias ejecuciones, el servidor E2E, navegadores) crear una organización
+    // de prueba puede pasar de los 10 s predeterminados: el límite es más holgado a propósito.
+    hookTimeout: 60_000,
+    testTimeout: 30_000,
     // Las pruebas de integración (organización/registro/reset de
     // contraseña) pegan contra la base de datos real de desarrollo, así
     // que corren de a una para no pisarse entre sí sin necesitar una
