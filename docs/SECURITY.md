@@ -61,3 +61,7 @@ Ampliado en `INFRASTRUCTURE.md` §7. Principios de seguridad específicos:
 
 Hoy los roles `owner` y `admin` no se verifican en ningún punto del código y todo miembro puede todo; es inocuo porque solo existe el dueño (no hay invitaciones). **Antes de habilitar cuentas de profesionales** hay que resolver los cinco riesgos descriptos en `docs/MULTI_PROFESSIONAL.md` §10 (roles sin verificación, una membresía por usuario, avisos internos a todas las membresías, consultas sin alcance por profesional, acciones que validan escritura y no rol). Las claves foráneas compuestas `(organizationId, id)` ya impiden, en la base de datos, asociar turnos, horarios, bloqueos y servicios con profesionales de otra organización.
 
+## Cuentas, roles e invitaciones (etapa 4)
+
+Los riesgos de roles que seguían abiertos (`docs/MULTI_PROFESSIONAL.md` §10) quedaron resueltos: el rol se verifica en el servidor en cada acción y página (`lib/permissions.ts`, `lib/dal.ts`); una persona puede tener varios negocios con el activo resuelto en el servidor; los avisos internos van al destinatario correcto; y toda consulta de turnos y clientes pasa por `modules/access/scope.ts`. Las invitaciones usan tokens aleatorios guardados como hash, de un solo uso y con vencimiento. Detalle, límites y riesgos restantes en `docs/AUTH_AND_ACCESS.md`.
+

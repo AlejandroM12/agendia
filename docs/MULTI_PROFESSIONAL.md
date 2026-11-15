@@ -1,6 +1,6 @@
 # Equipos con varios profesionales
 
-Estado: **etapas 1, 2 y 3 implementadas** (modelo de datos, motor de disponibilidad, pantalla «Equipo», horarios por profesional, agenda del equipo, reasignación y reserva pública con elección de profesional; ver secciones 14 y 15). Las etapas 4 y 5 están diseñadas en la sección 12 y **no** están implementadas. La funcionalidad está **apagada por defecto**: ningún negocio existente cambia de comportamiento hasta que se la enciende a propósito (sección 7).
+Estado: **etapas 1 a 4 implementadas** (modelo de datos, motor de disponibilidad, pantalla «Equipo», horarios por profesional, agenda del equipo, reasignación y reserva pública con elección de profesional; ver secciones 14 y 15). La etapa 5 está diseñada en las secciones 12 y 16 y **no** está implementada. La etapa 4 (cuentas, invitaciones y permisos) está en la sección 16 y en `docs/AUTH_AND_ACCESS.md`. La funcionalidad está **apagada por defecto**: ningún negocio existente cambia de comportamiento hasta que se la enciende a propósito (sección 7).
 
 ## 1. Qué cambió y qué no
 
@@ -362,4 +362,26 @@ Recomendación técnica (a validar): combinar 1 + 3 durante un plazo de adaptaci
 Despliegue acumulado de las etapas 1 a 3: `docs/DEPLOYMENT.md`. Costos y rentabilidad actualizados con los precios vigentes y futuros: `docs/PRODUCTION_READINESS.md` §5. La reserva pública no agrega servicios, dependencias, tareas ni variables de entorno.
 
 **Etapa 4 (propuesta): cuentas, invitaciones y permisos.** (1) Resolver primero los riesgos de la sección 10: varias membresías por usuario con un negocio activo en sesión, avisos internos dirigidos al destinatario correcto (el profesional asignado; el propietario sin duplicar), y un único helper de alcance por rol para toda consulta de turnos y clientes (un profesional ve su agenda y los datos mínimos de sus clientes; nunca facturación, suscripción, configuración comercial ni a otros profesionales). (2) Invitación por correo con token de un solo uso, vencimiento y guardado como hash (mismo patrón que la verificación de email), que vincula `Professional.userId`; revocar una cuenta sin perder historial ni turnos. (3) Rol `professional` en `lib/permissions.ts` con permisos acotados a su agenda. (4) Pruebas de aislamiento **dentro del mismo negocio** y de enumeración de invitaciones. (5) Sin cambios comerciales. No avanzar sin aprobación.
+
+## 16. Etapa 4: cuentas individuales, invitaciones y permisos (implementada)
+
+Detalle completo en **`docs/AUTH_AND_ACCESS.md`** (modelo, matriz de permisos, alcance de datos, invitaciones, revocación, notificaciones, auditoría, migración y rollback). Resumen:
+
+- Un usuario puede pertenecer a varios negocios (selector con nombre, logo y rol); el negocio activo y el rol se resuelven en el servidor en cada pedido; una revocación corta el acceso en el siguiente pedido.
+- Roles: propietario, administrador y profesional, con permisos centralizados; el profesional ve solo su agenda y sus clientes, con ocho permisos que el propietario configura.
+- Invitaciones por correo desde Equipo; aceptación con o sin cuenta; revocar el acceso conserva todo lo del profesional.
+- Avisos internos solo a quien corresponde, sin duplicados, revalidados al enviar.
+- **Riesgos de la sección 10: resueltos** (roles sin verificación, una membresía por usuario, avisos a todas las membresías, consultas sin alcance, acciones que validaban solo escritura).
+- Migraciones nuevas: `20261118000000_accounts_and_invitations` (aditiva). Rollback: `scripts/prepare-rollback.mjs` aparta también las membresías que no son del propietario (sin borrar).
+- Interruptor propio: `TEAM_ACCOUNTS_ENABLED` / `teamAccountsEnabled`, apagado por defecto.
+
+### Propuesta para la etapa 5 (integración comercial; NO implementada)
+
+1. **Ofertas y cupos:** publicar Profesional (hasta 2) y Equipo (hasta 5) con los precios definidos (`futurePricing`), elegir plan en el alta y desde «Mi plan», cambio de plan, y que `Plan.code` `equipo` exista en la base y en Mercado Pago (sandbox primero). Las cuentas individuales ya están incluidas en ambos planes: no hay cargo por acceso.
+2. **Exceso de cupo:** implementar la política que apruebes de las alternativas de §15.10 (aviso, período de adaptación, elección de a quién desactivar con la guía de reasignación, restricción de reservas del exceso solo como último recurso). Esperá tu aprobación: no se definió el plazo.
+3. **Licencias:** Licencia Profesional (ARS 149.000, hasta 2) y Equipo (ARS 249.000, hasta 5) como parámetros de la instalación independiente (`STANDALONE_MAX_PROFESSIONALS` pasa a depender de la licencia), con condiciones claras de lo incluido el primer año y la renovación aún sin precio.
+4. **Landing y onboarding:** comunicar equipo sin tecnicismos; onboarding que pregunte si trabaja solo o con equipo y deje el modo listo; capturas y piezas nuevas. Recién ahí se enciende el modo equipo y las cuentas por defecto para los planes que corresponda.
+5. **Operación:** panel de plataforma con el estado de equipo/cuentas por negocio y el consumo (invitaciones y avisos internos ya se miden), análisis de costos con datos reales y prueba de carga del VPS.
+6. **Pendientes de seguridad a evaluar:** autenticación de dos pasos opcional para propietarios, revocación de sesiones individuales, y auditoría de horarios.
+Nada de esto se publica ni se cobra hasta tu aprobación.
 

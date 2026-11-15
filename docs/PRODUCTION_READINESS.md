@@ -139,6 +139,13 @@ El hosting corre en el mismo VPS (D-34): ≈ 350–450 MB de RAM por instalació
 - **Desde el segundo año** el hosting, dominio y soporte se renuevan por separado; **el valor no está definido (B6)**. Para no perder plata en infraestructura la renovación tendría que ser, como mínimo, de **≈ ARS 56.000–98.000 por año (Profesional)** y **≈ ARS 70.000–117.000 (Equipo)**, sin contar soporte. Como referencia, el Plan Profesional suma ARS 118.800 por año y el Equipo ARS 238.800.
 - **Capacidad:** al pasar de ~6 instalaciones hay que subir el servidor o sumar otro (ver arriba): costo escalonado que hoy ninguna licencia financia después del primer año.
 
+### Impacto de las cuentas individuales (etapa 4) en correo y recursos
+
+- **Invitaciones:** un correo por envío y por reenvío (tope: 5 por invitación, 20 invitaciones nuevas por negocio por hora). Por negocio es un gasto único y chico: un equipo de 5 profesionales con cuentas son ≈ 5 correos al alta (≈ 10 con algún reenvío). Con 100 negocios de la mezcla B (195 profesionales) serían ≈ 200–400 correos **una sola vez**, no mensuales. Se miden en `/admin` → «Invitaciones» (no están en la tabla de avisos).
+- **Avisos internos:** hoy un turno genera un aviso al propietario (si está activo). Con cuentas, el profesional asignado suma **un correo más por evento de turno propio** (reserva, cambio, cancelación) cuando tiene avisos activos, y el administrador solo si el propietario se los activó. Con un equipo donde todos los profesionales tienen cuenta, el volumen de correos por turno pasa de ≈ 2,5 a ≈ 3,5 (hipótesis: +1 por reserva y +1 por cada cambio o cancelación). Con 100 negocios de la mezcla B (23.400 turnos al mes) serían hasta ≈ 23.000 correos mensuales más si **todos** los profesionales tienen cuenta y avisos activos (≈ 58.500 → ≈ 82.000): **esto sí empuja a un plan de correo superior** y conviene verificar su límite. Cada profesional puede apagar sus avisos y el propietario puede no habilitar cuentas.
+- **Consultas y sesiones:** cada pedido hace 3 consultas pequeñas para resolver sesión, negocio, rol y perfil (usuario + membresías, negocio, profesional); no hay consultas por fila. Más usuarios con sesión simultánea aumentan lecturas, no escrituras; con ≈ 400 cuentas activas es despreciable frente al VPS previsto, pero **no se midió**. Auditoría: filas chicas solo por acciones de gestión.
+- **Sin costo de licencia por cuenta:** las cuentas de profesionales no se cobran y no consumen cupo; el costo marginal es el correo y las lecturas.
+
 ### Datos que hay que obtener para reemplazar las hipótesis
 
 1. Consumo real de correos por negocio (ya disponible en `/admin` → «Consumo del mes») y el límite mensual del plan de Resend que se elija.

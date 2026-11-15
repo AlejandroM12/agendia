@@ -265,3 +265,15 @@
 **Estado:** CONFIRMADO.
 **Decisión:** para volver a una versión anterior con filas que esta no entiende (fotos de profesionales, avisos de cambio de profesional) se usa `scripts/prepare-rollback.mjs`, que las aparta en tablas de respaldo y se puede revertir; borrar filas no es parte del procedimiento. La reducción del Plan Equipo con exceso de profesionales queda **sin implementar** hasta que el dueño apruebe una política (alternativas en `docs/MULTI_PROFESSIONAL.md` §15.10).
 
+### D-54 · Cuentas individuales: membresías por negocio, roles y permisos en el servidor
+**Estado:** CONFIRMADO (implementado, deshabilitado por defecto). Detalle en `docs/AUTH_AND_ACCESS.md`.
+**Decisión:** una cuenta puede pertenecer a varios negocios; el negocio activo, el rol y los permisos se resuelven en el servidor en cada pedido (el token no los lleva; la cookie es solo una pista). Tres roles: propietario, administrador (sin facturación, sin permisos, sin nombrar administradores) y profesional (solo su agenda; lo demás lo decide el propietario con ocho permisos configurables y valores predeterminados prudentes). Los profesionales pueden existir sin cuenta; la cuenta es opcional, no consume cupo y no se cobra.
+
+### D-55 · Invitaciones: token con hash, un solo uso, 7 días, límites de abuso
+**Estado:** CONFIRMADO.
+**Decisión:** invitación por correo (Resend), atada a negocio, correo, rol y perfil; reenviar emite token nuevo; revocar el acceso borra solo la membresía y conserva todo lo del profesional; una reactivación no devuelve el acceso. Interruptor propio `TEAM_ACCOUNTS_ENABLED`, separado del modo equipo, por el mayor riesgo de abrir la aplicación a terceros.
+
+### D-56 · Rollback de accesos: se apartan, no se borran
+**Estado:** CONFIRMADO.
+**Decisión:** para volver a una versión sin roles, `scripts/prepare-rollback.mjs` aparta a tablas de respaldo las membresías que no son del propietario (restaurables); la versión anterior trataría a cualquier administrador como propietario, así que dejarlos no es una opción segura.
+

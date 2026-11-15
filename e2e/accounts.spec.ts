@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
-import { registerAndOnboard, resetRateLimits, sql } from "./helpers";
+import { registerAndOnboard, sql } from "./helpers";
 
 const TZ = "America/Argentina/Buenos_Aires";
 const shot = (page: Page, name: string) =>
