@@ -23,6 +23,7 @@ export async function startLicensePurchaseAction(_prev: ActionState, formData: F
     email: formData.get("email"),
     phone: formData.get("phone") ?? undefined,
     businessName: formData.get("businessName"),
+    tier: formData.get("tier") ?? undefined,
   });
   if (!parsed.success) return { errors: fieldErrors(parsed.error) };
 

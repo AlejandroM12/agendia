@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import type { LicenseOrderStatus } from "@prisma/client";
 import { ButtonLink } from "@/components/ui/button-link";
 import { db } from "@/lib/db";
-import { brand, formatMoney, offers } from "@/lib/brand";
+import { brand, formatMoney } from "@/lib/brand";
+import { licenseDisplayName } from "@/lib/plans";
 import { isStandalone } from "@/lib/deployment";
 import { syncLicenseOrder } from "@/modules/billing/licenses";
 
@@ -58,7 +59,7 @@ export default async function LicenseOrderPage(props: PageProps<"/licencia/orden
     <section className="mx-auto max-w-xl px-4 py-16 sm:px-6 sm:py-20">
       <div className="rounded-3xl border border-border bg-card p-7">
         <p className="text-sm font-medium text-muted-foreground">
-          {offers.license} · {formatMoney(order.amount, order.currency)}
+          {licenseDisplayName(order.tier === "equipo" ? "equipo" : "profesional")} · {formatMoney(order.amount, order.currency)}
         </p>
         <h1 className="mt-2 font-display text-3xl font-semibold">{status.title}</h1>
         <p className="mt-3 text-muted-foreground">{status.body}</p>

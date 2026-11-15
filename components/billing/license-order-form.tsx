@@ -7,11 +7,12 @@ import { SubmitButton } from "@/components/form/submit-button";
 import { useForm } from "@/components/form/use-form";
 import { startLicensePurchaseAction } from "@/modules/billing/license-actions";
 
-export function LicenseOrderForm({ priceLabel, terms }: { priceLabel: string; terms: string }) {
+export function LicenseOrderForm({ priceLabel, terms, tier }: { priceLabel: string; terms: string; tier: "profesional" | "equipo" }) {
   const form = useForm(startLicensePurchaseAction);
 
   return (
     <form {...form.formProps} className="space-y-4">
+      <input type="hidden" name="tier" value={tier} />
       <Field label="Tu nombre" htmlFor="name" error={form.error("name")}>
         <Input id="name" name="name" autoComplete="name" required />
       </Field>

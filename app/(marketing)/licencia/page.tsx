@@ -4,7 +4,9 @@ import { connection } from "next/server";
 import { Check } from "lucide-react";
 import { LicenseOrderForm } from "@/components/billing/license-order-form";
 import { ButtonLink } from "@/components/ui/button-link";
-import { brand, formatMoney, licenseRenewalText, licenseTerms, offers, pricing } from "@/lib/brand";
+import { brand, formatMoney, licenseRenewalText, licenseTerms, offers } from "@/lib/brand";
+import { teamPlansPublished } from "@/lib/features";
+import { licenseDisplayName, parsePlanTier, PLAN_CAPABILITIES } from "@/lib/plans";
 import { isStandalone } from "@/lib/deployment";
 import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
 
@@ -22,18 +24,22 @@ const INCLUDED = [
   "Agenda, clientes, reservas online y recordatorios por email",
 ];
 
-export default async function LicensePage() {
+export default async function LicensePage(props: PageProps<"/licencia">) {
   // Depende de la configuración del servidor en ejecución, no del build.
   await connection();
   if (isStandalone()) notFound();
 
-  const price = formatMoney(pricing.oneTime);
+  // Con los planes con equipo publicados hay dos niveles (?nivel=equipo); antes, una sola licencia.
+  const tier = teamPlansPublished() ? (parsePlanTier((await props.searchParams).nivel) ?? "profesional") : "profesional";
+  const capability = PLAN_CAPABILITIES[tier];
+  const licenseName = licenseDisplayName(tier);
+  const price = formatMoney(capability.licensePrice);
   const terms = licenseRenewalText();
 
   return (
     <section className="mx-auto max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl text-center">
-        <h1 className="font-display text-4xl font-semibold sm:text-5xl">{offers.license}</h1>
+        <h1 className="font-display text-4xl font-semibold sm:text-5xl">{licenseName}</h1>
         <p className="mt-4 text-lg text-muted-foreground">
           {brand.name} en una instalación propia para tu negocio, con un pago único. La instalamos y la configuramos
           por vos.
@@ -46,6 +52,17 @@ export default async function LicensePage() {
             <span className="font-display text-5xl font-semibold tracking-tight">{price}</span>
             <span className="text-muted-foreground"> una vez</span>
           </p>
+          {teamPlansPublished() && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Hasta {capability.maxActiveProfessionals} profesionales activos.{" "}
+              <a
+                href={`/licencia?nivel=${tier === "equipo" ? "profesional" : "equipo"}`}
+                className="font-medium text-primary underline underline-offset-4"
+              >
+                Ver la {licenseDisplayName(tier === "equipo" ? "profesional" : "equipo")}
+              </a>
+            </p>
+          )}
           <ul className="mt-6 space-y-2.5">
             {INCLUDED.map((item) => (
               <li key={item} className="flex items-start gap-2.5">
@@ -72,7 +89,7 @@ export default async function LicensePage() {
           <h2 className="text-lg font-semibold">Comprar la licencia</h2>
           {isMercadoPagoConfigured() ? (
             <div className="mt-5">
-              <LicenseOrderForm priceLabel={price} terms={terms} />
+              <LicenseOrderForm priceLabel={price} terms={terms} tier={tier} />
             </div>
           ) : (
             <div className="mt-4 space-y-4 text-sm">
@@ -82,7 +99,7 @@ export default async function LicensePage() {
               <ButtonLink
                 size="lg"
                 className="w-full"
-                href={`mailto:${brand.contactEmail}?subject=${encodeURIComponent(`${offers.license} de ${brand.name}`)}`}
+                href={`mailto:${brand.contactEmail}?subject=${encodeURIComponent(`${licenseName} de ${brand.name}`)}`}
               >
                 Escribir a {brand.contactEmail}
               </ButtonLink>

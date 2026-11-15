@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { PricingCards } from "@/components/marketing/pricing-cards";
+import { LicensesSection, PricingCards } from "@/components/marketing/pricing-cards";
 import { brand, licenseRenewalText, offers, trialPolicy } from "@/lib/brand";
+import { teamPlansPublished } from "@/lib/features";
 
 export const metadata: Metadata = {
   title: "Precios",
@@ -13,12 +14,14 @@ export default function PricingPage() {
       <div className="mx-auto max-w-2xl text-center">
         <h1 className="font-display text-4xl font-semibold sm:text-5xl">Precios</h1>
         <p className="mt-4 text-lg text-muted-foreground">
-          Probá {brand.name} {trialPolicy.trialDays} días gratis y seguí por mes, o quedate con tu propio sistema
-          con una licencia de pago único. Todos los importes están en pesos argentinos.
+          {teamPlansPublished()
+            ? `Probá ${brand.name} ${trialPolicy.trialDays} días gratis y seguí por mes con el plan que se ajuste a tu equipo. Todos los importes están en pesos argentinos.`
+            : `Probá ${brand.name} ${trialPolicy.trialDays} días gratis y seguí por mes, o quedate con tu propio sistema con una licencia de pago único. Todos los importes están en pesos argentinos.`}
         </p>
       </div>
 
       <PricingCards className="mt-14" />
+      <LicensesSection className="mt-12" />
 
       <div className="mx-auto mt-12 max-w-2xl rounded-2xl border border-border bg-card p-6 text-sm text-muted-foreground">
         <p>
@@ -26,10 +29,12 @@ export default function PricingPage() {
           durante {trialPolicy.readonlyGraceDays} días: seguís viendo tus datos, pero no podés crear turnos ni recibir
           reservas hasta activar el plan. Nunca eliminamos datos automáticamente.
         </p>
-        <p className="mt-3">
-          <strong className="text-foreground">¿Cómo se renueva la {offers.license.toLowerCase()}?</strong>{" "}
-          {licenseRenewalText()}
-        </p>
+        {!teamPlansPublished() && (
+          <p className="mt-3">
+            <strong className="text-foreground">¿Cómo se renueva la {offers.license.toLowerCase()}?</strong>{" "}
+            {licenseRenewalText()}
+          </p>
+        )}
         <p className="mt-3">
           ¿Dudas? Escribinos a{" "}
           <a href={`mailto:${brand.contactEmail}`} className="font-medium text-primary underline underline-offset-4">

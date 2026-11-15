@@ -3,7 +3,9 @@ import "server-only";
 import type { LicenseOrder } from "@prisma/client";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { brand, formatMoney, licenseRenewalText, licenseTerms, offers, pricing } from "@/lib/brand";
+import { brand, formatMoney, licenseRenewalText, licenseTerms, pricing } from "@/lib/brand";
+import { teamPlansPublished } from "@/lib/features";
+import { licenseDisplayName, parsePlanTier, PLAN_CAPABILITIES, type PlanTier } from "@/lib/plans";
 import { isEmailConfigured, sendEmail } from "@/modules/notifications/email";
 import { renderEmail } from "@/modules/notifications/templates";
 import {
@@ -35,6 +37,11 @@ export const licenseOrderSchema = z.object({
     .optional()
     .transform((value) => value || undefined),
   businessName: z.string().trim().min(2, "Ingresá el nombre de tu negocio.").max(120),
+  // Nivel de la licencia: se valida contra los conocidos; el precio sale siempre del servidor.
+  tier: z
+    .string()
+    .optional()
+    .transform((value): PlanTier => parsePlanTier(value) ?? "profesional"),
 });
 
 export type LicenseOrderInput = z.infer<typeof licenseOrderSchema>;
@@ -42,19 +49,21 @@ export type LicenseOrderInput = z.infer<typeof licenseOrderSchema>;
 export type CreateLicenseOrderResult = { ok: true; orderId: string; checkoutUrl: string } | { ok: false; error: string };
 
 /** Crea la orden y el checkout de Mercado Pago. La orden queda pendiente. */
-export async function createLicenseOrder(input: LicenseOrderInput): Promise<CreateLicenseOrderResult> {
+export async function createLicenseOrder(input: Omit<LicenseOrderInput, "tier"> & { tier?: PlanTier }): Promise<CreateLicenseOrderResult> {
   if (!isMercadoPagoConfigured()) {
     return { ok: false, error: "El pago online todavía no está habilitado. Escribinos y lo coordinamos." };
   }
+  // La licencia Equipo no se vende hasta publicar los planes con equipo.
+  const tier: PlanTier = input.tier === "equipo" && teamPlansPublished() ? "equipo" : "profesional";
 
   const order = await db.licenseOrder.create({
-    data: { ...input, amount: pricing.oneTime, currency: pricing.currency },
+    data: { ...input, tier, amount: PLAN_CAPABILITIES[tier].licensePrice, currency: pricing.currency },
   });
 
   try {
     const preference = await createPreference({
       externalReference: licenseReference(order.id),
-      title: `${brand.name} — ${offers.license}`,
+      title: `${brand.name} — ${licenseDisplayName(tier)}`,
       amount: order.amount,
       currency: order.currency,
       payer: { email: order.email, name: order.name },
@@ -73,6 +82,7 @@ export async function createLicenseOrder(input: LicenseOrderInput): Promise<Crea
 }
 
 async function notifyLicensePaid(order: LicenseOrder): Promise<void> {
+  const licenseName = licenseDisplayName(order.tier === "equipo" ? "equipo" : "profesional");
   if (!isEmailConfigured()) {
     console.error("[billing] licencia pagada sin canal de email: avisar a mano al comprador", order.id);
     return;
@@ -81,16 +91,16 @@ async function notifyLicensePaid(order: LicenseOrder): Promise<void> {
   const messages = [
     {
       to: order.email,
-      subject: `Recibimos tu pago: ${offers.license} de ${brand.name}`,
+      subject: `Recibimos tu pago: ${licenseName} de ${brand.name}`,
       ...renderEmail({
         heading: "Recibimos tu pago",
         paragraphs: [
-          `Hola ${order.name}, gracias por comprar la ${offers.license.toLowerCase()} de ${brand.name}.`,
+          `Hola ${order.name}, gracias por comprar la ${licenseName.toLowerCase()} de ${brand.name}.`,
           `Te vamos a escribir a este email para coordinar la instalación y la configuración de ${order.businessName}.`,
           licenseRenewalText(),
         ],
         details: [
-          ["Compra", offers.license],
+          ["Compra", licenseName],
           ["Importe", amount],
           ["Incluye", `Instalación, configuración y ${licenseTerms.includedServiceMonths} meses de hosting, dominio y soporte`],
           ["Número de orden", order.id],
@@ -110,6 +120,7 @@ async function notifyLicensePaid(order: LicenseOrder): Promise<void> {
           ["Email", order.email],
           ["Teléfono", order.phone ?? "—"],
           ["Importe", amount],
+          ["Nivel", order.tier],
           ["Orden", order.id],
           ["Pago", order.providerPaymentId ?? "—"],
         ],

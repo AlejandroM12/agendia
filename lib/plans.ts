@@ -1,5 +1,6 @@
 import type { OrganizationStatus } from "@prisma/client";
 import { offers, pricing } from "@/lib/brand";
+import { teamPlansPublished } from "@/lib/features";
 
 /**
  * Capacidades y límites de los planes: la única definición.
@@ -37,6 +38,14 @@ export const TRIAL_MAX_PROFESSIONALS = PLAN_CAPABILITIES.profesional.maxActivePr
  */
 export function planTierFromCode(code: string | null | undefined): PlanTier {
   return code === PLAN_CAPABILITIES.equipo.code ? "equipo" : "profesional";
+}
+
+/**
+ * Nombre comercial de la licencia de un nivel. Mientras los planes con equipo no están publicados
+ * existe una sola licencia pública: «Licencia independiente».
+ */
+export function licenseDisplayName(tier: PlanTier): string {
+  return teamPlansPublished() ? PLAN_CAPABILITIES[tier].licenseName : offers.license;
 }
 
 export function parsePlanTier(value: unknown): PlanTier | null {

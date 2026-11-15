@@ -1,8 +1,24 @@
 import { BellRing, CalendarDays, Clock, Link2, MessageCircle, Repeat, ShieldCheck, Smartphone, Users, type LucideIcon } from "lucide-react";
-import { PricingCards } from "@/components/marketing/pricing-cards";
+import { LicensesSection, PricingCards } from "@/components/marketing/pricing-cards";
 import { AgendaPreview, BookingPreview, ReminderPreview } from "@/components/marketing/product-preview";
 import { ButtonLink } from "@/components/ui/button-link";
-import { brand, licenseRenewalText, offers, trialPolicy } from "@/lib/brand";
+import { brand, trialPolicy } from "@/lib/brand";
+import { teamPlansPublished } from "@/lib/features";
+import { getFaqs } from "@/lib/faq";
+
+const TEAM_AUDIENCES = [
+  "Profesionales independientes", "Barberías", "Peluquerías", "Centros de estética", "Estudios de uñas",
+  "Psicología", "Nutrición", "Kinesiología", "Consultorios con varios profesionales", "Y cualquier lugar donde atienda más de una persona",
+];
+
+const TEAM_SITUATIONS: Array<{ title: string; text: string }> = [
+  { title: "Tus clientes reservan mientras atendés", text: "Nadie te escribe para pedir un horario: reservan solos en tu página, a cualquier hora." },
+  { title: "Cada profesional tiene su agenda", text: "Con sus propios horarios y servicios. Cada uno ve lo suyo, y vos ves todo el equipo." },
+  { title: "Turnos simultáneos sin pisarse", text: "Si dos clientes reservan a la vez, cada uno queda con su horario. Nunca se superponen dos turnos de la misma persona." },
+  { title: "Se organiza desde el celular", text: "Ves el día de todo el equipo, cargás un turno o reasignás a otro profesional desde el teléfono." },
+  { title: "Compartís tu enlace donde quieras", text: "En el perfil de Instagram, en un estado de WhatsApp o con un código QR en el mostrador." },
+  { title: "Los avisos, por email", text: "Confirmaciones y recordatorios automáticos por correo. Si querés escribirles por WhatsApp, el mensaje sale armado y lo mandás vos." },
+];
 
 const AUDIENCES = [
   "Peluquerías y barberías", "Manicuras", "Estética", "Psicología", "Nutrición", "Kinesiología",
@@ -20,30 +36,8 @@ const MORE_FEATURES: Array<{ icon: LucideIcon; title: string; text: string }> = 
 
 const STEPS = [
   { title: "Creá tu cuenta", text: "Nombre, email y contraseña. En un minuto estás adentro." },
-  { title: "Contanos cómo trabajás", text: "Tus servicios, cuánto duran y en qué horarios atendés. Son tres pasos cortos." },
+  { title: "Contanos cómo trabajás", text: "Tus servicios, cuánto duran y en qué horarios atendés. Son pasos cortos y podés completar el resto después." },
   { title: "Compartí tu enlace", text: "Pegalo en tu Instagram o WhatsApp y empezá a recibir reservas en tu agenda." },
-];
-
-const FAQS = [
-  { q: "¿Necesito instalar algún programa?", a: `No. ${brand.name} funciona desde el navegador, en el celular o en la computadora. No hay nada que descargar.` },
-  { q: "¿Puedo usar Agendia desde mi celular?", a: "Sí. Está pensada para el celular: ves tu agenda, cargás turnos y respondés a tus clientes desde el teléfono." },
-  { q: "¿Mis clientes necesitan descargar alguna aplicación?", a: "No. Entran a tu enlace desde el navegador, eligen servicio, día y horario, dejan su nombre y un contacto, y listo. No tienen que crear cuentas." },
-  { q: "¿Necesito conocimientos de informática?", a: "No. Si usás WhatsApp, podés usar Agendia. Además, te ayudamos a configurar tu agenda." },
-  { q: "¿Me ayudan a configurar mi agenda?", a: "Sí. La configuración inicial es asistida: te acompañamos con tus servicios, duraciones y horarios para que arranques tranquilo." },
-  { q: "¿Puedo registrar los turnos que recibo por WhatsApp?", a: "Sí. Los cargás a mano en un momento, eligiendo servicio, día y horario, y quedan en tu agenda junto con los que reservan online. Así evitás que se te pisen." },
-  { q: "¿Puedo registrar turnos que recibo por teléfono o personalmente?", a: "Sí. Agendás el turno desde tu panel, igual que uno que llega por WhatsApp. Todos quedan en el mismo lugar." },
-  { q: "¿Puedo compartir mi página de reservas por Instagram y WhatsApp?", a: "Sí. Tenés un enlace propio para pegar en tu perfil de Instagram, en tu estado o en un mensaje de WhatsApp." },
-  { q: "¿Puedo personalizar mi página de reservas?", a: "Sí. Podés ponerle tu logo, tu foto de portada, tus colores y tu estilo, para que se vea como tu negocio." },
-  { q: "¿Agendia envía recordatorios a mis clientes?", a: "Sí, por correo electrónico: la confirmación al reservar y un recordatorio antes del turno, de forma automática. Además, desde cada turno podés abrir un chat de WhatsApp con el mensaje ya escrito; ese mensaje lo enviás vos, a mano, no sale solo." },
-  { q: "¿Cómo funciona la prueba gratuita?", a: `Al registrarte tenés ${trialPolicy.trialDays} días con todas las funciones. No se cobra nada automáticamente: al terminar, vos decidís si seguís.` },
-  { q: `¿Qué pasa cuando terminan los ${trialPolicy.trialDays} días gratis?`, a: `Tu cuenta queda en modo de solo lectura durante ${trialPolicy.readonlyGraceDays} días: seguís viendo tus turnos y clientes, pero no podés crear turnos nuevos ni recibir reservas hasta activar el plan. Nunca borramos tus datos automáticamente.` },
-    { q: "¿Cómo me entero de una reserva nueva?", a: "Aparece al instante en tu agenda y, si querés, también te avisamos por email." },
-  { q: "¿Sirve para mi rubro?", a: "Si trabajás con turnos, sí. Vos definís tus propios servicios, duraciones y horarios: no está atada a ninguna actividad en particular." },
-  { q: `¿Qué diferencia hay entre el ${offers.monthly} y la ${offers.license}?`, a: `Con el ${offers.monthly} pagás por mes y usás ${brand.name} online, con hosting y soporte incluidos mientras dure la suscripción. La ${offers.license} es un pago único por una licencia de uso permanente: una instalación independiente, con base de datos propia, que instalamos y configuramos por vos. No incluye el código fuente. ${licenseRenewalText()}` },
-  { q: "¿Puedo cancelar mi suscripción?", a: "Sí, cuando quieras. No hay permanencia mínima y tus datos siguen siendo tuyos." },
-  { q: "¿Qué significa que la licencia sea permanente?", a: "Que pagás una sola vez por el derecho a usar el sistema y esa licencia no vence. No quiere decir que el alojamiento, el dominio o el soporte estén incluidos para siempre: eso se explica en la pregunta siguiente." },
-  { q: "¿Qué sucede después del primer año de la licencia independiente?", a: `La licencia sigue siendo tuya. Lo que cambia es que, desde el segundo año, el alojamiento, el dominio y el soporte se renuevan por separado. ${licenseRenewalText()}` },
-  { q: "¿La licencia incluye el código fuente?", a: "No. Es una licencia de uso: te instalamos y configuramos el sistema en una instalación independiente, con tu propia base de datos, pero no se entrega el código fuente." },
 ];
 
 function SectionHeading({ eyebrow, title, text }: { eyebrow: string; title: string; text?: string }) {
@@ -94,8 +88,25 @@ function FeatureRow({
 }
 
 export default function LandingPage() {
+  const team = teamPlansPublished();
+  const faqs = getFaqs({ team });
+  const audiences = team ? TEAM_AUDIENCES : AUDIENCES;
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            mainEntity: faqs.map((item) => ({
+              "@type": "Question",
+              name: item.q,
+              acceptedAnswer: { "@type": "Answer", text: item.a },
+            })),
+          }).replace(/</g, "\\u003c"),
+        }}
+      />
       {/* Hero */}
       <section className="overflow-hidden">
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 pt-14 pb-16 sm:px-6 sm:pt-20 lg:grid-cols-[1.05fr_1fr] lg:pb-24">
@@ -132,9 +143,9 @@ export default function LandingPage() {
       {/* Para quién */}
       <section className="border-y border-border bg-card/60">
         <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-          <p className="text-center text-sm font-medium text-muted-foreground">Para cualquier profesional que trabaje con turnos</p>
+          <p className="text-center text-sm font-medium text-muted-foreground">{team ? "Para profesionales independientes y equipos pequeños" : "Para cualquier profesional que trabaje con turnos"}</p>
           <ul className="mt-5 flex flex-wrap justify-center gap-2">
-            {AUDIENCES.map((audience) => (
+            {audiences.map((audience) => (
               <li key={audience} className="rounded-full border border-border bg-background px-3.5 py-1.5 text-sm">
                 {audience}
               </li>
@@ -199,6 +210,26 @@ export default function LandingPage() {
         </ul>
       </section>
 
+      {team && (
+        <section id="equipos" className="border-y border-border bg-card/60">
+          <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+            <SectionHeading
+              eyebrow="Para equipos"
+              title="Si atienden varias personas, cada una con su agenda"
+              text="Una sola suscripción por negocio, sin importar cuántas cuentas individuales tengas."
+            />
+            <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {TEAM_SITUATIONS.map((item) => (
+                <li key={item.title} className="rounded-2xl border border-border bg-background p-5">
+                  <h3 className="font-semibold">{item.title}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
+
       {/* Cómo funciona */}
       <section id="como-funciona" className="scroll-mt-20 bg-primary text-primary-foreground">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
@@ -220,15 +251,20 @@ export default function LandingPage() {
 
       {/* Precios */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <SectionHeading eyebrow="Precios" title="Precios claros, sin sorpresas" text="Probalo gratis y seguí por mes, o elegí una licencia de pago único." />
+        <SectionHeading
+          eyebrow="Precios"
+          title="Precios claros, sin sorpresas"
+          text={team ? "Probalo gratis y seguí por mes. Los dos planes incluyen lo mismo: solo cambia cuántos profesionales activos podés tener." : "Probalo gratis y seguí por mes, o elegí una licencia de pago único."}
+        />
         <PricingCards className="mt-12" />
+        <LicensesSection className="mt-12" />
       </section>
 
       {/* FAQ */}
       <section className="mx-auto max-w-3xl px-4 pb-20 sm:px-6">
         <SectionHeading eyebrow="Dudas frecuentes" title="Antes de empezar" />
         <div className="mt-10 divide-y divide-border rounded-2xl border border-border bg-card">
-          {FAQS.map((item) => (
+          {faqs.map((item) => (
             <details key={item.q} className="group px-5">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-4 font-medium [&::-webkit-details-marker]:hidden">
                 {item.q}

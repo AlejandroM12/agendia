@@ -33,6 +33,8 @@ x-app-env: &app-env
   EMAIL_FROM: ${EMAIL_FROM:-}
   TEAM_MODE_ENABLED: ${TEAM_MODE_ENABLED:-}
   TEAM_ACCOUNTS_ENABLED: ${TEAM_ACCOUNTS_ENABLED:-}
+  # Nivel de la licencia comprada: "profesional" (hasta 2 profesionales activos) o "equipo" (hasta 5).
+  LICENSE_TIER: ${LICENSE_TIER:-profesional}
 
 x-logging: &logging
   driver: json-file
