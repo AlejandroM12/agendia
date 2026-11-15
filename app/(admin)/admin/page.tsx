@@ -213,7 +213,7 @@ export default async function AdminPage(props: PageProps<"/admin">) {
           )}
         </p>
         <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-          <table className="w-full min-w-[640px] text-left text-sm">
+          <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="border-b border-border text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">Negocio</th>
@@ -222,6 +222,8 @@ export default async function AdminPage(props: PageProps<"/admin">) {
                 <th className="px-4 py-3 text-right font-medium">Correos enviados</th>
                 <th className="px-4 py-3 text-right font-medium">Fallidos</th>
                 <th className="px-4 py-3 text-right font-medium">Reintentos</th>
+                <th className="px-4 py-3 text-right font-medium">Avisos internos</th>
+                <th className="px-4 py-3 text-right font-medium">Invitaciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -236,6 +238,8 @@ export default async function AdminPage(props: PageProps<"/admin">) {
                   <td className="px-4 py-3 text-right tabular-nums">{row.emails.sent}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{row.emails.failed}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{row.emails.retried}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{row.internalNotices}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{row.invitationEmails}</td>
                 </tr>
               ))}
             </tbody>

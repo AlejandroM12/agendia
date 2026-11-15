@@ -16,9 +16,9 @@ import { addProfessional, createSchedulableOrganization, enableTeam, ownerProfes
  */
 
 type Script = {
-  inspect: (client: pg.Client) => Promise<{ photos: number; notices: number }>;
-  apply: (client: pg.Client) => Promise<{ photosMoved: number; noticesConverted: number }>;
-  restore: (client: pg.Client) => Promise<{ photosRestored: number; noticesRestored: number }>;
+  inspect: (client: pg.Client) => Promise<{ photos: number; notices: number; members: number }>;
+  apply: (client: pg.Client) => Promise<{ photosMoved: number; noticesConverted: number; membersMoved: number }>;
+  restore: (client: pg.Client) => Promise<{ photosRestored: number; noticesRestored: number; membersRestored: number }>;
 };
 
 let script: Script;
@@ -36,6 +36,7 @@ afterAll(async () => {
   await shop?.cleanup();
   await client.query('DROP TABLE IF EXISTS "rollback_backup_professional_images"');
   await client.query('DROP TABLE IF EXISTS "rollback_backup_notifications"');
+  await client.query('DROP TABLE IF EXISTS "rollback_backup_memberships"');
   await client.end();
 });
 
@@ -67,16 +68,28 @@ describe("preparar el rollback sin perder datos", () => {
     const noticeCount = () => db.$queryRaw<Array<{ n: bigint }>>`SELECT count(*) AS n FROM notifications WHERE "appointmentId" = ${appointmentId} AND "type"::text = 'professional_change'`;
     expect(Number((await noticeCount())[0].n)).toBe(1);
 
+    // Un profesional con cuenta y un administrador invitado, que la versión anterior no entiende.
+    const proUser = await db.user.create({ data: { email: `rb-pro-${Date.now()}@example.com`, name: "Pro", passwordHash: "x" } });
+    const adminUser = await db.user.create({ data: { email: `rb-admin-${Date.now()}@example.com`, name: "Admin", passwordHash: "x" } });
+    await db.membership.create({ data: { organizationId: shop.organization.id, userId: proUser.id, role: "professional" } });
+    await db.membership.create({ data: { organizationId: shop.organization.id, userId: adminUser.id, role: "admin", notifyBookings: false } });
+    await db.professional.update({ where: { id: owner.id }, data: { userId: proUser.id } });
+
     // 1. Solo informa.
     const before = await script.inspect(client);
     expect(before.photos).toBeGreaterThanOrEqual(1);
     expect(before.notices).toBeGreaterThanOrEqual(1);
+    expect(before.members).toBeGreaterThanOrEqual(2);
     expect(Number((await noticeCount())[0].n)).toBe(1);
 
     // 2. Aplica: no queda ninguna fila que la versión anterior no conozca, y nada se perdió.
     const applied = await script.apply(client);
     expect(applied.photosMoved).toBeGreaterThanOrEqual(1);
-    expect(await script.inspect(client)).toEqual({ photos: 0, notices: 0 });
+    expect(await script.inspect(client)).toEqual({ photos: 0, notices: 0, members: 0 });
+    // Solo queda el propietario: nadie conserva un acceso que la versión anterior malinterpretaría.
+    expect((await db.membership.findMany({ where: { organizationId: shop.organization.id } })).map((m) => m.role)).toEqual(["owner"]);
+    expect((await db.professional.findUniqueOrThrow({ where: { id: owner.id } })).userId).toBeNull(); // el perfil se conserva, sin cuenta
+    expect((await client.query(`SELECT count(*)::int AS n FROM "rollback_backup_memberships" WHERE "organizationId" = $1`, [shop.organization.id])).rows[0].n).toBe(2);
     expect(await db.organizationImage.count({ where: { organizationId: shop.organization.id } })).toBe(1); // solo el logo
     expect((await db.professional.findUniqueOrThrow({ where: { id: second.id } })).photoImageId).toBeNull();
     expect((await client.query(`SELECT count(*)::int AS n FROM "rollback_backup_professional_images" WHERE "organizationId" = $1`, [shop.organization.id])).rows[0].n).toBe(1);
@@ -87,7 +100,7 @@ describe("preparar el rollback sin perder datos", () => {
     expect(await db.professional.count({ where: { organizationId: shop.organization.id } })).toBe(2);
 
     // 3. Es repetible: una segunda vez no hace nada.
-    expect(await script.apply(client)).toEqual({ photosMoved: 0, noticesConverted: 0 });
+    expect(await script.apply(client)).toEqual({ photosMoved: 0, noticesConverted: 0, membersMoved: 0 });
 
     // 4. Restaura: vuelve la foto con su profesional y el tipo de aviso original.
     const restored = await script.restore(client);
@@ -95,5 +108,11 @@ describe("preparar el rollback sin perder datos", () => {
     const restoredPhoto = await db.professional.findUniqueOrThrow({ where: { id: second.id }, select: { photoImageId: true } });
     expect(restoredPhoto.photoImageId).toBe(saved.ok ? saved.id : "");
     expect(Number((await noticeCount())[0].n)).toBe(1);
+    // Y devuelve los accesos con su vínculo.
+    expect(restored.membersRestored).toBeGreaterThanOrEqual(2);
+    expect((await db.membership.findMany({ where: { organizationId: shop.organization.id } })).map((m) => m.role).sort()).toEqual(["admin", "owner", "professional"]);
+    expect((await db.professional.findUniqueOrThrow({ where: { id: owner.id } })).userId).toBe(proUser.id);
+    expect((await db.membership.findFirstOrThrow({ where: { organizationId: shop.organization.id, userId: adminUser.id } })).notifyBookings).toBe(false);
+    await db.user.deleteMany({ where: { id: { in: [proUser.id, adminUser.id] } } });
   });
 });

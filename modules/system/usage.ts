@@ -12,6 +12,9 @@ import { db } from "@/lib/db";
  * - «Correos enviados» son notificaciones en estado `sent`.
  * - «Reintentos» son envíos que necesitaron más de un intento (`attempts > 1`).
  * - Los canales no configurados quedan como `skipped` y no cuentan como envíos.
+ * - Las invitaciones a Agendia (modules/team/invitations.ts) no pasan por `notifications`:
+ *   se cuentan aparte (`invitationEmails`, un correo por envío y por reenvío) y
+ *   también consumen Resend. Los avisos internos (`*_owner`) se distinguen en `byType`.
  */
 
 export type EmailUsage = {
@@ -30,6 +33,10 @@ export type OrganizationUsage = {
   slug: string;
   activeProfessionals: number;
   appointmentsCreated: number;
+  /** Correos de invitación enviados en el período (altas y reenvíos). */
+  invitationEmails: number;
+  /** Avisos internos (al propietario, administradores y profesionales con cuenta) enviados. */
+  internalNotices: number;
   emails: EmailUsage;
 };
 
@@ -53,7 +60,7 @@ const emptyEmails = (): EmailUsage => ({ sent: 0, failed: 0, skipped: 0, pending
  * sin recorrer negocio por negocio.
  */
 export async function getUsageByOrganization(range: UsageRange, limit = 100): Promise<OrganizationUsage[]> {
-  const [professionals, appointments, statuses, types] = await Promise.all([
+  const [professionals, appointments, statuses, types, invitations] = await Promise.all([
     db.professional.groupBy({ by: ["organizationId"], where: { active: true }, _count: { _all: true } }),
     db.appointment.groupBy({
       by: ["organizationId"],
@@ -73,6 +80,11 @@ export async function getUsageByOrganization(range: UsageRange, limit = 100): Pr
       WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to} AND "status" IN ('sent', 'failed')
       GROUP BY "organizationId", "type"
     `,
+    db.invitation.groupBy({
+      by: ["organizationId"],
+      where: { lastSentAt: { gte: range.from, lt: range.to } },
+      _sum: { sendCount: true },
+    }),
   ]);
 
   const emails = new Map<string, EmailUsage>();
@@ -96,7 +108,8 @@ export async function getUsageByOrganization(range: UsageRange, limit = 100): Pr
   const activeByOrg = new Map(professionals.map((row) => [row.organizationId, row._count._all]));
   const appointmentsByOrg = new Map(appointments.map((row) => [row.organizationId, row._count._all]));
 
-  const ids = new Set([...emails.keys(), ...appointmentsByOrg.keys()]);
+  const invitationsByOrg = new Map(invitations.map((row) => [row.organizationId, row._sum.sendCount ?? 0]));
+  const ids = new Set([...emails.keys(), ...appointmentsByOrg.keys(), ...invitationsByOrg.keys()]);
   if (ids.size === 0) return [];
   const organizations = await db.organization.findMany({
     where: { id: { in: [...ids] } },
@@ -110,6 +123,10 @@ export async function getUsageByOrganization(range: UsageRange, limit = 100): Pr
       slug: org.slug,
       activeProfessionals: activeByOrg.get(org.id) ?? 0,
       appointmentsCreated: appointmentsByOrg.get(org.id) ?? 0,
+      invitationEmails: invitationsByOrg.get(org.id) ?? 0,
+      internalNotices: Object.entries((emails.get(org.id) ?? emptyEmails()).byType)
+        .filter(([type]) => type.endsWith("_owner"))
+        .reduce((sum, [, count]) => sum + count, 0),
       emails: emails.get(org.id) ?? emptyEmails(),
     }))
     .sort((a, b) => b.emails.sent + b.emails.failed - (a.emails.sent + a.emails.failed) || a.name.localeCompare(b.name))

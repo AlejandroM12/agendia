@@ -11,6 +11,12 @@
 //
 //  1. Las fotos de profesionales se copian a `rollback_backup_professional_images`
 //     y se sacan de `organization_images` (el profesional queda sin foto; nada más cambia).
+//  3. (Etapa 4) Los accesos que NO son del propietario -los de profesionales y de
+//     administradores invitados- se copian a `rollback_backup_memberships` y se quitan
+//     de `memberships`. La version anterior no conoce el rol `professional` y, ademas,
+//     trataria a cualquier administrador como propietario (no tenia roles): dejarlos
+//     seria dar acceso total a quien no lo tiene. Los profesionales conservan su
+//     perfil, su agenda y sus turnos; solo pierden la cuenta, y `--restore` la devuelve.
 //  2. Los avisos `professional_change` se copian a `rollback_backup_notifications`;
 //     los pendientes se anulan y el tipo de todos pasa a `reschedule` (el historial
 //     se conserva, con el tipo más parecido que conoce la versión anterior).
@@ -24,12 +30,14 @@ import pg from "pg";
 
 const PHOTO_BACKUP = "rollback_backup_professional_images";
 const NOTICE_BACKUP = "rollback_backup_notifications";
+const MEMBERSHIP_BACKUP = "rollback_backup_memberships";
 
 /** Cuántas filas habría que mover. Solo lectura. */
 export async function inspect(client) {
   const photos = await client.query(`SELECT count(*)::int AS n FROM "organization_images" WHERE "kind"::text = 'professional'`);
   const notices = await client.query(`SELECT count(*)::int AS n FROM "notifications" WHERE "type"::text = 'professional_change'`);
-  return { photos: photos.rows[0].n, notices: notices.rows[0].n };
+  const members = await client.query(`SELECT count(*)::int AS n FROM "memberships" WHERE "role"::text <> 'owner'`);
+  return { photos: photos.rows[0].n, notices: notices.rows[0].n, members: members.rows[0].n };
 }
 
 export async function apply(client) {
@@ -62,8 +70,20 @@ export async function apply(client) {
     await client.query(`UPDATE "notifications" SET "status" = 'canceled' WHERE "type"::text = 'professional_change' AND "status" = 'pending'`);
     const notices = await client.query(`UPDATE "notifications" SET "type" = 'reschedule' WHERE "type"::text = 'professional_change'`);
 
+    // Accesos que no son del propietario (ver arriba), con el perfil al que estaban vinculados.
+    await client.query(`CREATE TABLE IF NOT EXISTS "${MEMBERSHIP_BACKUP}" (LIKE "memberships" INCLUDING DEFAULTS)`);
+    await client.query(`ALTER TABLE "${MEMBERSHIP_BACKUP}" ALTER COLUMN "role" TYPE text USING "role"::text`);
+    await client.query(`ALTER TABLE "${MEMBERSHIP_BACKUP}" ADD COLUMN IF NOT EXISTS "professionalId" text`);
+    await client.query(
+      `INSERT INTO "${MEMBERSHIP_BACKUP}" ("id","organizationId","userId","role","createdAt","notifyBookings","professionalId")
+       SELECT m."id", m."organizationId", m."userId", m."role"::text, m."createdAt", m."notifyBookings", p."id"
+       FROM "memberships" m LEFT JOIN "professionals" p ON p."organizationId" = m."organizationId" AND p."userId" = m."userId"
+       WHERE m."role"::text <> 'owner' AND NOT EXISTS (SELECT 1 FROM "${MEMBERSHIP_BACKUP}" b WHERE b."id" = m."id")`,
+    );
+    const members = await client.query(`DELETE FROM "memberships" WHERE "role"::text <> 'owner'`);
+
     await client.query("COMMIT");
-    return { photosMoved: photos.rowCount, noticesConverted: notices.rowCount };
+    return { photosMoved: photos.rowCount, noticesConverted: notices.rowCount, membersMoved: members.rowCount };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -97,8 +117,25 @@ export async function restore(client) {
         )
       ).rowCount;
     }
+    let members = 0;
+    const hasMembers = (await client.query(`SELECT to_regclass('"${MEMBERSHIP_BACKUP}"') AS t`)).rows[0].t;
+    if (hasMembers) {
+      members = (
+        await client.query(
+          `INSERT INTO "memberships" ("id","organizationId","userId","role","createdAt","notifyBookings")
+           SELECT b."id", b."organizationId", b."userId", b."role"::"MembershipRole", b."createdAt", b."notifyBookings" FROM "${MEMBERSHIP_BACKUP}" b
+           WHERE NOT EXISTS (SELECT 1 FROM "memberships" m WHERE m."organizationId" = b."organizationId" AND m."userId" = b."userId")
+             AND EXISTS (SELECT 1 FROM "users" u WHERE u."id" = b."userId") AND EXISTS (SELECT 1 FROM "organizations" o WHERE o."id" = b."organizationId")`,
+        )
+      ).rowCount;
+      await client.query(
+        `UPDATE "professionals" p SET "userId" = b."userId" FROM "${MEMBERSHIP_BACKUP}" b
+         WHERE b."professionalId" = p."id" AND p."userId" IS NULL AND b."role" = 'professional'
+           AND EXISTS (SELECT 1 FROM "memberships" m WHERE m."organizationId" = p."organizationId" AND m."userId" = b."userId")`,
+      );
+    }
     await client.query("COMMIT");
-    return { photosRestored: photos, noticesRestored: notices };
+    return { photosRestored: photos, noticesRestored: notices, membersRestored: members };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -122,7 +159,8 @@ async function main() {
       const found = await inspect(client);
       console.log(`Fotos de profesionales: ${found.photos}`);
       console.log(`Avisos de cambio de profesional: ${found.notices}`);
-      console.log(found.photos + found.notices === 0 ? "Nada que mover: la base ya es compatible con la versión anterior." : "Para apartarlos sin borrar nada: node scripts/prepare-rollback.mjs --apply");
+      console.log(`Accesos de profesionales y administradores: ${found.members}`);
+      console.log(found.photos + found.notices + found.members === 0 ? "Nada que mover: la base ya es compatible con la versión anterior." : "Para apartarlos sin borrar nada: node scripts/prepare-rollback.mjs --apply");
     } else if (mode === "apply") {
       console.log(await apply(client));
     } else {
