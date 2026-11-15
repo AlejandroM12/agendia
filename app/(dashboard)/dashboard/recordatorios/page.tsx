@@ -38,7 +38,7 @@ export default async function RemindersPage() {
   const emailReady = isEmailConfigured();
 
   const notifications = await db.notification.findMany({
-    where: { organizationId: organization.id },
+    where: { organizationId: organization.id, type: { not: "account_notice" } },
     orderBy: { scheduledFor: "desc" },
     take: 40,
     include: { appointment: { select: { customer: { select: { name: true } } } } },

@@ -5,6 +5,7 @@ import { brand } from "@/lib/brand";
 import { isTeamModeEnabled } from "@/lib/features";
 import { usesTeam } from "@/modules/team/eligibility";
 import { isEmailConfigured, sendEmail } from "./email";
+import { renderAccountNotice } from "./account-notices";
 import { renderAppointmentEmail } from "./templates";
 
 const MAX_ATTEMPTS = 5;
@@ -105,6 +106,39 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
     if (!notification || notification.status !== "pending") continue;
 
     const { appointment, organization } = notification;
+
+    // Avisos de la cuenta (fin de la prueba, exceso de cupo): sin turno; solo al propietario vigente.
+    if (notification.type === "account_notice") {
+      const owner = await db.membership.findFirst({
+        where: { organizationId: organization.id, role: "owner", user: { email: { equals: notification.recipient, mode: "insensitive" } } },
+        select: { id: true },
+      });
+      const rendered = owner && notification.channel === "email" && isEmailConfigured() ? renderAccountNotice(notification, organization) : null;
+      if (!owner || !rendered) {
+        await db.notification.update({
+          where: { id },
+          data: { status: owner ? "skipped" : "canceled", lockedUntil: null, lastError: owner ? "Sin canal de email o aviso desconocido." : null },
+        });
+        summary[owner ? "skipped" : "canceled"]++;
+        continue;
+      }
+      const sent = await sendEmail({ to: notification.recipient, ...rendered });
+      if (sent.ok) {
+        await db.notification.update({ where: { id }, data: { status: "sent", sentAt: new Date(), lastError: null, lockedUntil: null } });
+        summary.sent++;
+      } else if (notification.attempts >= MAX_ATTEMPTS) {
+        await db.notification.update({ where: { id }, data: { status: "failed", lastError: sent.error, lockedUntil: null } });
+        summary.failed++;
+      } else {
+        const wait = BACKOFF_MINUTES[Math.min(notification.attempts - 1, BACKOFF_MINUTES.length - 1)];
+        await db.notification.update({
+          where: { id },
+          data: { lastError: sent.error, lockedUntil: null, scheduledFor: new Date(Date.now() + wait * 60000) },
+        });
+        summary.retried++;
+      }
+      continue;
+    }
 
     // Un aviso que ya no corresponde no se envía: el turno desapareció, o
     // es un recordatorio/confirmación de un turno que ya fue cancelado.

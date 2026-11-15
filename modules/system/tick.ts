@@ -3,7 +3,9 @@ import "server-only";
 import { db } from "@/lib/db";
 import { trialPolicy } from "@/lib/brand";
 import { reconcileSubscriptions } from "@/modules/billing/subscriptions";
+import { scanAccountNotices } from "@/modules/notifications/account-notices";
 import { processDueNotifications } from "@/modules/notifications/process";
+import { organizationsToSyncCapacity, syncCapacityGrace } from "@/modules/team/capacity";
 
 /**
  * Trabajo periódico de la plataforma. Lo dispara el proceso `worker` cada
@@ -13,6 +15,13 @@ import { processDueNotifications } from "@/modules/notifications/process";
  */
 export async function runTick() {
   const startedAt = Date.now();
+
+  // 0. Exceso de cupo (bajas de plan) y avisos de la cuenta; ambos idempotentes.
+  let capacity = 0;
+  for (const organizationId of await organizationsToSyncCapacity()) {
+    if ((await syncCapacityGrace(organizationId)) !== "none") capacity++;
+  }
+  const accountNotices = await scanAccountNotices();
 
   // 1. Notificaciones pendientes (varios lotes si hay acumuladas).
   const notifications = { claimed: 0, sent: 0, failed: 0, retried: 0, skipped: 0, canceled: 0 };
@@ -47,5 +56,5 @@ export async function runTick() {
   await db.customerAccessToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   await db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600000) } } });
 
-  return { notifications, expiredTrials, lockedAccounts, subscriptions, durationMs: Date.now() - startedAt };
+  return { capacity, accountNotices, notifications, expiredTrials, lockedAccounts, subscriptions, durationMs: Date.now() - startedAt };
 }
