@@ -58,20 +58,34 @@ async function lockTeam(tx: Prisma.TransactionClient, organizationId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`team:${organizationId}`}))`;
 }
 
+/**
+ * Pago verificado: hubo un cobro aprobado consultado a Mercado Pago y la suscripción sigue
+ * vigente (activa, en mora —se le da margen— o cancelada pero con el período ya pago en curso).
+ */
+export function hasVerifiedPayment(
+  subscription: { status: string; lastPaymentAt: Date | null; currentPeriodEnd: Date | null } | null,
+  now: Date = new Date(),
+): boolean {
+  if (!subscription?.lastPaymentAt) return false;
+  if (subscription.status === "active" || subscription.status === "past_due") return true;
+  return subscription.status === "canceled" && subscription.currentPeriodEnd !== null && subscription.currentPeriodEnd > now;
+}
+
 /** Cupos de profesionales del negocio según su plan (o prueba, o instalación independiente). */
 export async function getProfessionalQuota(client: Client, organization: OrgRef): Promise<ProfessionalQuota> {
-  const [active, subscription] = await Promise.all([
-    client.professional.count({ where: { organizationId: organization.id, active: true } }),
-    client.subscription.findUnique({
-      where: { organizationId: organization.id },
-      select: { plan: { select: { code: true } } },
-    }),
-  ]);
+  // Una consulta por vez: este código también corre dentro de transacciones (una sola conexión).
+  const active = await client.professional.count({ where: { organizationId: organization.id, active: true } });
+  const subscription = await client.subscription.findUnique({
+    where: { organizationId: organization.id },
+    select: { status: true, lastPaymentAt: true, currentPeriodEnd: true, plan: { select: { code: true } } },
+  });
   const limit = resolveProfessionalLimit({
     standalone: isStandalone(),
     status: organization.status,
     planCode: subscription?.plan.code,
     extraProfessionals: organization.extraProfessionals,
+    // El cupo del Plan Equipo exige un pago aprobado: no alcanza con que la suscripción esté autorizada.
+    paymentVerified: hasVerifiedPayment(subscription),
   });
   return evaluateProfessionalQuota(limit, active);
 }

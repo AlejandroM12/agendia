@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<NotificationType, string> = {
   booking_received_owner: "Aviso de nueva reserva (para vos)",
   cancellation_owner: "Aviso de cancelación (para vos)",
   reschedule_owner: "Aviso de cambio de horario (para vos)",
+  account_notice: "Aviso de tu cuenta",
 };
 
 const STATUS: Record<NotificationStatus, { label: string; className: string }> = {

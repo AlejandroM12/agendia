@@ -243,6 +243,7 @@ export async function getRescheduleAvailabilityAction(token: string, fromDateStr
     serviceId: appointment.serviceId,
     audience: "public",
     choice: appointment.professionalSelection === "any" ? "any" : (appointment.requestedProfessionalId ?? appointment.professionalId),
+    purpose: "reschedule",
   });
   if (!eligible.ok) {
     // Eligió a alguien que ya no atiende este servicio online: no se lo cambia por otro.

@@ -8,6 +8,7 @@ import { getTeamAvailability } from "@/modules/availability/queries";
 import { dayBoundsUtc } from "@/modules/availability/slots";
 import { findOrCreateCustomer } from "@/modules/customers/service";
 import { enqueueAppointmentNotifications } from "@/modules/notifications/enqueue";
+import { rescheduleCap } from "@/modules/team/capacity";
 import {
   countActiveAppointmentsByProfessional,
   orderByLoad,
@@ -449,6 +450,13 @@ export async function rescheduleAppointment(params: {
   if (!current) return fail("not_found", "No encontramos ese turno.");
   if (current.status !== "confirmed") return fail("invalid", "Solo se pueden reprogramar turnos confirmados.");
 
+  // Un profesional restringido por exceso de cupo puede reprogramar sus turnos ya confirmados,
+  // pero no correrlos más allá del horizonte: así no se elude el límite del plan.
+  const cap = await rescheduleCap(db, organization.id, current);
+  if (cap && params.startsAt.getTime() > cap.getTime()) {
+    return fail("unavailable", "Ese horario queda fuera del plazo permitido para este turno. Elegí una fecha más cercana.");
+  }
+
   const durationMinutes = Math.round((current.endsAt.getTime() - current.startsAt.getTime()) / 60000);
 
   let candidates: TeamProfessional[];
@@ -466,6 +474,7 @@ export async function rescheduleAppointment(params: {
       serviceId: current.serviceId,
       audience: "public",
       choice,
+      purpose: "reschedule",
     });
     if (!eligible.ok) {
       return fail("unavailable", "Este turno ya no se puede reprogramar online. Comunicate con el negocio.");

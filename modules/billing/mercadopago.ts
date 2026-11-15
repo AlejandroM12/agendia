@@ -23,12 +23,18 @@ export type Preapproval = {
   init_point?: string | null;
   next_payment_date?: string | null;
   payer_email?: string | null;
+  /** Importe y moneda que Mercado Pago cobra en cada período: se verifican contra lo que enviamos. */
+  auto_recurring?: { transaction_amount?: number | null; currency_id?: string | null; start_date?: string | null } | null;
+  /** Resumen de cobros; solo informativo (no se usa para habilitar nada). */
+  summarized?: { charged_quantity?: number | null; last_charged_date?: string | null } | null;
 };
 
 export type AuthorizedPayment = {
   id: number | string;
   preapproval_id?: string | null;
   status?: string | null;
+  transaction_amount?: number | null;
+  currency_id?: string | null;
   payment?: { id?: number | string; status?: string | null } | null;
 };
 
@@ -56,6 +62,8 @@ export function createPreapproval(params: {
   amount: number;
   currency: string;
   backUrl: string;
+  /** Primer cobro diferido (cambio de plan al fin del período ya pago). Por defecto, al autorizar. */
+  startDate?: Date;
 }): Promise<Preapproval> {
   return request<Preapproval>("POST", "/preapproval", {
     reason: params.reason,
@@ -68,6 +76,7 @@ export function createPreapproval(params: {
       frequency_type: "months",
       transaction_amount: params.amount,
       currency_id: params.currency,
+      ...(params.startDate ? { start_date: params.startDate.toISOString() } : {}),
     },
   });
 }

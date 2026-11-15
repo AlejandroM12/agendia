@@ -19,7 +19,7 @@ const created: Tenant[] = [];
 const plansToDelete: string[] = [];
 
 /** Negocio nuevo con el modo equipo encendido y el estado comercial indicado. */
-async function teamShop(options: { status?: Organization["status"]; planCode?: string; extra?: number; teamMode?: boolean } = {}) {
+async function teamShop(options: { status?: Organization["status"]; planCode?: string; extra?: number; teamMode?: boolean; unpaid?: boolean } = {}) {
   const shop = await createSchedulableOrganization();
   created.push(shop);
   await db.organization.update({
@@ -32,7 +32,7 @@ async function teamShop(options: { status?: Organization["status"]; planCode?: s
       plan = await db.plan.create({ data: { code: options.planCode, name: `Plan ${options.planCode} (prueba)`, price: 1 } });
       plansToDelete.push(plan.id);
     }
-    await db.subscription.create({ data: { organizationId: shop.organization.id, planId: plan.id, status: "active" } });
+    await db.subscription.create({ data: { organizationId: shop.organization.id, planId: plan.id, status: "active", lastPaymentAt: options.unpaid ? null : new Date() } });
   }
   return { shop, org: () => refreshOrganization(shop.organization.id) };
 }
@@ -65,6 +65,13 @@ describe("cupos por plan", () => {
     expect(quota).toMatchObject({ limit: 5, tier: "equipo", active: 1, available: 4 });
     for (const name of ["B", "C", "D", "E"]) expect((await createProfessional(await team.org(), { displayName: `Pro ${name}` })).ok).toBe(true);
     expect(await createProfessional(await team.org(), { displayName: "Sexto" })).toMatchObject({ ok: false, code: "quota_exceeded" });
+  });
+
+  it("el Plan Equipo sin un pago verificado no da los 5 cupos (volver de la pantalla de pago no alcanza)", async () => {
+    const team = await teamShop({ status: "active", planCode: "equipo", unpaid: true });
+    expect(await getProfessionalQuota(db, await team.org())).toMatchObject({ limit: 2, tier: "profesional" });
+    expect((await createProfessional(await team.org(), { displayName: "Pro B" })).ok).toBe(true);
+    expect(await createProfessional(await team.org(), { displayName: "Pro C" })).toMatchObject({ ok: false, code: "quota_exceeded" });
   });
 
   it("una cuenta que administra pero no atiende no consume cupo; si el dueño atiende, sí", async () => {

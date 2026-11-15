@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Organization, Prisma, PrismaClient } from "@prisma/client";
 import { isTeamModeEnabled } from "@/lib/features";
+import { restrictedProfessionalIds } from "./capacity";
 
 type Client = PrismaClient | Prisma.TransactionClient;
 type OrgRef = Pick<Organization, "id" | "teamModeEnabled">;
@@ -103,13 +104,16 @@ export type PublicTeam = {
  * ofrece a alguien que la reserva después rechazaría.
  */
 export async function listPublicTeam(client: Client, organization: OrgRef): Promise<PublicTeam> {
-  const [active, services] = await Promise.all([
+  const [allActive, restricted, services] = await Promise.all([
     listActiveProfessionals(client, organization.id),
+    restrictedProfessionalIds(client, organization.id),
     client.service.findMany({
       where: { organizationId: organization.id, active: true },
       select: { id: true, allProfessionals: true, professionals: { select: { professionalId: true } } },
     }),
   ]);
+  // Los excedentes por baja de plan no reciben reservas nuevas (modules/team/capacity.ts).
+  const active = allActive.filter((p) => !restricted.has(p.id));
   const byService: Record<string, string[]> = {};
   const used = new Set<string>();
   for (const service of services) {
@@ -162,6 +166,11 @@ export async function resolveEligibleProfessionals(
     serviceId: string;
     audience: "public" | "internal";
     choice?: ProfessionalChoice;
+    /**
+     * `new` (reserva o asignación nueva): los profesionales restringidos por exceso de cupo
+     * quedan afuera. `reschedule`: se los mantiene, porque su turno ya estaba confirmado.
+     */
+    purpose?: "new" | "reschedule";
   },
 ): Promise<EligibleResult> {
   const { organization, audience } = params;
@@ -172,7 +181,9 @@ export async function resolveEligibleProfessionals(
   });
   if (!service) return { ok: false, reason: "service_not_found" };
 
-  const active = await listActiveProfessionals(client, organization.id);
+  const allActive = await listActiveProfessionals(client, organization.id);
+  const restricted = params.purpose === "reschedule" ? new Set<string>() : await restrictedProfessionalIds(client, organization.id);
+  const active = restricted.size ? allActive.filter((p) => !restricted.has(p.id)) : allActive;
   const pool = eligiblePool(service, active, organization, audience);
 
   if (pool.length === 0) return { ok: false, reason: "none_eligible" };

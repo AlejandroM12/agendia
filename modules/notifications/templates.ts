@@ -210,6 +210,9 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
           action: { label: "Abrir mi agenda", url: ctx.dashboardUrl },
         }),
       };
+    default:
+      // Los avisos de la cuenta no tienen turno: los arma modules/notifications/account-notices.ts.
+      throw new Error(`El aviso ${type} no corresponde a un turno.`);
   }
 }
 
