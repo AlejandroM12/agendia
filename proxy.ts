@@ -32,7 +32,7 @@ export default auth((req) => {
   // otro dominio: responde los suyos acá.
   if (isStandalone() && pathname === "/sitemap.xml") return new NextResponse(null, { status: 404 });
   if (isStandalone() && pathname === "/robots.txt") {
-    const rules = ["User-agent: *", "Allow: /", "Disallow: /dashboard", "Disallow: /onboarding", "Disallow: /api/internal", "Disallow: /api/auth", "Disallow: /turno", "Disallow: /vista-previa", "Disallow: /*/mis-turnos"];
+    const rules = ["User-agent: *", "Allow: /", "Disallow: /dashboard", "Disallow: /onboarding", "Disallow: /api/internal", "Disallow: /api/auth", "Disallow: /turno", "Disallow: /vista-previa", "Disallow: /invitacion", "Disallow: /sin-acceso", "Disallow: /*/mis-turnos"];
     return new NextResponse(`${rules.join("\n")}\n`, { headers: { "content-type": "text/plain; charset=utf-8" } });
   }
 

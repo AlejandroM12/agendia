@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LoginForm } from "@/components/auth/login-form";
+import { safeCallbackPath } from "@/lib/safe-redirect";
 
 export const metadata: Metadata = { title: "Iniciar sesión" };
 export const instant = false;
@@ -13,6 +14,7 @@ const NOTICES: Record<string, { message: string; tone: "success" | "error" }> = 
 };
 
 export default async function LoginPage(props: PageProps<"/login">) {
-  const email = (await props.searchParams).email;
-  return <LoginForm notice={typeof email === "string" ? NOTICES[email] : undefined} />;
+  const params = await props.searchParams;
+  const email = params.email;
+  return <LoginForm notice={typeof email === "string" ? NOTICES[email] : undefined} callbackUrl={safeCallbackPath(params.callbackUrl)} />;
 }

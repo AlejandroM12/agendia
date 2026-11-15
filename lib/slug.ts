@@ -24,7 +24,7 @@ export const RESERVED_SLUGS = new Set([
   "olvide-contrasena", "onboarding", "pagina", "pagos", "planes", "precios", "privacidad",
   "registro", "reprogramar", "reservar", "restablecer-contrasena", "robots.txt", "servicios",
   "sitemap.xml", "soporte", "static", "terminos", "turno", "turnos", "verificar-email",
-  "vista-previa", "_next",
+  "vista-previa", "invitacion", "sin-acceso", "_next",
 ]);
 
 export function isValidSlugFormat(slug: string): boolean {

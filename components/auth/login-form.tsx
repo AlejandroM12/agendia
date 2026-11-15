@@ -10,7 +10,7 @@ import { SubmitButton } from "@/components/form/submit-button";
 import { useForm } from "@/components/form/use-form";
 import { AuthCard } from "./auth-card";
 
-export function LoginForm({ notice }: { notice?: { message: string; tone: "success" | "error" } }) {
+export function LoginForm({ notice, callbackUrl }: { notice?: { message: string; tone: "success" | "error" }; callbackUrl?: string | null }) {
   const form = useForm(loginAction);
 
   return (
@@ -27,6 +27,7 @@ export function LoginForm({ notice }: { notice?: { message: string; tone: "succe
       }
     >
       <form {...form.formProps} className="space-y-4">
+        {callbackUrl && <input type="hidden" name="callbackUrl" value={callbackUrl} />}
         {!form.message && <FormMessage message={notice?.message} tone={notice?.tone} />}
         <FormMessage message={form.message} />
         <Field label="Email" htmlFor="email" error={form.error("email")}>

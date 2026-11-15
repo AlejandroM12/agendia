@@ -9,6 +9,11 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { db } from "@/lib/db";
 import { requirePagePermission } from "@/lib/dal";
+import { isAccountsEnabled } from "@/lib/features";
+import { parsePermissionOverrides, resolveProfessionalPermissions } from "@/lib/permissions";
+import { AccessPanel } from "@/components/team/access-panel";
+import { OverridesForm } from "@/components/team/permissions-forms";
+import { ACCESS_STATE_LABEL, getAccessStates } from "@/modules/team/invitations";
 import { isTeamModeEnabled } from "@/lib/features";
 import { updateProfessionalAction } from "@/modules/team/actions";
 import { getProfessionalServices, getTeamOverview } from "@/modules/team/team-admin";
@@ -16,17 +21,20 @@ import { getProfessionalServices, getTeamOverview } from "@/modules/team/team-ad
 export const metadata: Metadata = { title: "Profesional" };
 
 export default async function ProfessionalPage(props: PageProps<"/dashboard/equipo/[id]">) {
-  const { organization, user, canWrite } = await requirePagePermission("team.manage");
+  const { organization, user, canWrite, permissions } = await requirePagePermission("team.manage");
   if (!isTeamModeEnabled(organization)) redirect("/dashboard/equipo");
   const { id } = await props.params;
 
   const professional = await db.professional.findFirst({ where: { id, organizationId: organization.id } });
   if (!professional) notFound();
 
-  const [services, overview] = await Promise.all([
+  const [services, overview, accessStates] = await Promise.all([
     getProfessionalServices(organization.id, professional.id),
     getTeamOverview(organization),
+    getAccessStates(organization.id),
   ]);
+  const access = accessStates.get(professional.id);
+  const dateLabel = (date: Date) => new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeZone: "America/Argentina/Buenos_Aires" }).format(date);
   const member = overview.members.find((m) => m.id === professional.id);
   const futureAppointments = member?.futureAppointments ?? 0;
   const isMe = professional.userId === user.id;
@@ -71,6 +79,39 @@ export default async function ProfessionalPage(props: PageProps<"/dashboard/equi
         <Section title="Servicios que realiza" description="Elegí cuáles puede atender. Un servicio sin ningún profesional no se puede reservar.">
           <ProfessionalServicesForm professionalId={professional.id} services={services} disabled={!canWrite} />
         </Section>
+
+        {permissions.has("team.invite") && access && (
+          <Section
+            title="Acceso individual"
+            description="Opcional: invitalo para que entre a su propia agenda con su cuenta. Si no, la administrás vos."
+          >
+            <AccessPanel
+              professionalId={professional.id}
+              professionalName={professional.displayName}
+              access={{
+                state: access.state,
+                label: ACCESS_STATE_LABEL[access.state],
+                invitedEmail: access.invitedEmail,
+                invitationId: access.invitationId,
+                accountEmail: access.accountEmail,
+                expiresLabel: access.expiresAt ? dateLabel(access.expiresAt) : null,
+              }}
+              accountsEnabled={isAccountsEnabled(organization)}
+              disabled={!canWrite}
+            />
+          </Section>
+        )}
+
+        {permissions.has("permissions.configure") && access?.state === "linked" && (
+          <Section title="Permisos de este profesional" description="Excepciones a lo que permitiste en general.">
+            <OverridesForm
+              professionalId={professional.id}
+              base={resolveProfessionalPermissions(organization.professionalPermissions, null)}
+              overrides={parsePermissionOverrides(professional.permissionOverrides)}
+              disabled={!canWrite}
+            />
+          </Section>
+        )}
 
         <Section title="Horarios" description="Sus días y horarios de atención, descansos, vacaciones y ausencias.">
           <ButtonLink variant="outline" href={`/dashboard/disponibilidad?profesional=${professional.id}`}>

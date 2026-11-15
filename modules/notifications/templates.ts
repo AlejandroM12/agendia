@@ -212,3 +212,37 @@ export function renderAppointmentEmail(type: NotificationType, ctx: AppointmentE
       };
   }
 }
+
+/**
+ * Correo de invitación a Agendia dentro de un negocio. Lleva el enlace de un
+ * solo uso (que vence), quién invita, a qué y qué hacer si no corresponde.
+ * No incluye datos de clientes ni de turnos.
+ */
+export function renderInvitationEmail(params: {
+  businessName: string;
+  businessColor: string;
+  inviterName: string;
+  roleLabel: string;
+  professionalName: string | null;
+  url: string;
+  expiresAt: Date;
+}): Rendered {
+  const expires = new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeZone: "America/Argentina/Buenos_Aires" }).format(params.expiresAt);
+  const what = params.professionalName
+    ? `para que accedas a tu propia agenda como ${params.professionalName}`
+    : `como ${params.roleLabel.toLowerCase()}`;
+  return {
+    subject: `${params.inviterName} te invitó a ${params.businessName} en ${brand.name}`,
+    ...renderEmail({
+      business: { name: params.businessName, primary: params.businessColor },
+      heading: `Te invitaron a ${params.businessName}`,
+      paragraphs: [
+        `${params.inviterName} te invitó a ${brand.name} ${what}, en ${params.businessName}.`,
+        "Para aceptar, abrí el enlace: vas a poder elegir tu contraseña y entrar directo a tu agenda. No hace falta contratar nada.",
+        `El enlace vence el ${expires} y sirve una sola vez. Si no esperabas esta invitación, ignorá este correo: no pasa nada si no la aceptás.`,
+      ],
+      action: { label: "Aceptar la invitación", url: params.url },
+      footer: `Recibís este mensaje porque ${params.inviterName} ingresó tu correo en ${brand.name}. Enviado con ${brand.name}.`,
+    }),
+  };
+}

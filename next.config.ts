@@ -35,6 +35,7 @@ const nextConfig: NextConfig = {
       // credencial: nunca viajan como referente, ni siquiera el origen.
       { source: "/turno/:token", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
       { source: "/:slug/mis-turnos/:token", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
+      { source: "/invitacion/:token", headers: [{ key: "Referrer-Policy", value: "no-referrer" }] },
       // La vista previa de «Mi página pública» se muestra en un marco dentro
       // del propio panel: solo ahí se permite, y solo desde el mismo sitio.
       {

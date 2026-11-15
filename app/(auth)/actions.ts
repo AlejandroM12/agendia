@@ -16,6 +16,7 @@ import { getRegistrationStatus } from "@/modules/auth/registration";
 import { emailSchema, newPasswordSchema } from "@/modules/auth/schemas";
 import { isEmailVerificationRequired, issueEmailVerification } from "@/modules/auth/email-verification";
 import { requireSignedInUser } from "@/lib/dal";
+import { safeCallbackPath } from "@/lib/safe-redirect";
 
 export type ActionState = {
   ok?: boolean;
@@ -92,7 +93,7 @@ export async function loginAction(
     await signIn("credentials", {
       email,
       password: formData.get("password"),
-      redirectTo: "/dashboard",
+      redirectTo: safeCallbackPath(formData.get("callbackUrl")) ?? "/dashboard",
     });
   } catch (error) {
     if (error instanceof AuthError) {

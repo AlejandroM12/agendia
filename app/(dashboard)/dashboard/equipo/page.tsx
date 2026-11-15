@@ -7,6 +7,9 @@ import { ButtonLink } from "@/components/ui/button-link";
 import { EmptyState, PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
 import { requirePagePermission } from "@/lib/dal";
+import { isAccountsEnabled } from "@/lib/features";
+import { AccessBadge } from "@/components/team/access-panel";
+import { ACCESS_STATE_LABEL, getAccessStates, type AccessState } from "@/modules/team/invitations";
 import { isTeamModeEnabled } from "@/lib/features";
 import { brand } from "@/lib/brand";
 import { getTeamOverview, type TeamMember } from "@/modules/team/team-admin";
@@ -28,7 +31,9 @@ function MemberCard({
   position,
   count,
   canWrite,
+  access,
 }: {
+  access?: AccessState;
   member: TeamMember;
   isMe: boolean;
   position: number;
@@ -49,6 +54,7 @@ function MemberCard({
           {isMe && <Badge tone="primary">Sos vos</Badge>}
           {!member.active && <Badge>Desactivado</Badge>}
           {member.active && !member.bookableOnline && <Badge>Sin reservas online</Badge>}
+          {access && access !== "none" && <AccessBadge state={access} label={ACCESS_STATE_LABEL[access]} />}
           {member.active && member.hoursRules === 0 && <Badge tone="warning">Sin horarios cargados</Badge>}
         </div>
         {member.description && <p className="mt-0.5 truncate text-sm text-muted-foreground">{member.description}</p>}
@@ -78,7 +84,7 @@ function MemberCard({
 }
 
 export default async function TeamPage() {
-  const { organization, user, canWrite } = await requirePagePermission("team.manage");
+  const { organization, user, canWrite, permissions } = await requirePagePermission("team.manage");
 
   if (!isTeamModeEnabled(organization)) {
     return (
@@ -92,7 +98,8 @@ export default async function TeamPage() {
     );
   }
 
-  const { members, quota } = await getTeamOverview(organization);
+  const [{ members, quota }, accessStates] = await Promise.all([getTeamOverview(organization), getAccessStates(organization.id)]);
+  const accountsOn = isAccountsEnabled(organization);
   const active = members.filter((m) => m.active);
   const inactive = members.filter((m) => !m.active);
   const meLinked = members.some((m) => m.userId === user.id);
@@ -129,6 +136,15 @@ export default async function TeamPage() {
         </p>
       </div>
 
+      {permissions.has("permissions.configure") && (
+        <p className="mb-6 text-sm">
+          <Link href="/dashboard/equipo/accesos" className="font-medium text-primary underline-offset-4 hover:underline">
+            Accesos y permisos
+          </Link>{" "}
+          <span className="text-muted-foreground">· qué pueden hacer los profesionales con cuenta propia y quiénes administran.</span>
+        </p>
+      )}
+
       <Section title="Profesionales activos">
         {active.length === 0 ? (
           <EmptyState
@@ -139,7 +155,7 @@ export default async function TeamPage() {
         ) : (
           <ul className="space-y-3">
             {active.map((member, index) => (
-              <MemberCard key={member.id} member={member} isMe={member.userId === user.id} position={index} count={active.length} canWrite={canWrite} />
+              <MemberCard key={member.id} member={member} isMe={member.userId === user.id} position={index} count={active.length} canWrite={canWrite} access={accountsOn ? accessStates.get(member.id)?.state : undefined} />
             ))}
           </ul>
         )}
