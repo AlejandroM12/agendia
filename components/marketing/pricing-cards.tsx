@@ -71,6 +71,24 @@ function Card({
   );
 }
 
+/**
+ * Antes de publicar los planes con equipo, el plan único se describe como siempre: no se anuncia
+ * nada que todavía no esté disponible para todos.
+ */
+const SINGLE_PLAN_FEATURES = [
+  `${trialPolicy.trialDays} días gratis para probarlo`,
+  "Agendá todos los turnos y clientes que necesites",
+  "Tu propia página para recibir reservas online",
+  "Tus clientes pueden reservar las 24 horas",
+  "Confirmaciones y recordatorios automáticos por correo",
+  "Contactá a tus clientes por WhatsApp con mensajes preparados desde tu agenda",
+  "Accedé desde tu celular o computadora",
+  "Personalizá tu página con tu marca, logo y colores",
+  "Te ayudamos a configurar tu agenda",
+  "Soporte incluido",
+  "Cancelá cuando quieras",
+];
+
 /** Lo que incluyen los dos planes mensuales: es lo mismo; solo cambia la cantidad de profesionales activos. */
 const PLAN_FEATURES = [
   `${trialPolicy.trialDays} días gratis para probarlo`,
@@ -99,7 +117,7 @@ export function PricingCards({ className }: { className?: string }) {
           summary="Organizá tus turnos y olvidate de la agenda de papel."
           price={`${formatMoney(pricing.monthly)} ${pricing.currency}`}
           unit="/ mes"
-          features={PLAN_FEATURES}
+          features={SINGLE_PLAN_FEATURES}
           cta={{ label: "Empezar gratis", href: "/registro" }}
           note={`${trialPolicy.trialDays} días gratis. Sin permanencia.`}
         />

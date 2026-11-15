@@ -1,3 +1,5 @@
+import { isStandalone } from "@/lib/deployment";
+
 /**
  * Activación controlada del modo equipo (varios profesionales por negocio).
  *
@@ -15,7 +17,7 @@
  * (modules/team/eligibility.ts y modules/team/professionals.ts).
  */
 export function isTeamModeEnabled(organization: { teamModeEnabled: boolean }): boolean {
-  return process.env.TEAM_MODE_ENABLED === "1" || organization.teamModeEnabled || commercialActivation();
+  return process.env.TEAM_MODE_ENABLED === "1" || organization.teamModeEnabled || commercialActivation() || isStandalone();
 }
 
 /**
@@ -55,7 +57,7 @@ function commercialActivation(): boolean {
  * borra cuentas ni membresías (solo impide invitar y aceptar).
  */
 export function isAccountsEnabled(organization: { teamAccountsEnabled: boolean }): boolean {
-  return process.env.TEAM_ACCOUNTS_ENABLED === "1" || organization.teamAccountsEnabled || commercialActivation();
+  return process.env.TEAM_ACCOUNTS_ENABLED === "1" || organization.teamAccountsEnabled || commercialActivation() || isStandalone();
 }
 
 /**

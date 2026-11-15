@@ -1,7 +1,9 @@
 #!/bin/sh
 # Instalaciones independientes (licencias) alojadas en este servidor.
 #
-#   ./deploy/instance.sh create <nombre> <dominio>   # crea y levanta una instalación
+#   ./deploy/instance.sh create <nombre> <dominio> [profesional|equipo]   # crea y levanta una instalación
+#                                                    # (nivel de la licencia: hasta 2 o hasta 5 profesionales activos; por
+#                                                    # defecto profesional)
 #   ./deploy/instance.sh update <nombre>             # la pasa a la imagen actual (migraciones incluidas)
 #   ./deploy/instance.sh update-all                  # ídem, todas
 #   ./deploy/instance.sh list
@@ -61,8 +63,10 @@ reload_proxy() {
 case "${1:-}" in
   create)
     name="${2:?Uso: instance.sh create <nombre> <dominio>}"
-    domain="${3:?Uso: instance.sh create <nombre> <dominio>}"
+    domain="${3:?Uso: instance.sh create <nombre> <dominio> [profesional|equipo]}"
+    tier="${4:-profesional}"
     valid_name "$name"
+    case "$tier" in profesional|equipo) ;; *) fail "nivel inválido: usar profesional (hasta 2 profesionales) o equipo (hasta 5)" ;; esac
     echo "$domain" | grep -Eq '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' || fail "dominio inválido (sin https:// ni barras)"
     [ -f .env.production ] || fail "falta .env.production"
     [ ! -e "instances/$name" ] || fail "ya existe instances/$name"
@@ -76,6 +80,8 @@ case "${1:-}" in
 # Instalación independiente "$name" — creada el $(date -u +%Y-%m-%d). No subir a ningún repositorio.
 INSTANCE=$name
 DOMAIN=$domain
+# Nivel de la licencia comprada: profesional = hasta 2 profesionales activos, equipo = hasta 5.
+LICENSE_TIER=$tier
 POSTGRES_USER=agendia
 POSTGRES_DB=agendia
 POSTGRES_PASSWORD=$(secret 24)
@@ -96,7 +102,7 @@ EOF
     printf '%s {\n\timport agendia %s-app:3000\n}\n' "$domain" "$name" > "deploy/sites/$name.caddy"
     reload_proxy
 
-    echo "Listo: https://$domain"
+    echo "Listo: https://$domain (licencia $tier)"
     echo "El dueño de la licencia crea su cuenta en https://$domain/registro (solo se admite la primera)."
     ;;
 
@@ -134,7 +140,7 @@ EOF
     ;;
 
   *)
-    echo "Uso: instance.sh create <nombre> <dominio> | update <nombre> | update-all | backup <nombre> | list" >&2
+    echo "Uso: instance.sh create <nombre> <dominio> [profesional|equipo] | update <nombre> | update-all | backup <nombre> | list" >&2
     exit 1
     ;;
 esac

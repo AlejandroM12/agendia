@@ -11,7 +11,7 @@ import { db } from "@/lib/db";
 import { requirePagePermission } from "@/lib/dal";
 import { brand, formatMoney, licenseTerms, offers, trialPolicy } from "@/lib/brand";
 import { isStandalone } from "@/lib/deployment";
-import { teamPlansAvailable } from "@/lib/features";
+import { isTeamModeEnabled, teamPlansAvailable } from "@/lib/features";
 import { daysRemainingInTrial, getEffectiveStatus } from "@/lib/organization-access";
 import { PLAN_CAPABILITIES, planTierFromCode, type PlanTier } from "@/lib/plans";
 import { formatDateLong, toZoned } from "@/lib/time";
@@ -24,15 +24,21 @@ import { getProfessionalQuota } from "@/modules/team/professionals";
 export const metadata: Metadata = { title: "Mi plan" };
 
 /** Lo que incluyen los dos planes: es lo mismo; solo cambia la cantidad de profesionales. */
-export const INCLUDED = [
+export const INCLUDED_BASE = [
   "Agenda y turnos sin límite",
   "Clientes e historial sin límite",
-  "Una agenda por profesional",
   "Página de reservas online propia",
   "Confirmaciones y recordatorios por email",
   "WhatsApp manual con mensajes preparados",
-  "Cuentas individuales opcionales y permisos configurables",
   "Hosting y soporte incluidos",
+];
+/** Lo de equipos solo se nombra si el negocio ya puede usarlo: no se anuncia algo que todavía no está disponible. */
+const INCLUDED_TEAM = [
+  ...INCLUDED_BASE.slice(0, 2),
+  "Una agenda por profesional",
+  ...INCLUDED_BASE.slice(2, 5),
+  "Cuentas individuales opcionales y permisos configurables",
+  ...INCLUDED_BASE.slice(5),
 ];
 
 export default async function BillingPage(props: PageProps<"/dashboard/facturacion">) {
@@ -52,6 +58,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
   const live = isLiveSubscription(subscription) && status !== "suspended";
   const currentTier: PlanTier | null = live ? planTierFromCode(subscription!.plan.code) : null;
   const showTeamPlan = teamPlansAvailable() || currentTier === "equipo";
+  const teamEnabled = isTeamModeEnabled(organization) || showTeamPlan;
 
   const [quota, capacity] = await Promise.all([
     getProfessionalQuota(db, organization),
@@ -64,7 +71,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
   const headline: Record<string, { title: string; body: string }> = {
     trial: {
       title: `Prueba gratuita · ${trialDays} ${trialDays === 1 ? "día restante" : "días restantes"}`,
-      body: `Tenés acceso completo hasta el ${date(organization.trialEndsAt)}, con hasta ${quota.limit} profesionales activos. No se cobra nada automáticamente. Si no contratás, tu cuenta pasa a solo lectura durante ${trialPolicy.readonlyGraceDays} días: podés ver todo, pero no crear ni modificar turnos. Nunca borramos tus datos.`,
+      body: `Tenés acceso completo hasta el ${date(organization.trialEndsAt)}${teamEnabled ? `, con hasta ${quota.limit} profesionales activos` : ""}. No se cobra nada automáticamente. Si no contratás, tu cuenta pasa a solo lectura durante ${trialPolicy.readonlyGraceDays} días: podés ver todo, pero no crear ni modificar turnos. Nunca borramos tus datos.`,
     },
     trial_readonly: {
       title: "Tu prueba gratuita terminó",
@@ -153,6 +160,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
         )}
       </div>
 
+      {teamEnabled && (
       <div className="mt-6 rounded-2xl border border-border bg-card p-5" data-testid="seat-usage">
         <p className="font-medium">
           Estás utilizando {quota.active} de {quota.limit} profesionales
@@ -173,6 +181,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
           </p>
         )}
       </div>
+      )}
 
       {capacity && capacity.excess > 0 && (
         <div className="mt-6 rounded-2xl border border-warning/40 bg-warning-soft p-5" data-testid="capacity-excess">
@@ -215,7 +224,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
       )}
 
       <div className="mt-10 space-y-10">
-        <Section title="Planes" description="Los dos planes incluyen lo mismo. Solo cambia cuántos profesionales activos podés tener.">
+        <Section title="Planes" description={showTeamPlan ? "Los dos planes incluyen lo mismo. Solo cambia cuántos profesionales activos podés tener." : undefined}>
           <div className="grid gap-4 sm:grid-cols-2">
             {tiers.map((tier) => {
               const capability = PLAN_CAPABILITIES[tier];
@@ -228,7 +237,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
                     <span className="font-display text-4xl font-semibold">{formatMoney(capability.monthlyPrice)}</span>
                     <span className="text-muted-foreground"> / mes</span>
                   </p>
-                  <p className="mt-2 text-sm text-muted-foreground">Hasta {capability.maxActiveProfessionals} profesionales activos</p>
+                  {teamEnabled && <p className="mt-2 text-sm text-muted-foreground">Hasta {capability.maxActiveProfessionals} profesionales activos</p>}
                   <div className="mt-4">
                     {isCurrent ? (
                       <p className="text-sm font-medium text-primary">Tu plan actual</p>
@@ -245,7 +254,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
             })}
           </div>
           <ul className="mt-5 grid gap-2 text-sm sm:grid-cols-2">
-            {INCLUDED.map((item) => (
+            {(teamEnabled ? INCLUDED_TEAM : INCLUDED_BASE).map((item) => (
               <li key={item} className="flex items-center gap-2">
                 <Check className="size-4 text-primary" aria-hidden="true" /> {item}
               </li>
