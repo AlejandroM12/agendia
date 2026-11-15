@@ -10,12 +10,13 @@ import { SubmitButton } from "@/components/form/submit-button";
 import { useForm } from "@/components/form/use-form";
 import { firstFieldErrors } from "@/lib/action-state";
 import { brand, trialPolicy } from "@/lib/brand";
+import { PLAN_CAPABILITIES, TRIAL_MAX_PROFESSIONALS, type PlanTier } from "@/lib/plans";
 import { registerSchema } from "@/modules/auth/schemas";
 import { AuthBenefits } from "./benefits";
 import { AuthCard } from "./auth-card";
 
 /** `trial`: la cuenta empieza con la prueba gratuita (no aplica a una instalación independiente). */
-export function RegisterForm({ trial }: { trial: boolean }) {
+export function RegisterForm({ trial, plan = null }: { trial: boolean; plan?: PlanTier | null }) {
   const form = useForm(registerAction, {
     // El mismo esquema con el que valida el servidor.
     validate: (data) => {
@@ -44,6 +45,7 @@ export function RegisterForm({ trial }: { trial: boolean }) {
       >
         <form {...form.formProps} className="space-y-4">
           <FormMessage message={form.message} />
+          {plan && <input type="hidden" name="plan" value={plan} />}
           <Field label="Tu nombre" htmlFor="name" error={form.error("name")}>
             <Input id="name" name="name" autoComplete="name" maxLength={120} required />
           </Field>
@@ -69,6 +71,13 @@ export function RegisterForm({ trial }: { trial: boolean }) {
           {trial && (
             <p className="text-center text-sm text-muted-foreground">
               {trialPolicy.trialDays} días de prueba con todas las funciones.
+            </p>
+          )}
+          {trial && plan === "equipo" && (
+            <p className="rounded-xl bg-secondary p-3.5 text-sm" data-testid="team-intent">
+              Elegiste el {PLAN_CAPABILITIES.equipo.name}. Empezás con la prueba gratuita de {trialPolicy.trialDays} días, con hasta{" "}
+              {TRIAL_MAX_PROFESSIONALS} profesionales activos y sin ningún cobro. Cuando quieras sumar más (hasta{" "}
+              {PLAN_CAPABILITIES.equipo.maxActiveProfessionals}), lo contratás desde «Mi plan».
             </p>
           )}
         </form>

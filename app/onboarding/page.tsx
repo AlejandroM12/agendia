@@ -7,16 +7,20 @@ import { requireContext } from "@/lib/dal";
 import { industries } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { DEFAULT_WEEKLY_RULES } from "@/modules/availability/rules";
-import { BusinessStep, HoursStep, ServicesStep } from "./steps";
+import { isTeamModeEnabled } from "@/lib/features";
+import { PLAN_CAPABILITIES, TRIAL_MAX_PROFESSIONALS } from "@/lib/plans";
+import { BusinessStep, HoursStep, ServicesStep, TeamStep } from "./steps";
 
 export const metadata: Metadata = { title: "Configurá tu agenda" };
 export const instant = false;
 
-const STEPS = [
-  { title: "Tu negocio", description: "Lo básico para armar tu página de reservas." },
-  { title: "Tus servicios", description: "Qué ofrecés y cuánto dura cada cosa. Después podés cambiarlo todo." },
-  { title: "Tus horarios", description: "Los días y horarios en los que atendés normalmente." },
-];
+type StepKey = "business" | "team" | "services" | "hours";
+const STEP_INFO: Record<StepKey, { title: string; description: string }> = {
+  business: { title: "Tu negocio", description: "Lo básico para armar tu página de reservas." },
+  team: { title: "Tu equipo", description: "Quiénes atienden. Es opcional: podés completarlo después desde «Equipo»." },
+  services: { title: "Tus servicios", description: "Qué ofrecés y cuánto dura cada cosa. Después podés cambiarlo todo." },
+  hours: { title: "Tus horarios", description: "Los días y horarios en los que atendés normalmente." },
+};
 
 export default async function OnboardingPage(props: PageProps<"/onboarding">) {
   const { organization, permissions } = await requireContext();
@@ -35,11 +39,18 @@ export default async function OnboardingPage(props: PageProps<"/onboarding">) {
     }),
   ]);
 
+  // Con «trabajo con otras personas» hay un paso más (el equipo). Sin las funciones de equipo, todo queda como siempre.
+  const teamFlow = isTeamModeEnabled(organization) && organization.workMode === "team";
+  const keys: StepKey[] = teamFlow ? ["business", "team", "services", "hours"] : ["business", "services", "hours"];
+  const STEPS = keys.map((key) => STEP_INFO[key]);
+
   // Se puede retomar: el primer paso sin completar es el punto de partida.
-  const firstIncomplete = !organization.industry ? 1 : services.length === 0 ? 2 : 3;
+  const firstIncomplete = !organization.industry ? 1 : services.length === 0 ? keys.indexOf("services") + 1 : keys.indexOf("hours") + 1;
   const requested = Number((await props.searchParams).paso);
   const step = requested >= 1 && requested <= firstIncomplete ? requested : firstIncomplete;
   const current = STEPS[step - 1];
+  const key = keys[step - 1];
+  const teamOn = isTeamModeEnabled(organization);
 
   const suggested =
     industries.find((i) => i.id === organization.industry)?.services.map((s) => ({ ...s, price: null })) ?? [];
@@ -68,9 +79,18 @@ export default async function OnboardingPage(props: PageProps<"/onboarding">) {
       </div>
 
       <div className="mt-7">
-        {step === 1 && <BusinessStep name={organization.name} industry={organization.industry} />}
-        {step === 2 && <ServicesStep initial={services.length ? services : suggested} />}
-        {step === 3 && <HoursStep initialRules={rules.length ? rules : DEFAULT_WEEKLY_RULES} />}
+        {key === "business" && (
+          <BusinessStep name={organization.name} industry={organization.industry} askWorkMode={teamOn} workMode={organization.workMode} />
+        )}
+        {key === "team" && (
+          <TeamStep trialLimit={TRIAL_MAX_PROFESSIONALS} teamLimit={PLAN_CAPABILITIES.equipo.maxActiveProfessionals} />
+        )}
+        {key === "services" && (
+          <ServicesStep initial={services.length ? services : suggested} backStep={keys.indexOf("services")} />
+        )}
+        {key === "hours" && (
+          <HoursStep initialRules={rules.length ? rules : DEFAULT_WEEKLY_RULES} backStep={keys.indexOf("hours")} />
+        )}
       </div>
     </main>
   );

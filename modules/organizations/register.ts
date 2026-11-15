@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/password";
 import { generateUniqueOrganizationSlug } from "@/lib/slug";
 import { trialPolicy } from "@/lib/brand";
+import type { PlanTier } from "@/lib/plans";
 import { registerSchema } from "@/modules/auth/schemas";
 
 export const registerOrganizationSchema = registerSchema.extend({
@@ -19,6 +20,11 @@ export type RegisterOrganizationInput = z.infer<typeof registerOrganizationSchem
    * modules/auth/email-verification.ts).
    */
   emailVerified?: boolean;
+  /**
+   * Plan por el que llegó la persona (CTA de la landing). Es solo una intención: no da lugares, no
+   * crea suscripción ni cobra nada; la cuenta empieza igual con la prueba gratuita.
+   */
+  intendedPlan?: PlanTier | null;
 };
 
 export type RegisterOrganizationResult =
@@ -55,6 +61,7 @@ export async function registerOrganization(
         slug,
         trialStartedAt: now,
         trialEndsAt,
+        intendedPlan: input.intendedPlan ?? null,
       },
     });
 

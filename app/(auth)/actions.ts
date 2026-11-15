@@ -17,6 +17,8 @@ import { emailSchema, newPasswordSchema } from "@/modules/auth/schemas";
 import { isEmailVerificationRequired, issueEmailVerification } from "@/modules/auth/email-verification";
 import { requireSignedInUser } from "@/lib/dal";
 import { safeCallbackPath } from "@/lib/safe-redirect";
+import { teamPlansPublished } from "@/lib/features";
+import { parsePlanTier } from "@/lib/plans";
 
 export type ActionState = {
   ok?: boolean;
@@ -50,7 +52,9 @@ export async function registerAction(
   }
 
   const mustVerify = isEmailVerificationRequired();
-  const result = await registerOrganization({ ...validated.data, emailVerified: !mustVerify });
+  // La intención de plan solo se guarda si es un plan conocido y los planes con equipo están publicados.
+  const intendedPlan = teamPlansPublished() ? parsePlanTier(formData.get("plan")) : null;
+  const result = await registerOrganization({ ...validated.data, emailVerified: !mustVerify, intendedPlan });
 
   if (!result.success) {
     return { errors: { email: [`${result.error} Ingresá con tu cuenta o usá otro email.`] } };

@@ -5,17 +5,22 @@ import { AuthCard } from "@/components/auth/auth-card";
 import { RegisterForm } from "@/components/auth/register-form";
 import { brand } from "@/lib/brand";
 import { isStandalone } from "@/lib/deployment";
+import { teamPlansPublished } from "@/lib/features";
+import { parsePlanTier } from "@/lib/plans";
 import { getRegistrationStatus } from "@/modules/auth/registration";
 
 export const metadata: Metadata = { title: "Crear cuenta" };
 export const instant = false;
 
-export default async function RegisterPage() {
+export default async function RegisterPage(props: PageProps<"/registro">) {
   // Depende de la configuración del servidor en ejecución, no del build.
   await connection();
   const status = await getRegistrationStatus();
 
-  if (status.open) return <RegisterForm trial={!isStandalone()} />;
+  if (status.open) {
+    const plan = teamPlansPublished() ? parsePlanTier((await props.searchParams).plan) : null;
+    return <RegisterForm trial={!isStandalone()} plan={plan} />;
+  }
 
   const footer = (
     <>

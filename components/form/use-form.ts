@@ -182,9 +182,13 @@ export function useForm<S extends StateShape>(
       if (pending || submitting.current) return;
 
       const form = event.currentTarget;
-      const data = new FormData(form);
+      // El botón que envió el formulario también viaja (p. ej. «Completar más tarde»), y si pide
+      // `formNoValidate` no se exigen los campos.
+      const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+      const data = submitter ? new FormData(form, submitter) : new FormData(form);
+      const skipValidation = submitter?.hasAttribute("formnovalidate") ?? false;
       // La validación propia da mensajes más específicos: gana sobre la nativa.
-      const errors = { ...nativeErrors(form), ...(optionsRef.current.validate?.(data) ?? {}) };
+      const errors = skipValidation ? {} : { ...nativeErrors(form), ...(optionsRef.current.validate?.(data) ?? {}) };
       const names = Object.keys(errors);
       if (names.length > 0) {
         setClientErrors(errors);
