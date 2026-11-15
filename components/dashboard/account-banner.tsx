@@ -7,17 +7,19 @@ import { daysRemainingInTrial, getEffectiveStatus } from "@/lib/organization-acc
  * Aviso del estado comercial de la cuenta. Solo aparece cuando hay algo
  * que el profesional necesita saber o hacer.
  */
-export function AccountBanner({ organization }: { organization: Organization }) {
+export function AccountBanner({ organization, canManageBilling }: { organization: Organization; canManageBilling: boolean }) {
   if (isStandalone()) return null;
 
   const status = getEffectiveStatus(organization);
-  const cta = (
+  // Sin permiso de facturación no se muestran ofertas ni enlaces al plan: solo se informa el estado.
+  const cta = !canManageBilling ? null : (
     <Link href="/dashboard/facturacion" className="font-semibold underline underline-offset-4">
       Ver mi plan
     </Link>
   );
 
   if (status === "trial") {
+    if (!canManageBilling) return null;
     const days = daysRemainingInTrial(organization);
     if (days > 3) return null;
     return (
@@ -29,6 +31,7 @@ export function AccountBanner({ organization }: { organization: Organization }) 
 
   if (status === "active") return null;
 
+  const neutral = "El negocio está en modo de solo lectura: podés consultar los datos, pero no crear ni modificar turnos. Consultá con quien administra la cuenta.";
   const message: Record<string, string> = {
     trial_readonly: "Tu prueba gratuita terminó. Podés consultar tus datos, pero no crear ni modificar turnos.",
     locked: "Tu cuenta está pausada. Tus datos siguen guardados: activá tu plan para volver a usarla.",
@@ -39,7 +42,7 @@ export function AccountBanner({ organization }: { organization: Organization }) 
 
   return (
     <div className="bg-highlight-soft px-4 py-2.5 text-center text-sm text-highlight">
-      {message[status]} {status !== "suspended" && cta}
+      {canManageBilling ? message[status] : status === "suspended" ? "La cuenta está suspendida." : neutral} {status !== "suspended" && cta}
     </div>
   );
 }

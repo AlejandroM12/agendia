@@ -134,6 +134,14 @@ export default async function TeamPage() {
               : "Ya usás todos los cupos. Para sumar a otro profesional tenés que desactivar a alguien o ampliar tu plan."}{" "}
           Solo cuentan los profesionales activos: una cuenta que administra pero no atiende clientes no ocupa cupo.
         </p>
+        {permissions.has("billing.manage") && (quota.overLimit || !quota.canAdd) && (
+          <p className="mt-2 text-sm">
+            <Link href="/dashboard/facturacion" className="font-medium text-primary underline-offset-4 hover:underline">
+              Ver mi plan
+            </Link>{" "}
+            <span className="text-muted-foreground">· cambiá de plan o elegí quiénes siguen recibiendo reservas.</span>
+          </p>
+        )}
       </div>
 
       {permissions.has("permissions.configure") && (
