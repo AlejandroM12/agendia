@@ -1,41 +1,55 @@
 import type { OrganizationStatus } from "@prisma/client";
+import { offers, pricing } from "@/lib/brand";
 
 /**
  * Capacidades y límites de los planes: la única definición.
  *
- * Todo lo que dependa del plan (cupos de profesionales hoy; otras
- * capacidades mañana) se consulta acá y se valida en el servidor
- * (modules/team/professionals.ts). Nada de esto toca precios,
- * suscripciones ni Mercado Pago: son capacidades, no condiciones de cobro.
+ * Los dos planes comparten TODAS las funcionalidades; lo único que los
+ * diferencia es cuántos profesionales activos admiten (y el precio). Todo lo
+ * que dependa del plan se consulta acá y se valida en el servidor
+ * (modules/team/professionals.ts); la interfaz solo lo muestra.
  *
- * Sin dependencias del servidor: lo puede importar también la interfaz para
- * mostrar cupos, pero la validación que cuenta es la del backend.
+ * Los importes salen de lib/brand.ts (`pricing`): un solo lugar para el
+ * precio de lista. El precio que se COBRA es el de la tabla `plans` (ver
+ * modules/billing/catalog.ts, que impide cobrar si difiere del publicado).
  */
 
 export type PlanTier = "profesional" | "equipo";
 
-export const PLAN_CAPABILITIES: Record<PlanTier, { name: string; maxActiveProfessionals: number }> = {
-  profesional: { name: "Plan Profesional", maxActiveProfessionals: 2 },
-  equipo: { name: "Plan Equipo", maxActiveProfessionals: 5 },
+export const PLAN_CAPABILITIES: Record<
+  PlanTier,
+  { name: string; licenseName: string; maxActiveProfessionals: number; code: string; monthlyPrice: number; licensePrice: number }
+> = {
+  // `mensual` es el código histórico del Plan Profesional en la base de datos.
+  profesional: { name: offers.monthly, licenseName: offers.licenseProfessional, maxActiveProfessionals: 2, code: "mensual", monthlyPrice: pricing.monthly, licensePrice: pricing.oneTime },
+  equipo: { name: offers.team, licenseName: offers.licenseTeam, maxActiveProfessionals: 5, code: "equipo", monthlyPrice: pricing.teamMonthly, licensePrice: pricing.licenseTeam },
 };
+
+export const PLAN_TIERS = Object.keys(PLAN_CAPABILITIES) as PlanTier[];
 
 /** Durante la prueba gratuita de 14 días se permiten los mismos cupos que el Plan Profesional. */
 export const TRIAL_MAX_PROFESSIONALS = PLAN_CAPABILITIES.profesional.maxActiveProfessionals;
 
 /**
- * Instalación independiente. Provisorio: las condiciones comerciales del
- * modo standalone todavía no están definidas; se usa el cupo del Plan
- * Profesional y se puede ampliar con `Organization.extraProfessionals`.
- */
-export const STANDALONE_MAX_PROFESSIONALS = PLAN_CAPABILITIES.profesional.maxActiveProfessionals;
-
-/**
  * Tier de un plan a partir de su código. `mensual` es el código histórico
- * del plan único actual (hoy «Plan Profesional»); un código desconocido cae
- * en el más restrictivo, nunca en el más generoso.
+ * del Plan Profesional; un código desconocido cae en el más restrictivo,
+ * nunca en el más generoso.
  */
 export function planTierFromCode(code: string | null | undefined): PlanTier {
-  return code === "equipo" ? "equipo" : "profesional";
+  return code === PLAN_CAPABILITIES.equipo.code ? "equipo" : "profesional";
+}
+
+export function parsePlanTier(value: unknown): PlanTier | null {
+  return value === "profesional" || value === "equipo" ? value : null;
+}
+
+/**
+ * Nivel de una instalación independiente: lo define la licencia comprada
+ * (`LICENSE_TIER`), no una suscripción. Sin valor o con uno desconocido es la
+ * Licencia Profesional (el más restrictivo).
+ */
+export function standaloneTier(): PlanTier {
+  return parsePlanTier(process.env.LICENSE_TIER) ?? "profesional";
 }
 
 export type ProfessionalLimit = {
@@ -52,26 +66,34 @@ const TRIAL_STATUSES: ReadonlySet<OrganizationStatus> = new Set(["trial", "trial
 /**
  * Cuántos profesionales activos admite un negocio.
  *
- * - Instalación independiente: cupo propio (`STANDALONE_MAX_PROFESSIONALS`).
- * - En prueba: `TRIAL_MAX_PROFESSIONALS`.
- * - Con plan: el del tier (una activación manual sin suscripción cuenta como Plan Profesional).
- * - `extraProfessionals` suma cupos adicionales en cualquier caso (futuras ampliaciones).
+ * - Instalación independiente: el de su licencia (`standaloneTier`).
+ * - En prueba, o con la cuenta cancelada o suspendida: el de la prueba (2).
+ * - Con suscripción: el del plan. **El cupo del Plan Equipo solo rige con un
+ *   pago verificado** (`paymentVerified`): haber vuelto de la pantalla de pago
+ *   o tener la suscripción autorizada no alcanza. El Plan Profesional tiene el
+ *   mismo cupo que la prueba, así que no hay nada que verificar.
+ * - `extraProfessionals` suma cupos adicionales en cualquier caso (ampliación pactada).
  */
 export function resolveProfessionalLimit(input: {
   standalone: boolean;
   status: OrganizationStatus;
   planCode: string | null | undefined;
   extraProfessionals: number;
+  paymentVerified?: boolean;
+  licenseTier?: PlanTier;
 }): ProfessionalLimit {
   const extra = Math.max(0, Math.trunc(input.extraProfessionals || 0));
 
   if (input.standalone) {
-    return { limit: STANDALONE_MAX_PROFESSIONALS + extra, base: STANDALONE_MAX_PROFESSIONALS, extra, source: "standalone", tier: null };
+    const tier = input.licenseTier ?? standaloneTier();
+    const base = PLAN_CAPABILITIES[tier].maxActiveProfessionals;
+    return { limit: base + extra, base, extra, source: "standalone", tier };
   }
-  if (TRIAL_STATUSES.has(input.status)) {
+  if (TRIAL_STATUSES.has(input.status) || input.status === "canceled" || input.status === "suspended") {
     return { limit: TRIAL_MAX_PROFESSIONALS + extra, base: TRIAL_MAX_PROFESSIONALS, extra, source: "trial", tier: null };
   }
-  const tier = planTierFromCode(input.planCode);
+  let tier = planTierFromCode(input.planCode);
+  if (tier === "equipo" && !input.paymentVerified) tier = "profesional";
   const base = PLAN_CAPABILITIES[tier].maxActiveProfessionals;
   return { limit: base + extra, base, extra, source: "plan", tier };
 }

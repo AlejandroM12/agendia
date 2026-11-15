@@ -88,6 +88,18 @@ model Organization {
   // (ver lib/permissions.ts). Nulo = valores predeterminados.
   professionalPermissions Json?
 
+  // Comercial (etapa 5). `intendedPlan` es solo la intención con la que llegó
+  // (CTA del plan): no da cupos ni cobra nada. `workMode` es la respuesta del
+  // onboarding («¿Cómo trabajás?»): "solo" | "team".
+  intendedPlan           String?
+  workMode               String?
+  // Exceso de cupo tras bajar de plan: desde `capacityGraceStartedAt` rige un
+  // período de adaptación hasta `capacityGraceEndsAt`; después, los
+  // profesionales excedentes dejan de recibir reservas NUEVAS (nunca se borra ni
+  // se cancela nada). Ver modules/team/capacity.ts.
+  capacityGraceStartedAt DateTime?
+  capacityGraceEndsAt    DateTime?
+
   // Reglas de agenda (ver modules/availability)
   slotIntervalMinutes     Int @default(30)
   bufferMinutes           Int @default(0)
@@ -144,6 +156,8 @@ model Professional {
   accessRevokedAt     DateTime?
   /// Excepciones a los permisos del negocio para este profesional (parcial).
   permissionOverrides Json?
+  /// Selección del propietario ante un exceso de cupo: true = sigue recibiendo reservas, false = no. Nulo = sin elegir.
+  keepBookable        Boolean?
 
   organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user                   User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -330,6 +344,7 @@ enum NotificationType {
   cancellation
   reschedule
   professional_change // el negocio le cambió el profesional al turno
+  account_notice // aviso de la cuenta al propietario (prueba por vencer, cupo, plan); el tipo va en payload.kind
   cancellation_owner
   reschedule_owner
 }
@@ -384,7 +399,8 @@ model Plan {
   active    Boolean  @default(true)
   updatedAt DateTime @updatedAt
 
-  subscriptions Subscription[]
+  subscriptions        Subscription[]
+  pendingSubscriptions Subscription[] @relation("PendingPlan")
 
   @@map("plans")
 }
@@ -398,20 +414,34 @@ enum SubscriptionStatus {
 }
 
 model Subscription {
-  id                     String             @id @default(uuid())
-  organizationId         String             @unique
-  planId                 String
-  status                 SubscriptionStatus @default(pending)
-  provider               String             @default("mercadopago")
-  providerSubscriptionId String?            @unique
-  currentPeriodEnd       DateTime?
-  lastPaymentAt          DateTime?
-  canceledAt             DateTime?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
+  id                            String             @id @default(uuid())
+  organizationId                String             @unique
+  planId                        String
+  status                        SubscriptionStatus @default(pending)
+  provider                      String             @default("mercadopago")
+  providerSubscriptionId        String?            @unique
+  currentPeriodEnd              DateTime?
+  lastPaymentAt                 DateTime?
+  // Cambio de plan en curso (modules/billing/plan-change.ts): el plan nuevo no
+  // rige hasta que Mercado Pago confirma lo necesario (ver docs).
+  pendingPlanId                 String?
+  pendingProviderSubscriptionId String?            @unique
+  pendingKind                   String? // "upgrade" | "downgrade"
+  pendingEffectiveAt            DateTime?
+  // Importe y moneda que se enviaron a Mercado Pago al crear la suscripción
+  // vigente: lo que se verifica al sincronizar. Nulo en suscripciones anteriores.
+  contractedAmount              Int?
+  contractedCurrency            String?
+  // Suscripción anterior de Mercado Pago que hay que cancelar tras un cambio de
+  // plan verificado (se reintenta desde el worker hasta lograrlo).
+  retiredProviderSubscriptionId String?
+  canceledAt                    DateTime?
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   plan         Plan         @relation(fields: [planId], references: [id])
+  pendingPlan  Plan?        @relation("PendingPlan", fields: [pendingPlanId], references: [id])
 
   @@map("subscriptions")
 }
@@ -541,6 +571,8 @@ model LicenseOrder {
   businessName         String
   amount               Int
   currency             String
+  // "profesional" (hasta 2 profesionales) o "equipo" (hasta 5).
+  tier                 String             @default("profesional")
   status               LicenseOrderStatus @default(pending)
   providerPreferenceId String?
   providerPaymentId    String?            @unique

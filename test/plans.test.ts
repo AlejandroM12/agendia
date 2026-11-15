@@ -5,7 +5,6 @@ import {
   PLAN_CAPABILITIES,
   planTierFromCode,
   resolveProfessionalLimit,
-  STANDALONE_MAX_PROFESSIONALS,
   TRIAL_MAX_PROFESSIONALS,
 } from "@/lib/plans";
 
@@ -16,7 +15,7 @@ describe("capacidades de los planes (definición única)", () => {
     expect(PLAN_CAPABILITIES.profesional.maxActiveProfessionals).toBe(2);
     expect(PLAN_CAPABILITIES.equipo.maxActiveProfessionals).toBe(5);
     expect(resolveProfessionalLimit(base)).toMatchObject({ limit: 2, source: "plan", tier: "profesional" });
-    expect(resolveProfessionalLimit({ ...base, planCode: "equipo" })).toMatchObject({ limit: 5, tier: "equipo" });
+    expect(resolveProfessionalLimit({ ...base, planCode: "equipo", paymentVerified: true })).toMatchObject({ limit: 5, tier: "equipo" });
   });
 
   it("el plan actual «mensual» es el Plan Profesional; un código desconocido nunca da más cupos", () => {
@@ -37,15 +36,27 @@ describe("capacidades de los planes (definición única)", () => {
     expect(resolveProfessionalLimit({ ...base, planCode: null })).toMatchObject({ limit: 2, source: "plan" });
   });
 
-  it("cancelar, suspender o atrasarse no reduce los cupos de un plan existente", () => {
-    for (const status of ["past_due", "canceled", "suspended"] as const) {
-      expect(resolveProfessionalLimit({ ...base, status, planCode: "equipo" }).limit).toBe(5);
+  it("el cupo del Plan Equipo solo rige con un pago verificado", () => {
+    expect(resolveProfessionalLimit({ ...base, planCode: "equipo" }).limit).toBe(2);
+    expect(resolveProfessionalLimit({ ...base, planCode: "equipo", paymentVerified: false })).toMatchObject({ limit: 2, tier: "profesional" });
+    expect(resolveProfessionalLimit({ ...base, planCode: "equipo", paymentVerified: true })).toMatchObject({ limit: 5, tier: "equipo" });
+  });
+
+  it("estar en mora no quita el cupo pagado, pero cancelar o suspender vuelve al cupo de la prueba", () => {
+    expect(resolveProfessionalLimit({ ...base, status: "past_due", planCode: "equipo", paymentVerified: true }).limit).toBe(5);
+    for (const status of ["canceled", "suspended"] as const) {
+      expect(resolveProfessionalLimit({ ...base, status, planCode: "equipo", paymentVerified: true })).toMatchObject({ limit: 2, source: "trial" });
     }
+  });
+
+  it("la licencia Equipo independiente admite 5 y la Profesional 2", () => {
+    expect(resolveProfessionalLimit({ ...base, standalone: true, licenseTier: "equipo" }).limit).toBe(5);
+    expect(resolveProfessionalLimit({ ...base, standalone: true, licenseTier: "profesional" }).limit).toBe(2);
   });
 
   it("la instalación independiente tiene su propio cupo", () => {
     expect(resolveProfessionalLimit({ ...base, standalone: true })).toMatchObject({
-      limit: STANDALONE_MAX_PROFESSIONALS,
+      limit: PLAN_CAPABILITIES.profesional.maxActiveProfessionals,
       source: "standalone",
     });
   });

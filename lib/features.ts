@@ -15,7 +15,34 @@
  * (modules/team/eligibility.ts y modules/team/professionals.ts).
  */
 export function isTeamModeEnabled(organization: { teamModeEnabled: boolean }): boolean {
-  return process.env.TEAM_MODE_ENABLED === "1" || organization.teamModeEnabled;
+  return process.env.TEAM_MODE_ENABLED === "1" || organization.teamModeEnabled || commercialActivation();
+}
+
+/**
+ * Publicación comercial de los planes con equipo (etapa 5): APAGADA por
+ * defecto. Encendida (`PUBLISH_TEAM_PLANS=1`, también al construir la imagen,
+ * porque la landing es estática), la landing muestra los planes Profesional
+ * y Equipo, el registro acepta la intención de plan, y el modo equipo y las
+ * cuentas individuales pasan a estar disponibles para todos los negocios
+ * según su plan (el cupo lo sigue limitando el plan: lib/plans.ts), sin que
+ * AtajoLab tenga que activar nada a mano.
+ */
+export function teamPlansPublished(): boolean {
+  return process.env.PUBLISH_TEAM_PLANS === "1";
+}
+
+/**
+ * Interruptor de emergencia: con `TEAM_FEATURES_PAUSED=1` se detiene la
+ * activación automática por publicación comercial (no se habilitan negocios
+ * nuevos). No desactiva lo que un negocio ya tiene habilitado explícitamente
+ * ni borra nada.
+ */
+export function teamFeaturesPaused(): boolean {
+  return process.env.TEAM_FEATURES_PAUSED === "1";
+}
+
+function commercialActivation(): boolean {
+  return teamPlansPublished() && !teamFeaturesPaused();
 }
 
 /**
@@ -28,6 +55,13 @@ export function isTeamModeEnabled(organization: { teamModeEnabled: boolean }): b
  * borra cuentas ni membresías (solo impide invitar y aceptar).
  */
 export function isAccountsEnabled(organization: { teamAccountsEnabled: boolean }): boolean {
-  return process.env.TEAM_ACCOUNTS_ENABLED === "1" || organization.teamAccountsEnabled;
+  return process.env.TEAM_ACCOUNTS_ENABLED === "1" || organization.teamAccountsEnabled || commercialActivation();
 }
 
+/**
+ * ¿Se puede contratar el Plan Equipo? Solo con la publicación comercial encendida (y sin la
+ * pausa de emergencia). Antes de eso el plan existe en la base pero no se ofrece ni se vende.
+ */
+export function teamPlansAvailable(): boolean {
+  return commercialActivation();
+}

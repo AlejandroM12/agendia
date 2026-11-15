@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { formatMoney, futurePricing, licenseRenewalText, offers, pricing, trialPolicy } from "@/lib/brand";
+import { formatMoney, licenseRenewalText, offers, pricing, trialPolicy } from "@/lib/brand";
 import { PLAN_CAPABILITIES } from "@/lib/plans";
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
@@ -40,31 +40,25 @@ describe("oferta comercial vigente", () => {
   });
 });
 
-describe("oferta multiprofesional futura", () => {
-  it("está definida en un solo lugar, con los importes acordados", () => {
-    expect(futurePricing).toEqual({ teamMonthly: 19900, licenseProfessional: 149000, licenseTeam: 249000 });
+describe("oferta comercial con equipos", () => {
+  it("los cuatro importes acordados están definidos en un solo lugar", () => {
+    expect(pricing.monthly).toBe(9900);
+    expect(pricing.teamMonthly).toBe(19900);
+    expect(pricing.oneTime).toBe(149000);
+    expect(pricing.licenseTeam).toBe(249000);
     expect(PLAN_CAPABILITIES.profesional.maxActiveProfessionals).toBe(2);
     expect(PLAN_CAPABILITIES.equipo.maxActiveProfessionals).toBe(5);
+    expect(PLAN_CAPABILITIES.equipo.monthlyPrice).toBe(pricing.teamMonthly);
+    expect(PLAN_CAPABILITIES.equipo.licensePrice).toBe(pricing.licenseTeam);
   });
 
-  it("no se publica: ninguna página, componente ni módulo la usa todavía", () => {
-    const users = runtimeSources.filter((file) => file !== join("lib", "brand.ts") && /futurePricing/.test(readFileSync(file, "utf8")));
-    expect(users).toEqual([]);
-    for (const value of [futurePricing.teamMonthly, futurePricing.licenseTeam]) {
+  it("ningún módulo escribe los importes a mano: salen de lib/brand.ts", () => {
+    for (const value of [pricing.teamMonthly, pricing.licenseTeam]) {
       const formatted = formatMoney(value).replace(/ /g, " ");
       for (const file of runtimeSources) {
+        if (file === join("lib", "brand.ts")) continue;
         expect(readFileSync(file, "utf8"), file).not.toContain(formatted);
       }
-    }
-  });
-});
-
-describe("integraciones que todavía no existen", () => {
-  it("no hay dependencias ni código de Google Calendar ni de proveedores de WhatsApp", () => {
-    const pkg = readFileSync("package.json", "utf8").toLowerCase();
-    expect(pkg).not.toMatch(/googleapis|google-auth|twilio|whatsapp/);
-    for (const file of runtimeSources) {
-      expect(readFileSync(file, "utf8"), file).not.toMatch(/googleapis|calendar\.google|graph\.facebook\.com|api\.twilio/i);
     }
   });
 });

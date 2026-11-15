@@ -31,26 +31,23 @@ export const trialPolicy = {
  */
 export const pricing = {
   currency: "ARS",
+  /** Plan Profesional (hasta 2 profesionales activos), por mes. */
   monthly: Number(process.env.PRICE_MONTHLY ?? 9900),
+  /** Plan Equipo (hasta 5 profesionales activos), por mes. */
+  teamMonthly: Number(process.env.PRICE_TEAM_MONTHLY ?? 19900),
+  /** Licencia Profesional (hasta 2), pago único. */
   oneTime: Number(process.env.PRICE_ONE_TIME ?? 149000),
-} as const;
-
-/**
- * Oferta multiprofesional FUTURA. Está definida acá para que la fuente de
- * verdad sea una sola, pero NO se publica ni se cobra: ninguna página, correo
- * ni integración de pago la usa hasta completar las etapas 3 a 5 de
- * docs/MULTI_PROFESSIONAL.md. Todos los importes en ARS.
- */
-export const futurePricing = {
-  teamMonthly: 19900,
-  licenseProfessional: 149000,
-  licenseTeam: 249000,
+  /** Licencia Equipo (hasta 5), pago único. */
+  licenseTeam: Number(process.env.PRICE_LICENSE_TEAM ?? 249000),
 } as const;
 
 /** Nombres comerciales de las dos modalidades. */
 export const offers = {
   monthly: "Plan Profesional",
+  team: "Plan Equipo",
   license: "Licencia independiente",
+  licenseProfessional: "Licencia Profesional",
+  licenseTeam: "Licencia Equipo",
 } as const;
 
 /**
