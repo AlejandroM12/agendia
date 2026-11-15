@@ -37,6 +37,17 @@ export const INVITATION_TTL_DAYS = 7;
 export const MAX_SENDS_PER_INVITATION = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
+/**
+ * Sin canal de correo, el enlace de la invitación solo se muestra fuera de
+ * producción (desarrollo y pruebas). Las pruebas E2E corren sobre la build de
+ * producción: `ALLOW_INVITATIONS_WITHOUT_EMAIL=1` (solo en playwright.config.ts,
+ * nunca en una instalación real) las deja ver el enlace, igual que
+ * `ALLOW_REGISTRATION_WITHOUT_EMAIL` con el registro.
+ */
+function showsInvitationLinks(): boolean {
+  return process.env.NODE_ENV !== "production" || process.env.ALLOW_INVITATIONS_WITHOUT_EMAIL === "1";
+}
+
 const hashToken = (raw: string) => createHash("sha256").update(raw).digest("hex");
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 const emailOk = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) && email.length <= 200;
@@ -171,7 +182,7 @@ async function deliver(params: {
     return { sent: result.ok };
   }
   // Sin canal de email solo se muestra el enlace fuera de producción (desarrollo y pruebas).
-  if (process.env.NODE_ENV !== "production") return { sent: false, devLink: `/invitacion/${params.token}` };
+  if (showsInvitationLinks()) return { sent: false, devLink: `/invitacion/${params.token}` };
   return { sent: false };
 }
 
@@ -196,7 +207,7 @@ export async function createInvitation(
   if (input.role === "professional" ? !input.professionalId : Boolean(input.professionalId)) {
     return fail("invalid", "La invitación no es válida.");
   }
-  if (!isEmailConfigured() && process.env.NODE_ENV === "production") {
+  if (!isEmailConfigured() && !showsInvitationLinks()) {
     return fail("email_unavailable", "El envío de correos no está configurado en esta instalación: no se puede invitar.");
   }
 
@@ -294,7 +305,7 @@ export async function resendInvitation(
 ): Promise<InvitationResult<{ sent: boolean; devLink?: string }>> {
   if (!isAccountsEnabled(organization)) return fail("disabled", "Las cuentas individuales todavía no están habilitadas para tu negocio.");
   if (!canPerformWriteActions(organization)) return fail("read_only", "Tu cuenta está en modo de solo lectura.");
-  if (!isEmailConfigured() && process.env.NODE_ENV === "production") {
+  if (!isEmailConfigured() && !showsInvitationLinks()) {
     return fail("email_unavailable", "El envío de correos no está configurado en esta instalación.");
   }
 

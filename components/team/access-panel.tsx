@@ -67,12 +67,16 @@ export function AccessPanel({
   disabled: boolean;
 }) {
   const router = useRouter();
+  const [note, setNote] = useState<InviteState>(undefined);
   const form = useForm(async (prev: InviteState, data: FormData) => {
     const result = await inviteProfessionalAction(professionalId, prev, data);
-    if (result?.ok) router.refresh();
+    if (result?.ok) {
+      // El formulario desaparece al quedar pendiente: el aviso (y el enlace de prueba) se muestra aparte.
+      setNote(result);
+      router.refresh();
+    }
     return result;
   });
-  const [note, setNote] = useState<InviteState>(undefined);
 
   async function run(action: () => Promise<InviteState>) {
     const result = await action();
