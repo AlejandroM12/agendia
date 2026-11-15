@@ -1,5 +1,6 @@
 "use server";
 
+import { recordAudit } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -136,6 +137,14 @@ export async function saveProfessionalServicesAction(
   const serviceIds = formData.getAll("serviceId").map(String);
   const saved = await setProfessionalServices(access.context.organization, professionalId, serviceIds);
   if (!saved.ok) return { message: saved.message };
+  await recordAudit({
+    organizationId: access.context.organization.id,
+    userId: access.context.user.id,
+    action: "team.professional.services",
+    entityType: "professional",
+    entityId: professionalId,
+    metadata: { services: serviceIds.length },
+  });
 
   revalidateTeam();
   const warning = saved.value.servicesWithoutProfessional;
@@ -269,6 +278,14 @@ export async function saveProfessionalHoursAction(
 
   const saved = await saveProfessionalHours(access.context.organization, professionalId, parsed.data);
   if (!saved.ok) return { message: saved.message };
+  await recordAudit({
+    organizationId: access.context.organization.id,
+    userId: access.context.user.id,
+    action: "schedule.hours.update",
+    entityType: "professional",
+    entityId: professionalId,
+    metadata: { ranges: parsed.data.length },
+  });
   revalidatePath("/dashboard/disponibilidad");
   revalidateTeam();
   return { ok: true, message: "Horarios guardados." };
@@ -282,6 +299,14 @@ export async function copyHoursAction(toProfessionalId: string, _prev: ActionSta
 
   const copied = await copyProfessionalHours(access.context.organization, from.slice(0, 64), toProfessionalId);
   if (!copied.ok) return { message: copied.message };
+  await recordAudit({
+    organizationId: access.context.organization.id,
+    userId: access.context.user.id,
+    action: "schedule.hours.copy",
+    entityType: "professional",
+    entityId: toProfessionalId,
+    metadata: { fromProfessionalId: from.slice(0, 64) },
+  });
   revalidatePath("/dashboard/disponibilidad");
   return { ok: true, message: "Horarios copiados. Podés ajustarlos si hace falta." };
 }
@@ -315,6 +340,14 @@ export async function addBlockAction(
   if (until) {
     const range = await createDateRangeBlock(organization, { professionalId, from: date, to: until, reason }, today);
     if (!range.ok) return { message: range.message };
+    await recordAudit({
+      organizationId: organization.id,
+      userId: access.context.user.id,
+      action: "schedule.block.create",
+      entityType: "availability_exception",
+      entityId: professionalId,
+      metadata: { scope: professionalId ? "professional" : "business", days: range.value.days },
+    });
     revalidatePath("/dashboard/disponibilidad");
     return { ok: true, message: `${range.value.days} ${range.value.days === 1 ? "día bloqueado" : "días bloqueados"}.` };
   }
@@ -337,6 +370,14 @@ export async function addBlockAction(
     reason,
   });
   if (!created.ok) return { message: created.message };
+  await recordAudit({
+    organizationId: organization.id,
+    userId: access.context.user.id,
+    action: "schedule.block.create",
+    entityType: "availability_exception",
+    entityId: created.value.id,
+    metadata: { scope: professionalId ? "professional" : "business", fullDay },
+  });
   revalidatePath("/dashboard/disponibilidad");
   return { ok: true, message: "Bloqueo agregado." };
 }
@@ -348,5 +389,13 @@ export async function deleteBlockAction(professionalId: string | null, exception
   if (!access.ok) return;
   if (professionalId !== null && !canActOnProfessional(access.context, professionalId)) return;
   await deleteAvailabilityException(access.context.organization, exceptionId, { professionalId });
+  await recordAudit({
+    organizationId: access.context.organization.id,
+    userId: access.context.user.id,
+    action: "schedule.block.delete",
+    entityType: "availability_exception",
+    entityId: exceptionId,
+    metadata: { scope: professionalId ? "professional" : "business" },
+  });
   revalidatePath("/dashboard/disponibilidad");
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { recordAudit } from "@/lib/audit";
 import { requireContext, requireScopedManage, requireScopedWrite } from "@/lib/dal";
 import { appointmentScope, customerScope, findAppointmentFor } from "@/modules/access/scope";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
@@ -171,6 +172,7 @@ export async function rescheduleAppointmentAction(
   const access = await requireScopedWrite("appointments.manage", "own.appointments.reschedule");
   if (!access.ok) return { message: access.message };
   const { organization, restrictedProfessionalId } = access.context;
+  const organizationId = organization.id;
   if (!(await findAppointmentFor(access.context, appointmentId))) return { message: "No encontramos ese turno." };
 
   const startsAt = parseStart(formData, organization.timezone);
@@ -186,6 +188,14 @@ export async function rescheduleAppointmentAction(
     actorUserId: access.context.user.id,
   });
   if (!result.ok) return { message: result.message };
+  await recordAudit({
+    organizationId,
+    userId: access.context.user.id,
+    action: "appointment.reschedule",
+    entityType: "appointment",
+    entityId: appointmentId,
+    metadata: { professionalChanged: Boolean(result.previousProfessionalId) },
+  });
 
   revalidateAgenda();
   redirect(`/dashboard/turnos/${appointmentId}`);
@@ -202,6 +212,15 @@ export async function cancelAppointmentAction(appointmentId: string): Promise<Ac
     actor: "professional",
     actorUserId: access.context.user.id,
   });
+  if (result.ok) {
+    await recordAudit({
+      organizationId: access.context.organization.id,
+      userId: access.context.user.id,
+      action: "appointment.cancel",
+      entityType: "appointment",
+      entityId: appointmentId,
+    });
+  }
   revalidateAgenda();
   return result.ok ? { ok: true } : { message: result.message };
 }

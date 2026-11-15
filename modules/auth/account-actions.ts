@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getCurrentSession, requireContext } from "@/lib/dal";
+import { recordAudit } from "@/lib/audit";
 import { revokeOtherSessions, revokeSession } from "@/lib/sessions";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 
@@ -46,6 +47,7 @@ export async function revokeSessionAction(sessionId: string): Promise<ActionStat
   const current = (await getCurrentSession())?.user?.sid;
   if (current && current === sessionId) return { message: "Esta es tu sesión actual: usá «Cerrar sesión»." };
   const revoked = await revokeSession(user.id, sessionId);
+  if (revoked) await recordAudit({ userId: user.id, action: "account.session.revoked", entityType: "user_session", entityId: sessionId });
   revalidatePath("/dashboard/perfil");
   return revoked ? { ok: true, message: "Cerramos esa sesión." } : { message: "No encontramos esa sesión." };
 }
@@ -55,6 +57,7 @@ export async function revokeOtherSessionsAction(): Promise<ActionState> {
   const { user } = await requireContext();
   const current = (await getCurrentSession())?.user?.sid;
   const count = await revokeOtherSessions(user.id, current);
+  if (count > 0) await recordAudit({ userId: user.id, action: "account.sessions.revoked_others", entityType: "user", entityId: user.id, metadata: { count } });
   revalidatePath("/dashboard/perfil");
   return { ok: true, message: count === 0 ? "No había otras sesiones abiertas." : `Cerramos ${count} ${count === 1 ? "sesión" : "sesiones"}.` };
 }

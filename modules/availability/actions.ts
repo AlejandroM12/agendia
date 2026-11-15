@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { recordAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
@@ -24,6 +25,14 @@ export async function saveWeeklyHoursAction(_prev: ActionState, formData: FormDa
   if (!primary) return { message: "No encontramos a un profesional activo para guardar los horarios." };
   const saved = await saveProfessionalHours(access.context.organization, primary.id, parsed.data);
   if (!saved.ok) return { message: saved.message };
+  await recordAudit({
+    organizationId: access.context.organization.id,
+    userId: access.context.user.id,
+    action: "schedule.hours.update",
+    entityType: "professional",
+    entityId: primary.id,
+    metadata: { ranges: parsed.data.length },
+  });
 
   revalidatePath("/dashboard/disponibilidad");
   return { ok: true, message: "Horarios guardados." };
@@ -44,7 +53,18 @@ export async function saveBookingSettingsAction(_prev: ActionState, formData: Fo
   const parsed = settingsSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { message: "Revisá los valores ingresados.", errors: fieldErrors(parsed.error) };
 
-  await db.organization.update({ where: { id: access.context.organization.id }, data: parsed.data });
+  const before = access.context.organization;
+  await db.organization.update({ where: { id: before.id }, data: parsed.data });
+  await recordAudit({
+    organizationId: before.id,
+    userId: access.context.user.id,
+    action: "settings.booking.update",
+    entityType: "organization",
+    entityId: before.id,
+    metadata: {
+      changed: Object.keys(parsed.data).filter((key) => (before as unknown as Record<string, unknown>)[key] !== (parsed.data as Record<string, unknown>)[key]),
+    },
+  });
 
   revalidatePath("/dashboard/disponibilidad");
   return { ok: true, message: "Reglas de reserva guardadas." };
@@ -55,5 +75,13 @@ export async function deleteExceptionAction(exceptionId: string): Promise<void> 
   const access = await requireWriteContext("schedule.manage");
   if (!access.ok) return;
   await deleteAvailabilityException(access.context.organization, exceptionId, { professionalId: null });
+  await recordAudit({
+    organizationId: access.context.organization.id,
+    userId: access.context.user.id,
+    action: "schedule.block.delete",
+    entityType: "availability_exception",
+    entityId: exceptionId,
+    metadata: { scope: "business" },
+  });
   revalidatePath("/dashboard/disponibilidad");
 }

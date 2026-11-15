@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { recordAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { requireWriteContext } from "@/lib/dal";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
@@ -127,6 +128,9 @@ export async function saveTeamStep(_prev: ActionState, formData: FormData): Prom
   for (const name of names) {
     if (known.has(name.toLowerCase())) continue;
     const created = await createProfessional(organization, { displayName: name });
+    if (created.ok) {
+      await recordAudit({ organizationId: organization.id, userId: access.context.user.id, action: "team.professional.create", entityType: "professional", entityId: created.value.id, metadata: { source: "onboarding" } });
+    }
     if (!created.ok) {
       // Si no se pudo sumar a nadie, el negocio no se queda sin profesional activo.
       if (toggledOwner && !attends) await setProfessionalActive(organization, ownerPro.id, true);

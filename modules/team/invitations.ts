@@ -5,6 +5,7 @@ import type { Invitation, MembershipRole, Organization, Prisma } from "@prisma/c
 import { db } from "@/lib/db";
 import { brand } from "@/lib/brand";
 import { isAccountsEnabled } from "@/lib/features";
+import { invitationLinksVisible } from "@/lib/test-flags";
 import { canPerformWriteActions } from "@/lib/organization-access";
 import { hashPassword } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
@@ -38,15 +39,10 @@ export const MAX_SENDS_PER_INVITATION = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 /**
- * Sin canal de correo, el enlace de la invitación solo se muestra fuera de
- * producción (desarrollo y pruebas). Las pruebas E2E corren sobre la build de
- * producción: `ALLOW_INVITATIONS_WITHOUT_EMAIL=1` (solo en playwright.config.ts,
- * nunca en una instalación real) las deja ver el enlace, igual que
- * `ALLOW_REGISTRATION_WITHOUT_EMAIL` con el registro.
+ * Sin canal de correo, el enlace de la invitación solo se muestra en desarrollo y en las pruebas E2E
+ * locales (lib/test-flags.ts): nunca en una instalación comercial, tenga o no la variable de pruebas.
  */
-function showsInvitationLinks(): boolean {
-  return process.env.NODE_ENV !== "production" || process.env.ALLOW_INVITATIONS_WITHOUT_EMAIL === "1";
-}
+const showsInvitationLinks = invitationLinksVisible;
 
 const hashToken = (raw: string) => createHash("sha256").update(raw).digest("hex");
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
