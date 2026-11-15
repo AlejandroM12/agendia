@@ -16,8 +16,8 @@ import { addProfessional, createSchedulableOrganization, enableTeam, ownerProfes
  */
 
 type Script = {
-  inspect: (client: pg.Client) => Promise<{ photos: number; notices: number; members: number }>;
-  apply: (client: pg.Client) => Promise<{ photosMoved: number; noticesConverted: number; membersMoved: number }>;
+  inspect: (client: pg.Client) => Promise<{ photos: number; notices: number; members: number; sessionUsers: number }>;
+  apply: (client: pg.Client) => Promise<{ photosMoved: number; noticesConverted: number; membersMoved: number; sessionsInvalidatedFor: number }>;
   restore: (client: pg.Client) => Promise<{ photosRestored: number; noticesRestored: number; membersRestored: number }>;
 };
 
@@ -85,7 +85,7 @@ describe("preparar el rollback sin perder datos", () => {
     // 2. Aplica: no queda ninguna fila que la versión anterior no conozca, y nada se perdió.
     const applied = await script.apply(client);
     expect(applied.photosMoved).toBeGreaterThanOrEqual(1);
-    expect(await script.inspect(client)).toEqual({ photos: 0, notices: 0, members: 0 });
+    expect(await script.inspect(client)).toEqual({ photos: 0, notices: 0, members: 0, sessionUsers: 0 });
     // Solo queda el propietario: nadie conserva un acceso que la versión anterior malinterpretaría.
     expect((await db.membership.findMany({ where: { organizationId: shop.organization.id } })).map((m) => m.role)).toEqual(["owner"]);
     expect((await db.professional.findUniqueOrThrow({ where: { id: owner.id } })).userId).toBeNull(); // el perfil se conserva, sin cuenta
@@ -100,7 +100,7 @@ describe("preparar el rollback sin perder datos", () => {
     expect(await db.professional.count({ where: { organizationId: shop.organization.id } })).toBe(2);
 
     // 3. Es repetible: una segunda vez no hace nada.
-    expect(await script.apply(client)).toEqual({ photosMoved: 0, noticesConverted: 0, membersMoved: 0 });
+    expect(await script.apply(client)).toEqual({ photosMoved: 0, noticesConverted: 0, membersMoved: 0, sessionsInvalidatedFor: 0 });
 
     // 4. Restaura: vuelve la foto con su profesional y el tipo de aviso original.
     const restored = await script.restore(client);
@@ -114,5 +114,46 @@ describe("preparar el rollback sin perder datos", () => {
     expect((await db.professional.findUniqueOrThrow({ where: { id: owner.id } })).userId).toBe(proUser.id);
     expect((await db.membership.findFirstOrThrow({ where: { organizationId: shop.organization.id, userId: adminUser.id } })).notifyBookings).toBe(false);
     await db.user.deleteMany({ where: { id: { in: [proUser.id, adminUser.id] } } });
+  });
+});
+
+describe("etapa 5: avisos de la cuenta y sesiones revocadas", () => {
+  it("aparta los avisos de la cuenta (tipo que la versión anterior no conoce) y los devuelve a su tipo", async () => {
+    const notice = await db.notification.create({
+      data: { organizationId: shop.organization.id, type: "account_notice", recipient: shop.ownerEmail, scheduledFor: new Date(), idempotencyKey: `rb-${Date.now()}`, payload: { kind: "trial_ending" } },
+    });
+    expect((await script.inspect(client)).notices).toBeGreaterThanOrEqual(1);
+
+    const applied = await script.apply(client);
+    expect(applied.noticesConverted).toBeGreaterThanOrEqual(1);
+    const converted = await db.notification.findUniqueOrThrow({ where: { id: notice.id } });
+    // Legible por la versión anterior, y un aviso pendiente no se envía más.
+    expect(converted).toMatchObject({ type: "reschedule", status: "canceled" });
+    expect(await db.notification.count({ where: { type: "account_notice" } })).toBe(0);
+
+    await script.restore(client);
+    expect((await db.notification.findUniqueOrThrow({ where: { id: notice.id } })).type).toBe("account_notice");
+  });
+
+  it("una sesión revocada no revive en la versión anterior: se cierran todas las sesiones de esa persona", async () => {
+    const { createUserSession, revokeSession } = await import("@/lib/sessions");
+    const other = await createSchedulableOrganization();
+    try {
+      const sid = await createUserSession(shop.userId);
+      await revokeSession(shop.userId, sid);
+      await createUserSession(other.userId); // sin revocaciones: no se toca
+      const before = await db.user.findMany({ where: { id: { in: [shop.userId, other.userId] } }, select: { id: true, sessionVersion: true } });
+
+      expect((await script.inspect(client)).sessionUsers).toBeGreaterThanOrEqual(1);
+      const applied = await script.apply(client);
+      expect(applied.sessionsInvalidatedFor).toBeGreaterThanOrEqual(1);
+
+      const after = new Map((await db.user.findMany({ where: { id: { in: [shop.userId, other.userId] } }, select: { id: true, sessionVersion: true } })).map((u) => [u.id, u.sessionVersion]));
+      const was = new Map(before.map((u) => [u.id, u.sessionVersion]));
+      expect(after.get(shop.userId)).toBe(was.get(shop.userId)! + 1);
+      expect(after.get(other.userId)).toBe(was.get(other.userId));
+    } finally {
+      await other.cleanup();
+    }
   });
 });

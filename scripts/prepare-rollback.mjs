@@ -4,8 +4,9 @@
 //   node scripts/prepare-rollback.mjs --apply    hace una copia y deja la base compatible
 //   node scripts/prepare-rollback.mjs --restore  vuelve a poner lo copiado (al volver a la versión nueva)
 //
-// Por qué hace falta: las versiones anteriores no conocen dos valores nuevos de
-// enum (`OrganizationImageKind.professional` y `NotificationType.professional_change`)
+// Por qué hace falta: las versiones anteriores no conocen tres valores nuevos de
+// enum (`OrganizationImageKind.professional`, `NotificationType.professional_change` y
+// `NotificationType.account_notice`)
 // y fallan al leer una fila que los tenga. Los valores de enum no se pueden quitar,
 // así que las filas se APARTAN, no se borran:
 //
@@ -17,9 +18,19 @@
 //     trataria a cualquier administrador como propietario (no tenia roles): dejarlos
 //     seria dar acceso total a quien no lo tiene. Los profesionales conservan su
 //     perfil, su agenda y sus turnos; solo pierden la cuenta, y `--restore` la devuelve.
-//  2. Los avisos `professional_change` se copian a `rollback_backup_notifications`;
-//     los pendientes se anulan y el tipo de todos pasa a `reschedule` (el historial
-//     se conserva, con el tipo más parecido que conoce la versión anterior).
+//  2. Los avisos `professional_change` y `account_notice` (los de la cuenta al propietario:
+//     fin de prueba, exceso de cupo) se copian a `rollback_backup_notifications`; los
+//     pendientes se anulan y el tipo de todos pasa a `reschedule` (el historial se conserva,
+//     con el tipo más parecido que conoce la versión anterior; sin turno, la versión anterior
+//     los descarta al procesarlos). `--restore` devuelve cada uno a su tipo original.
+//  4. (Etapa 5) Las sesiones revocadas (`user_sessions.revokedAt`) dejarían de estar revocadas:
+//     la versión anterior no consulta esa tabla. Para que una sesión cerrada no reviva, a esas
+//     personas se les sube `sessionVersion` (se les cierran todas las sesiones y vuelven a
+//     ingresar). No hay nada que restaurar.
+//     Lo demás de la etapa 5 es aditivo y la versión anterior lo ignora: columnas de suscripción
+//     (cambio de plan pendiente, importe contratado), período de adaptación, `keepBookable`,
+//     `workMode`, `intendedPlan`, nivel de licencia. Un negocio con Plan Equipo conserva su
+//     cupo de 5 en las versiones que ya conocían ese plan; las anteriores no limitan cupos.
 //
 // Todo ocurre en UNA transacción: si algo falla, no cambia nada. `--restore` revierte
 // ambos pasos. Antes de usarlo en producción: copia de seguridad completa (deploy/backup.sh).
@@ -35,9 +46,12 @@ const MEMBERSHIP_BACKUP = "rollback_backup_memberships";
 /** Cuántas filas habría que mover. Solo lectura. */
 export async function inspect(client) {
   const photos = await client.query(`SELECT count(*)::int AS n FROM "organization_images" WHERE "kind"::text = 'professional'`);
-  const notices = await client.query(`SELECT count(*)::int AS n FROM "notifications" WHERE "type"::text = 'professional_change'`);
+  const notices = await client.query(`SELECT count(*)::int AS n FROM "notifications" WHERE "type"::text IN ('professional_change', 'account_notice')`);
   const members = await client.query(`SELECT count(*)::int AS n FROM "memberships" WHERE "role"::text <> 'owner'`);
-  return { photos: photos.rows[0].n, notices: notices.rows[0].n, members: members.rows[0].n };
+  const sessions = await client.query(
+    `SELECT count(DISTINCT "userId")::int AS n FROM "user_sessions" WHERE "revokedAt" IS NOT NULL AND "userId" IN (SELECT "id" FROM "users")`,
+  ).catch(() => ({ rows: [{ n: 0 }] })); // la tabla no existe en una base anterior a la etapa 5
+  return { photos: photos.rows[0].n, notices: notices.rows[0].n, members: members.rows[0].n, sessionUsers: sessions.rows[0].n };
 }
 
 export async function apply(client) {
@@ -65,10 +79,10 @@ export async function apply(client) {
       `INSERT INTO "${NOTICE_BACKUP}" ("id","organizationId","appointmentId","type","channel","recipient","scheduledFor","status","attempts","lastError","sentAt","idempotencyKey","lockedUntil","payload","createdAt")
        SELECT n."id", n."organizationId", n."appointmentId", n."type"::text, n."channel"::text, n."recipient",
          n."scheduledFor", n."status"::text, n."attempts", n."lastError", n."sentAt", n."idempotencyKey", n."lockedUntil", n."payload", n."createdAt"
-       FROM "notifications" n WHERE n."type"::text = 'professional_change' AND NOT EXISTS (SELECT 1 FROM "${NOTICE_BACKUP}" b WHERE b."id" = n."id")`,
+       FROM "notifications" n WHERE n."type"::text IN ('professional_change', 'account_notice') AND NOT EXISTS (SELECT 1 FROM "${NOTICE_BACKUP}" b WHERE b."id" = n."id")`,
     );
-    await client.query(`UPDATE "notifications" SET "status" = 'canceled' WHERE "type"::text = 'professional_change' AND "status" = 'pending'`);
-    const notices = await client.query(`UPDATE "notifications" SET "type" = 'reschedule' WHERE "type"::text = 'professional_change'`);
+    await client.query(`UPDATE "notifications" SET "status" = 'canceled' WHERE "type"::text IN ('professional_change', 'account_notice') AND "status" = 'pending'`);
+    const notices = await client.query(`UPDATE "notifications" SET "type" = 'reschedule' WHERE "type"::text IN ('professional_change', 'account_notice')`);
 
     // Accesos que no son del propietario (ver arriba), con el perfil al que estaban vinculados.
     await client.query(`CREATE TABLE IF NOT EXISTS "${MEMBERSHIP_BACKUP}" (LIKE "memberships" INCLUDING DEFAULTS)`);
@@ -82,8 +96,18 @@ export async function apply(client) {
     );
     const members = await client.query(`DELETE FROM "memberships" WHERE "role"::text <> 'owner'`);
 
+    // Sesiones revocadas: se cierran todas las de esas personas (ver 4).
+    let sessions = 0;
+    if ((await client.query(`SELECT to_regclass('"user_sessions"') AS t`)).rows[0].t) {
+      sessions = (
+        await client.query(
+          `UPDATE "users" SET "sessionVersion" = "sessionVersion" + 1 WHERE "id" IN (SELECT DISTINCT "userId" FROM "user_sessions" WHERE "revokedAt" IS NOT NULL)`,
+        )
+      ).rowCount;
+    }
+
     await client.query("COMMIT");
-    return { photosMoved: photos.rowCount, noticesConverted: notices.rowCount, membersMoved: members.rowCount };
+    return { photosMoved: photos.rowCount, noticesConverted: notices.rowCount, membersMoved: members.rowCount, sessionsInvalidatedFor: sessions };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -112,7 +136,7 @@ export async function restore(client) {
     if (hasNotices) {
       notices = (
         await client.query(
-          `UPDATE "notifications" n SET "type" = 'professional_change', "status" = b."status"::"NotificationStatus"
+          `UPDATE "notifications" n SET "type" = b."type"::"NotificationType", "status" = b."status"::"NotificationStatus"
            FROM "${NOTICE_BACKUP}" b WHERE b."id" = n."id"`,
         )
       ).rowCount;
@@ -160,7 +184,8 @@ async function main() {
       console.log(`Fotos de profesionales: ${found.photos}`);
       console.log(`Avisos de cambio de profesional: ${found.notices}`);
       console.log(`Accesos de profesionales y administradores: ${found.members}`);
-      console.log(found.photos + found.notices + found.members === 0 ? "Nada que mover: la base ya es compatible con la versión anterior." : "Para apartarlos sin borrar nada: node scripts/prepare-rollback.mjs --apply");
+      console.log(`Personas con sesiones revocadas (se les cierran todas las sesiones): ${found.sessionUsers}`);
+      console.log(found.photos + found.notices + found.members + found.sessionUsers === 0 ? "Nada que mover: la base ya es compatible con la versión anterior." : "Para apartarlos sin borrar nada: node scripts/prepare-rollback.mjs --apply");
     } else if (mode === "apply") {
       console.log(await apply(client));
     } else {

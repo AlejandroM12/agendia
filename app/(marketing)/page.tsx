@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import { BellRing, CalendarDays, Clock, Link2, MessageCircle, Repeat, ShieldCheck, Smartphone, Users, type LucideIcon } from "lucide-react";
 import { LicensesSection, PricingCards } from "@/components/marketing/pricing-cards";
 import { AgendaPreview, BookingPreview, ReminderPreview } from "@/components/marketing/product-preview";
@@ -87,7 +88,12 @@ function FeatureRow({
   );
 }
 
-export default function LandingPage() {
+// La oferta (planes con equipo, precios) se lee de la configuración en ejecución, no del build: publicar o
+// pausar los planes con equipo no exige reconstruir la imagen.
+export const instant = false;
+
+export default async function LandingPage() {
+  await connection();
   const team = teamPlansPublished();
   const faqs = getFaqs({ team });
   const audiences = team ? TEAM_AUDIENCES : AUDIENCES;

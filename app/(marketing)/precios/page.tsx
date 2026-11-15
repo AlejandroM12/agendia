@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { LicensesSection, PricingCards } from "@/components/marketing/pricing-cards";
 import { brand, licenseRenewalText, offers, trialPolicy } from "@/lib/brand";
 import { teamPlansPublished } from "@/lib/features";
@@ -8,7 +9,11 @@ export const metadata: Metadata = {
   description: `Planes de ${brand.name}: ${trialPolicy.trialDays} días de prueba gratis, ${offers.monthly} mensual o ${offers.license} de pago único.`,
 };
 
-export default function PricingPage() {
+export const instant = false;
+
+export default async function PricingPage() {
+  // Los precios y la publicación de planes se leen de la configuración en ejecución.
+  await connection();
   return (
     <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl text-center">
