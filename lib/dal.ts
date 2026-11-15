@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { MembershipRole } from "@prisma/client";
 import { auth } from "@/auth";
+import { touchUserSession } from "@/lib/sessions";
 import { db } from "@/lib/db";
 import { composeContext, type AppContext, type LoadedContext } from "@/lib/app-context";
 import { getOrganizationWithSyncedStatus } from "@/lib/organization-access";
@@ -49,12 +50,19 @@ const loadContext = cache(async (): Promise<LoadedContext | "anonymous" | "stale
       email: true,
       name: true,
       sessionVersion: true,
+      // La sesión concreta (si la tiene): una revocada deja de valer aunque el token siga vigente.
+      sessions: { where: { id: session.user.sid ?? "" }, select: { id: true, revokedAt: true, lastSeenAt: true } },
       isPlatformAdmin: true,
       emailVerifiedAt: true,
       memberships: { orderBy: { createdAt: "asc" }, select: { id: true, organizationId: true, role: true, notifyBookings: true } },
     },
   });
   if (!user || user.sessionVersion !== session.user.sessionVersion) return "stale";
+  if (session.user.sid) {
+    const own = user.sessions[0];
+    if (!own || own.revokedAt) return "stale";
+    void touchUserSession(own.id, own.lastSeenAt);
+  }
   if (user.memberships.length === 0) return "no_workspace";
 
   // La pista solo cuenta si hoy sigue siendo un negocio al que pertenece.

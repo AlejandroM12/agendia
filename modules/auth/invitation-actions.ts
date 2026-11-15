@@ -9,6 +9,7 @@ import { ACTIVE_ORGANIZATION_COOKIE, getCurrentSession } from "@/lib/dal";
 import { db } from "@/lib/db";
 import { type ActionState } from "@/lib/action-state";
 import { clientIp, rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
+import { isSessionActive } from "@/lib/sessions";
 import { acceptInvitationWithAccount, acceptInvitationWithNewAccount } from "@/modules/team/invitations";
 
 /**
@@ -25,6 +26,7 @@ export async function acceptInvitationAction(token: string): Promise<ActionState
   if (!session?.user?.id) return { message: "Iniciá sesión para aceptar la invitación." };
   const user = await db.user.findUnique({ where: { id: session.user.id }, select: { id: true, email: true, sessionVersion: true } });
   if (!user || user.sessionVersion !== session.user.sessionVersion) return { message: "Tu sesión venció. Ingresá de nuevo." };
+  if (session.user.sid && !(await isSessionActive(user.id, session.user.sid))) return { message: "Tu sesión venció. Ingresá de nuevo." };
 
   const result = await acceptInvitationWithAccount(String(token), user);
   if (!result.ok) return { message: result.message };

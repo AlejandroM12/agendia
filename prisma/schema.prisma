@@ -413,6 +413,23 @@ enum SubscriptionStatus {
   canceled
 }
 
+// Una fila por inicio de sesión. El JWT lleva el id (`sid`): al revocar la fila esa sesión deja de
+// valer en el próximo pedido, sin tocar las demás. Las sesiones anteriores a esta tabla (sin `sid`)
+// siguen valiendo hasta que se cambia la contraseña o se cierran todas.
+model UserSession {
+  id         String    @id @default(uuid())
+  userId     String
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  device     String? // «Chrome en Windows»: solo para reconocerla, nunca la IP ni el user agent completo
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@map("user_sessions")
+}
+
 model Subscription {
   id                            String             @id @default(uuid())
   organizationId                String             @unique
@@ -491,6 +508,7 @@ model User {
   name            String
   // Se incrementa al cambiar la contraseña: invalida las sesiones previas.
   sessionVersion  Int       @default(0)
+  sessions        UserSession[]
   // Acceso al panel de plataforma (/admin). Solo se otorga desde el servidor
   // con `npm run admin:grant` — nunca por configuración ni desde la app.
   isPlatformAdmin Boolean   @default(false)

@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { trialPolicy } from "@/lib/brand";
 import { reconcileSubscriptions } from "@/modules/billing/subscriptions";
+import { pruneSessions } from "@/lib/sessions";
 import { scanAccountNotices } from "@/modules/notifications/account-notices";
 import { processDueNotifications } from "@/modules/notifications/process";
 import { organizationsToSyncCapacity, syncCapacityGrace } from "@/modules/team/capacity";
@@ -53,6 +54,7 @@ export async function runTick() {
   // 4. Limpieza de datos efímeros.
   await db.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(Date.now() - 24 * 3600000) } } });
   await db.passwordResetToken.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600000) } } });
+  await pruneSessions();
   await db.customerAccessToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   await db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600000) } } });
 

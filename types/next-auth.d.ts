@@ -7,6 +7,8 @@ declare module "next-auth" {
     user: {
       id: string;
       sessionVersion: number;
+      /** Id de esta sesión en `user_sessions` (ausente en sesiones anteriores a su introducción). */
+      sid?: string;
     } & DefaultSession["user"];
   }
 
@@ -18,5 +20,6 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     sessionVersion?: number;
+    sid?: string;
   }
 }

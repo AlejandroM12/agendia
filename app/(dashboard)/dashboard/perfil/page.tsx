@@ -5,7 +5,9 @@ import { Section } from "@/components/dashboard/section";
 import { PasswordForm } from "@/components/settings/settings-forms";
 import { ProfessionalAvatar } from "@/components/team/professional-avatar";
 import { db } from "@/lib/db";
-import { requireOrganization } from "@/lib/dal";
+import { getCurrentSession, requireOrganization } from "@/lib/dal";
+import { SessionsList } from "@/components/account/sessions-list";
+import { listSessions } from "@/lib/sessions";
 import { PROFESSIONAL_PERMISSION_LABELS, PROFESSIONAL_PERMISSION_KEYS } from "@/lib/permissions";
 import { ROLE_LABEL } from "@/lib/roles";
 
@@ -48,6 +50,13 @@ export default async function ProfilePage() {
 
         <Section title="Contraseña">
           <PasswordForm />
+        </Section>
+
+        <Section title="Sesiones abiertas" description="Los dispositivos donde ingresaste. Si no reconocés alguno, cerralo y cambiá tu contraseña.">
+          <SessionsList
+            currentId={(await getCurrentSession())?.user?.sid ?? null}
+            sessions={(await listSessions(user.id)).map((s) => ({ id: s.id, device: s.device ?? "Dispositivo", lastSeenAt: s.lastSeenAt.toISOString() }))}
+          />
         </Section>
 
         {isProfessional && profile && (

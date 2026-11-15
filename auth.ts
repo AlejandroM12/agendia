@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
+import { createUserSession } from "@/lib/sessions";
 
 const credentialsSchema = z.object({
   email: z.email(),
@@ -54,6 +55,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.sessionVersion = user.sessionVersion;
+        // Cada inicio de sesión queda registrado: así se puede cerrar una sola, o todas las demás.
+        token.sid = await createUserSession(user.id as string);
       }
       return token;
     },
@@ -61,6 +64,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user) {
         session.user.id = token.sub as string;
         session.user.sessionVersion = (token.sessionVersion as number | undefined) ?? 0;
+        session.user.sid = token.sid as string | undefined;
       }
       return session;
     },
