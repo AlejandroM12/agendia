@@ -16,7 +16,7 @@
     "team:verify": "node scripts/verify-team-data.mjs",
     "demo:seed": "node scripts/seed-demos.mjs",
     "demo:clean": "node scripts/seed-demos.mjs --clean",
-    "loadtest:local": "node scripts/loadtest-local.mjs",
+    "loadtest:local": "vitest run --config vitest.loadtest.config.mts",
     "rollback:prepare": "node scripts/prepare-rollback.mjs",
     "support:reset-link": "node scripts/create-reset-link.mjs",
     "email:test": "node scripts/send-test-email.mjs",
