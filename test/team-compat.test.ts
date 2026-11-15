@@ -247,7 +247,7 @@ describe("reserva pública de un negocio con un solo profesional", () => {
       return bookAppointmentAction(undefined, form);
     };
     const results = await Promise.all([submit(), submit(), submit()]);
-    expect(results.every((r) => r?.ok)).toBe(true);
+    expect(results.every((r) => r?.ok), JSON.stringify(results)).toBe(true);
     expect(await db.appointment.count({ where: { organizationId: org.id } })).toBe(1);
   });
 });

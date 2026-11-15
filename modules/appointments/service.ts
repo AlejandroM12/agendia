@@ -278,6 +278,14 @@ export async function createAppointment(params: {
       startsAt: params.startsAt,
     });
     if (candidates.length === 0) {
+      // Un reintento del MISMO formulario puede llegar cuando el primer envío ya confirmó el
+      // turno: el horario figura ocupado porque es el suyo. Se devuelve ese turno.
+      if (idempotencyKey) {
+        const replay = await db.appointment.findUnique({
+          where: { organizationId_idempotencyKey: { organizationId: organization.id, idempotencyKey } },
+        });
+        if (replay) return replayResult(replay, params.serviceId, params.startsAt);
+      }
       return fail("unavailable", "Ese horario acaba de ocuparse. Elegí otro, por favor.");
     }
   }

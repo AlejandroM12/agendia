@@ -133,13 +133,15 @@ export async function resolveInternalRecipients(
     notifyAdmins: boolean;
   },
 ): Promise<string[]> {
-  const [members, professional] = await Promise.all([
-    tx.membership.findMany({
-      where: { organizationId: params.organizationId },
-      select: { userId: true, role: true, notifyBookings: true, user: { select: { email: true } } },
-    }),
-    tx.professional.findFirst({ where: { id: params.professionalId, organizationId: params.organizationId }, select: { userId: true } }),
-  ]);
+  // Una consulta por vez: una transacción interactiva tiene una sola conexión.
+  const members = await tx.membership.findMany({
+    where: { organizationId: params.organizationId },
+    select: { userId: true, role: true, notifyBookings: true, user: { select: { email: true } } },
+  });
+  const professional = await tx.professional.findFirst({
+    where: { id: params.professionalId, organizationId: params.organizationId },
+    select: { userId: true },
+  });
 
   const emails = new Map<string, string>();
   const add = (email: string) => emails.set(email.trim().toLowerCase(), email);
