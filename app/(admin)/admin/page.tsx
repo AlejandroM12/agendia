@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
 import type { LicenseOrderStatus, OrganizationStatus } from "@prisma/client";
-import { PlanPriceForm } from "@/components/admin/plan-price-form";
+import { ConfirmButton } from "@/components/form/confirm-button";
 import { Logo } from "@/components/brand/logo";
 import { Section } from "@/components/dashboard/section";
 import { Input } from "@/components/ui/input";
@@ -10,11 +10,13 @@ import { db } from "@/lib/db";
 import { getEffectiveStatus } from "@/lib/organization-access";
 import { formatMoney, offers, pricing } from "@/lib/brand";
 import { cn } from "@/lib/utils";
-import { type AccountOperation, accountOperationAction } from "@/modules/admin/actions";
+import { type AccountOperation, accountOperationAction, alignPlanPricesAction } from "@/modules/admin/actions";
+import { priceDiscrepancies } from "@/modules/billing/catalog";
+import { teamFeaturesPaused, teamPlansPublished } from "@/lib/features";
+import { PLAN_CAPABILITIES, PLAN_TIERS } from "@/lib/plans";
 import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
-import { getMonthlyPlan } from "@/modules/billing/subscriptions";
 import { isEmailConfigured } from "@/modules/notifications/email";
-import { getDailyEmailUsage, getUsageByOrganization, monthRange, totalUsage } from "@/modules/system/usage";
+import { getDailyEmailUsage, getEmailsByType, getUsageByOrganization, monthRange, totalUsage } from "@/modules/system/usage";
 
 export const metadata: Metadata = { title: "Plataforma", robots: { index: false } };
 
@@ -60,7 +62,7 @@ export default async function AdminPage(props: PageProps<"/admin">) {
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 80) : "";
 
   const range = monthRange();
-  const [organizations, grouped, plan, failedNotifications, failedEvents, audit, licenseOrders, usage, dailyEmails] = await Promise.all([
+  const [organizations, grouped, discrepancies, failedNotifications, failedEvents, audit, licenseOrders, usage, dailyEmails, emailTypes] = await Promise.all([
     db.organization.findMany({
       where: q
         ? {
@@ -80,13 +82,14 @@ export default async function AdminPage(props: PageProps<"/admin">) {
       },
     }),
     db.organization.groupBy({ by: ["status"], _count: true }),
-    getMonthlyPlan(),
+    priceDiscrepancies(),
     db.notification.count({ where: { status: "failed", createdAt: { gte: weekAgo } } }),
     db.paymentEvent.count({ where: { processedAt: null } }),
     db.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 15 }),
     db.licenseOrder.findMany({ orderBy: { createdAt: "desc" }, take: 30 }),
     getUsageByOrganization(range, 15),
     getDailyEmailUsage(range),
+    getEmailsByType(range),
   ]);
   const usageTotals = totalUsage(usage);
 
@@ -150,7 +153,11 @@ export default async function AdminPage(props: PageProps<"/admin">) {
                 return (
                   <tr key={organization.id}>
                     <td className="px-4 py-3">
-                      <p className="font-medium">{organization.name}</p>
+                      <p className="font-medium">
+                        <Link href={`/admin/negocios/${organization.id}`} className="underline-offset-4 hover:underline">
+                          {organization.name}
+                        </Link>
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {organization.memberships[0]?.user.email} · /{organization.slug}
                         {!organization.onboardingCompletedAt && " · onboarding incompleto"}
@@ -190,10 +197,40 @@ export default async function AdminPage(props: PageProps<"/admin">) {
       </Section>
 
       <Section
-        title={`Precio del ${offers.monthly}`}
-        description="Es lo que se cobra en las suscripciones que se inicien a partir de ahora. El precio que muestra la landing se define con PRICE_MONTHLY en .env.production y se aplica en el próximo despliegue: mantenelos iguales."
+        title="Catálogo comercial y funciones"
+        description="Una sola fuente de precios: lib/brand.ts (PRICE_* al construir). El precio contratable de cada plan (tabla plans) tiene que coincidir; si no, ese plan no se vende. Las suscripciones vigentes conservan lo que autorizaron."
       >
-        <PlanPriceForm price={plan.price} currency={plan.currency} />
+        <ul className="space-y-1.5 text-sm" data-testid="catalog">
+          {PLAN_TIERS.map((tier) => (
+            <li key={tier}>
+              {PLAN_CAPABILITIES[tier].name}: <strong>{formatMoney(PLAN_CAPABILITIES[tier].monthlyPrice)}</strong> por mes · hasta {PLAN_CAPABILITIES[tier].maxActiveProfessionals} profesionales ·{" "}
+              {PLAN_CAPABILITIES[tier].licenseName} {formatMoney(PLAN_CAPABILITIES[tier].licensePrice)}
+            </li>
+          ))}
+          <li>
+            Publicación de los planes con equipo: <strong>{teamPlansPublished() ? "ENCENDIDA" : "apagada"}</strong>
+            {teamFeaturesPaused() && " · pausa de emergencia ACTIVA"}
+          </li>
+        </ul>
+        {discrepancies.length > 0 ? (
+          <div className="mt-3 rounded-xl bg-warning-soft p-3 text-sm text-warning" data-testid="price-discrepancy">
+            <p className="font-medium">Hay precios contratables distintos de los publicados:</p>
+            <ul className="mt-1 list-disc pl-5">
+              {discrepancies.map((d) => (
+                <li key={d.code}>
+                  {d.code}: en la base {formatMoney(d.stored)}, publicado {formatMoney(d.published)}
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3">
+              <ConfirmButton variant="outline" action={alignPlanPricesAction} confirmMessage="¿Alinear los precios de la base con los publicados? Queda registrado.">
+                Alinear con los publicados
+              </ConfirmButton>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-muted-foreground">Los precios contratables coinciden con los publicados.</p>
+        )}
       </Section>
 
       <Section
@@ -212,6 +249,16 @@ export default async function AdminPage(props: PageProps<"/admin">) {
             </>
           )}
         </p>
+        {emailTypes.length > 0 && (
+          <ul className="mb-4 flex flex-wrap gap-2 text-xs" data-testid="emails-by-type">
+            {emailTypes.map((row) => (
+              <li key={row.type} className="rounded-full border border-border bg-card px-3 py-1">
+                {row.type} <span className="text-muted-foreground">({row.audience})</span>: <strong>{row.sent}</strong>
+                {row.failed > 0 && <span className="text-warning"> · {row.failed} fallidos</span>}
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="overflow-x-auto rounded-2xl border border-border bg-card">
           <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="border-b border-border text-xs text-muted-foreground">
@@ -250,7 +297,7 @@ export default async function AdminPage(props: PageProps<"/admin">) {
 
       <Section
         title={offers.license}
-        description={`Precio publicado: ${formatMoney(pricing.oneTime)} (PRICE_ONE_TIME en .env.production). Una orden pasa a «Pagada» solo cuando Mercado Pago confirma el pago; después hay que crear la instalación (docs/DEPLOYMENT.md).`}
+        description={`Precios publicados: ${formatMoney(pricing.oneTime)} (Profesional, PRICE_ONE_TIME) y ${formatMoney(pricing.licenseTeam)} (Equipo, PRICE_LICENSE_TEAM; solo se vende con los planes con equipo publicados). Una orden pasa a «Pagada» solo cuando Mercado Pago confirma el pago; después hay que crear la instalación (docs/DEPLOYMENT.md).`}
       >
         <div className="overflow-x-auto rounded-2xl border border-border bg-card">
           <table className="w-full min-w-[640px] text-left text-sm">
@@ -268,7 +315,7 @@ export default async function AdminPage(props: PageProps<"/admin">) {
                 <tr key={order.id}>
                   <td className="px-4 py-3">
                     <p className="font-medium">{order.businessName}</p>
-                    <p className="text-xs text-muted-foreground">orden {order.id.slice(0, 8)}</p>
+                    <p className="text-xs text-muted-foreground">orden {order.id.slice(0, 8)} · nivel {order.tier}</p>
                   </td>
                   <td className="px-4 py-3">
                     <p>{order.name}</p>

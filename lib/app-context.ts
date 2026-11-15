@@ -8,6 +8,11 @@ export type AppContext = {
   role: MembershipRole;
   /** `false` con la prueba vencida o la cuenta suspendida: solo lectura. */
   canWrite: boolean;
+  /**
+   * En solo lectura (prueba terminada, cuenta cancelada) igual se pueden gestionar los turnos YA
+   * confirmados: cancelarlos y marcar su resultado. No se crean ni se mueven. Una cuenta suspendida no puede nada.
+   */
+  canManageExisting: boolean;
   /** La membresía vigente de esta persona en este negocio. */
   membership: { id: string; notifyBookings: boolean };
   /** El perfil de profesional vinculado a esta cuenta en este negocio, si lo hay. */
@@ -47,6 +52,7 @@ export function composeContext(input: {
     organization,
     role: membership.role,
     canWrite: canPerformWriteActions(organization),
+    canManageExisting: canPerformWriteActions(organization) || organization.status !== "suspended",
     membership: { id: membership.id, notifyBookings: membership.notifyBookings },
     professional: professional ? { id: professional.id, displayName: professional.displayName, active: professional.active } : null,
     permissions: permissionsFor(membership.role, professionalConfig),

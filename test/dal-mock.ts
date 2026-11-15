@@ -26,6 +26,11 @@ export function createDalMock(getContext: () => AppContext) {
     },
     requireWriteContext,
     requirePermission: requireWriteContext,
+    requireScopedManage: async (any: Permission, own: Permission) => {
+      const context = getContext();
+      if (!context.permissions.has(any) && !context.permissions.has(own)) return { ok: false as const, message: FORBIDDEN_MESSAGE };
+      return context.canManageExisting ? { ok: true as const, context } : { ok: false as const, message: "solo lectura" };
+    },
     requireScopedWrite: async (any: Permission, own: Permission) => {
       const context = getContext();
       if (!context.permissions.has(any) && !context.permissions.has(own)) return { ok: false as const, message: FORBIDDEN_MESSAGE };

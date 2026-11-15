@@ -184,7 +184,7 @@ describe("aceptar invitaciones", () => {
 
     const accepted = await acceptInvitationWithAccount(sent.token, user);
     expect(accepted).toMatchObject({ ok: true, organizationId: s.t.organization.id, role: "professional" });
-    expect(await db.membership.findFirstOrThrow({ where: { organizationId: s.t.organization.id, userId: user.id } })).toMatchObject({ role: "professional", notifyBookings: true });
+    expect(await db.membership.findFirstOrThrow({ where: { organizationId: s.t.organization.id, userId: user.id } })).toMatchObject({ role: "professional", notifyBookings: false });
     expect((await db.professional.findUniqueOrThrow({ where: { id: s.professional.id } })).userId).toBe(user.id);
     expect(await db.membership.count({ where: { userId: user.id } })).toBe(2);
     expect((await db.membership.findFirstOrThrow({ where: { organizationId: home.organization.id, userId: user.id } })).role).toBe("owner");

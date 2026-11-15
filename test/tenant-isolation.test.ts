@@ -29,7 +29,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-import { accountOperationAction, updatePlanPriceAction } from "@/modules/admin/actions";
+import { accountOperationAction, alignPlanPricesAction } from "@/modules/admin/actions";
 import {
   cancelAppointmentAction,
   createAppointmentAction,
@@ -219,7 +219,7 @@ describe("aislamiento entre negocios en las server actions", () => {
     it("un usuario común no puede operar cuentas ni cambiar precios (ni siquiera la propia)", async () => {
       expect(await run(() => accountOperationAction(victim.organization.id, "suspend"))).toBe("NOT_FOUND");
       expect(await run(() => accountOperationAction(attacker.organization.id, "activate"))).toBe("NOT_FOUND");
-      expect(await run(() => updatePlanPriceAction(undefined, form({ price: "1" })))).toBe("NOT_FOUND");
+      expect(await run(() => alignPlanPricesAction())).toBe("NOT_FOUND");
 
       const [victimOrg, attackerOrg] = await Promise.all([
         db.organization.findUniqueOrThrow({ where: { id: victim.organization.id } }),

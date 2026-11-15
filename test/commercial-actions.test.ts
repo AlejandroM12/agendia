@@ -193,3 +193,52 @@ describe("onboarding «¿Cómo trabajás?»", () => {
     expect(await db.professional.count({ where: { organizationId: tenant.organization.id } })).toBe(1);
   });
 });
+
+describe("solo lectura: los turnos ya confirmados se siguen gestionando", () => {
+  async function confirmed() {
+    const { createAppointment } = await import("@/modules/appointments/service");
+    const { addDays, todayInTz, zonedTimeToUtc } = await import("@/lib/time");
+    const when = zonedTimeToUtc(addDays(todayInTz(tenant.organization.timezone), 3), 600, tenant.organization.timezone);
+    const result = await createAppointment({
+      organization: tenant.organization,
+      serviceId: tenant.service.id,
+      startsAt: when,
+      customer: { name: "Cliente", email: `c-${uniqueSuffix()}@example.com`, phone: null },
+      actor: "customer",
+    });
+    if (!result.ok) throw new Error("no se pudo crear el turno");
+    return result.appointment;
+  }
+
+  it("con la prueba terminada se puede cancelar un turno confirmado, pero no crear ni mover turnos", async () => {
+    const { cancelAppointmentAction, createAppointmentAction, rescheduleAppointmentAction } = await import("@/modules/appointments/actions");
+    const appointment = await confirmed();
+    await db.organization.update({ where: { id: tenant.organization.id }, data: { status: "trial_readonly", trialEndsAt: new Date(Date.now() - 86400000) } });
+    await actAs("owner", false);
+
+    expect(await run(() => rescheduleAppointmentAction(appointment.id, undefined, form({ date: "2099-01-01", time: "10:00" })))).toMatchObject({ message: expect.any(String) });
+    expect(await createAppointmentAction(undefined, form({}))).toMatchObject({ message: expect.any(String) });
+    expect(await cancelAppointmentAction(appointment.id)).toMatchObject({ ok: true });
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status).toBe("canceled");
+  });
+
+  it("también se puede cerrar un turno como completado, pero no deshacerlo", async () => {
+    const { setOutcomeAction } = await import("@/modules/appointments/actions");
+    const appointment = await confirmed();
+    await db.organization.update({ where: { id: tenant.organization.id }, data: { status: "trial_readonly", trialEndsAt: new Date(Date.now() - 86400000) } });
+    await actAs("owner", false);
+    await setOutcomeAction(appointment.id, "no_show");
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status).toBe("no_show");
+    await setOutcomeAction(appointment.id, "confirmed");
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status).toBe("no_show");
+  });
+
+  it("una cuenta suspendida no puede gestionar nada", async () => {
+    const { cancelAppointmentAction } = await import("@/modules/appointments/actions");
+    const appointment = await confirmed();
+    await db.organization.update({ where: { id: tenant.organization.id }, data: { status: "suspended" } });
+    await actAs("owner", false);
+    expect(await cancelAppointmentAction(appointment.id)).toMatchObject({ message: expect.any(String) });
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status).toBe("confirmed");
+  });
+});

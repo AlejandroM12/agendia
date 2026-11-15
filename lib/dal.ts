@@ -157,6 +157,21 @@ export async function requireScopedWrite(
   return { ok: true, context };
 }
 
+/**
+ * Como `requireScopedWrite`, pero para gestionar turnos que YA existen (cancelar, marcar el resultado):
+ * sigue permitido cuando la cuenta está en solo lectura por fin de prueba o suscripción cancelada, para
+ * que nadie quede con un turno confirmado que no puede cancelar ni cerrar. Una cuenta suspendida no puede.
+ */
+export async function requireScopedManage(
+  any: Permission,
+  own: Permission,
+): Promise<{ ok: true; context: AppContext } | { ok: false; message: string }> {
+  const context = await requireContext();
+  if (!context.permissions.has(any) && !context.permissions.has(own)) return { ok: false, message: FORBIDDEN_MESSAGE };
+  if (!context.canManageExisting) return { ok: false, message: READ_ONLY_MESSAGE };
+  return { ok: true, context };
+}
+
 export type Workspace = {
   organizationId: string;
   name: string;

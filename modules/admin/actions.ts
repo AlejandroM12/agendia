@@ -7,7 +7,12 @@ import { db } from "@/lib/db";
 import { requireContext } from "@/lib/dal";
 import { type ActionState } from "@/lib/action-state";
 import { canAccessPlatformAdmin } from "@/lib/deployment";
-import { getMonthlyPlan } from "@/modules/billing/subscriptions";
+import { PLAN_CAPABILITIES, PLAN_TIERS } from "@/lib/plans";
+import { pricing } from "@/lib/brand";
+import { ensurePlan, listPrice } from "@/modules/billing/catalog";
+import { getPreapproval, isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
+import { applyPreapprovalState } from "@/modules/billing/subscriptions";
+import { syncCapacityGrace } from "@/modules/team/capacity";
 
 /** Toda acción del panel vuelve a verificar el permiso: el layout no alcanza. */
 async function requirePlatformAdmin() {
@@ -71,27 +76,103 @@ export async function accountOperationAction(organizationId: string, operation: 
   revalidatePath("/admin");
 }
 
-export async function updatePlanPriceAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+/**
+ * Alinea el precio contratable de cada plan (tabla `plans`) con el precio de lista publicado
+ * (PRICE_* en la configuración). No hay un campo libre de precio: el precio se decide en un solo lugar
+ * (lib/brand.ts) y esto solo corrige una diferencia. No toca las suscripciones vigentes, que conservan
+ * el importe que autorizaron.
+ */
+export async function alignPlanPricesAction(): Promise<ActionState> {
   const admin = await requirePlatformAdmin();
-
-  const price = Number(String(formData.get("price") ?? "").replace(/[^\d]/g, ""));
-  if (!Number.isInteger(price) || price < 1 || price > 100_000_000) {
-    return { message: "Ingresá un precio válido." };
+  const changes: Array<{ code: string; from: number; to: number }> = [];
+  for (const tier of PLAN_TIERS) {
+    const plan = await ensurePlan(tier);
+    const target = listPrice(tier);
+    if (plan.price === target && plan.currency === pricing.currency) continue;
+    await db.$transaction([
+      db.plan.update({ where: { id: plan.id }, data: { price: target, currency: pricing.currency } }),
+      db.auditLog.create({
+        data: {
+          userId: admin.user.id,
+          action: "admin.plan.price_aligned",
+          entityType: "plan",
+          entityId: plan.id,
+          metadata: { code: PLAN_CAPABILITIES[tier].code, previousPrice: plan.price, newPrice: target },
+        },
+      }),
+    ]);
+    changes.push({ code: plan.code, from: plan.price, to: target });
   }
+  revalidatePath("/admin");
+  return { ok: true, message: changes.length ? `Precios alineados: ${changes.map((c) => `${c.code} ${c.from} → ${c.to}`).join(", ")}.` : "Los precios ya coinciden con los publicados." };
+}
 
-  const plan = await getMonthlyPlan();
+export type OrganizationFeature = "team" | "accounts";
+
+/**
+ * Habilita o deshabilita una función de equipo para UN negocio (piloto controlado). No borra datos:
+ * apagar el modo equipo no elimina profesionales ni turnos (el negocio vuelve a verse con el primero).
+ * Queda registrado quién lo hizo, cuándo y el valor anterior.
+ */
+export async function setOrganizationFeatureAction(organizationId: string, feature: OrganizationFeature, enabled: boolean): Promise<void> {
+  const admin = await requirePlatformAdmin();
+  const organization = await db.organization.findUnique({ where: { id: organizationId }, select: { teamModeEnabled: true, teamAccountsEnabled: true } });
+  if (!organization) return;
+
+  const field = feature === "team" ? "teamModeEnabled" : "teamAccountsEnabled";
+  const previous = organization[field];
+  // Las cuentas individuales requieren el modo equipo: no se enciende una sin la otra.
+  const data: { teamModeEnabled?: boolean; teamAccountsEnabled?: boolean } =
+    feature === "team" && !enabled ? { teamModeEnabled: false, teamAccountsEnabled: false } : feature === "accounts" && enabled ? { teamAccountsEnabled: true, teamModeEnabled: true } : { [field]: enabled };
   await db.$transaction([
-    db.plan.update({ where: { id: plan.id }, data: { price } }),
+    db.organization.update({ where: { id: organizationId }, data }),
     db.auditLog.create({
       data: {
+        organizationId,
         userId: admin.user.id,
-        action: "admin.plan.price_updated",
-        entityType: "plan",
-        entityId: plan.id,
-        metadata: { previousPrice: plan.price, newPrice: price },
+        action: `admin.feature.${feature}.${enabled ? "enabled" : "disabled"}`,
+        entityType: "organization",
+        entityId: organizationId,
+        metadata: { previous, next: enabled },
       },
     }),
   ]);
+  revalidatePath(`/admin/negocios/${organizationId}`);
   revalidatePath("/admin");
-  return { ok: true, message: "Precio actualizado. Aplica a las suscripciones nuevas." };
+}
+
+/**
+ * Diagnóstico y conciliación de UN negocio: vuelve a consultar en Mercado Pago el estado de su suscripción
+ * (y del cambio de plan pendiente) y recalcula el exceso de cupo. Solo lee de Mercado Pago y aplica las
+ * mismas reglas verificadas que el webhook; nunca habilita un cambio de plan sin un cobro aprobado.
+ */
+export async function reconcileOrganizationAction(organizationId: string): Promise<ActionState> {
+  const admin = await requirePlatformAdmin();
+  const subscription = await db.subscription.findUnique({ where: { organizationId } });
+  const results: string[] = [];
+  if (subscription && isMercadoPagoConfigured()) {
+    for (const id of [subscription.providerSubscriptionId, subscription.pendingProviderSubscriptionId]) {
+      if (!id) continue;
+      try {
+        results.push(`${await applyPreapprovalState(await getPreapproval(id))}`);
+      } catch {
+        results.push("error");
+      }
+    }
+  } else {
+    results.push(subscription ? "Mercado Pago sin configurar" : "sin suscripción");
+  }
+  const capacity = await syncCapacityGrace(organizationId);
+  await db.auditLog.create({
+    data: {
+      organizationId,
+      userId: admin.user.id,
+      action: "admin.reconcile",
+      entityType: "organization",
+      entityId: organizationId,
+      metadata: { results, capacity },
+    },
+  });
+  revalidatePath(`/admin/negocios/${organizationId}`);
+  return { ok: true, message: `Conciliación: ${results.join(", ")} · cupos: ${capacity}.` };
 }

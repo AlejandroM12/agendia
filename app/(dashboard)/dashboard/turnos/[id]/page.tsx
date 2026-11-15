@@ -29,7 +29,7 @@ export const metadata: Metadata = { title: "Turno" };
 
 export default async function AppointmentPage(props: PageProps<"/dashboard/turnos/[id]">) {
   const context = await requireOrganization();
-  const { organization, canWrite, permissions } = context;
+  const { organization, canWrite, canManageExisting, permissions } = context;
   const restricted = context.restrictedProfessionalId !== null;
   const { id } = await props.params;
   const tz = organization.timezone;
@@ -94,7 +94,7 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
         </p>
       </div>
 
-      {canWrite && appointment.status !== "canceled" && (
+      {canManageExisting && appointment.status !== "canceled" && (
         <div className="mt-4 flex flex-wrap gap-3">
           {appointment.status === "confirmed" ? (
             <>
@@ -112,7 +112,7 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
                   </form>
                 </>
               )}
-              {permissions.has(restricted ? "own.appointments.reschedule" : "appointments.manage") && (
+              {canWrite && permissions.has(restricted ? "own.appointments.reschedule" : "appointments.manage") && (
                 <RescheduleForm appointmentId={appointment.id} serviceId={service.id} defaultDate={dateStr} professionalId={multi || restricted ? appointment.professional.id : undefined} />
               )}
               {permissions.has(restricted ? "own.appointments.cancel" : "appointments.manage") && (
@@ -120,7 +120,7 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
               )}
             </>
           ) : (
-            permissions.has(restricted ? "own.appointments.outcome" : "appointments.manage") && (
+            canWrite && permissions.has(restricted ? "own.appointments.outcome" : "appointments.manage") && (
               <form action={setOutcomeAction.bind(null, appointment.id, "confirmed")}>
                 <Button type="submit" variant="outline">
                   <RotateCcw aria-hidden="true" /> Deshacer

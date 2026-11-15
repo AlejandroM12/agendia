@@ -539,8 +539,9 @@ async function acceptWithin(
       organizationId: organization.id,
       userId: params.userId,
       role: invitation.role,
-      // Un administrador empieza sin los avisos de todo el negocio; el propietario los activa a propósito.
-      notifyBookings: invitation.role === "professional",
+      // Los avisos internos de una cuenta nueva (profesional o administrador) arrancan apagados: cada
+      // persona los activa si los quiere, desde su Perfil. No cambia lo ya configurado de cuentas existentes.
+      notifyBookings: false,
     },
   });
   if (invitation.role === "professional") {

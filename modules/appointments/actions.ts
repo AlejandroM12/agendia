@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireContext, requireScopedWrite } from "@/lib/dal";
+import { requireContext, requireScopedManage, requireScopedWrite } from "@/lib/dal";
 import { appointmentScope, customerScope, findAppointmentFor } from "@/modules/access/scope";
 import { type ActionState, fieldErrors } from "@/lib/action-state";
 import { formatTime, isValidDateStr, labelToMinutes, toZoned, zonedTimeToUtc } from "@/lib/time";
@@ -192,7 +192,7 @@ export async function rescheduleAppointmentAction(
 }
 
 export async function cancelAppointmentAction(appointmentId: string): Promise<ActionState> {
-  const access = await requireScopedWrite("appointments.manage", "own.appointments.cancel");
+  const access = await requireScopedManage("appointments.manage", "own.appointments.cancel");
   if (!access.ok) return { message: access.message };
   if (!(await findAppointmentFor(access.context, appointmentId))) return { message: "No encontramos ese turno." };
 
@@ -210,8 +210,10 @@ export async function setOutcomeAction(
   appointmentId: string,
   status: "confirmed" | "completed" | "no_show",
 ): Promise<void> {
-  const access = await requireScopedWrite("appointments.manage", "own.appointments.outcome");
+  const access = await requireScopedManage("appointments.manage", "own.appointments.outcome");
   if (!access.ok) return;
+  // En solo lectura se puede cerrar un turno (completado / no asistió), pero no deshacerlo.
+  if (!access.context.canWrite && status === "confirmed") return;
   if (!(await findAppointmentFor(access.context, appointmentId))) return;
   await setAppointmentOutcome({ organizationId: access.context.organization.id, appointmentId, status });
   revalidateAgenda();

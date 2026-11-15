@@ -133,6 +133,30 @@ export async function getUsageByOrganization(range: UsageRange, limit = 100): Pr
     .slice(0, limit);
 }
 
+/**
+ * Correos enviados en el período, por tipo y de toda la plataforma. Separa lo que recibe el cliente
+ * final (confirmaciones, recordatorios, cambios, cancelaciones) de lo interno (`*_owner`: avisos al
+ * negocio) y de los avisos de la cuenta (`account_notice`).
+ */
+export type EmailTypeUsage = { type: string; audience: "cliente" | "interno" | "cuenta"; sent: number; failed: number };
+
+export async function getEmailsByType(range: UsageRange): Promise<EmailTypeUsage[]> {
+  const rows = await db.$queryRaw<Array<{ type: string; sent: bigint; failed: bigint }>>`
+    SELECT "type"::text AS "type",
+           count(*) FILTER (WHERE "status" = 'sent') AS sent,
+           count(*) FILTER (WHERE "status" = 'failed') AS failed
+    FROM "notifications"
+    WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to}
+    GROUP BY 1 ORDER BY 2 DESC
+  `;
+  return rows.map((row) => ({
+    type: row.type,
+    audience: row.type === "account_notice" ? "cuenta" : row.type.endsWith("_owner") ? "interno" : "cliente",
+    sent: Number(row.sent),
+    failed: Number(row.failed),
+  }));
+}
+
 /** Correos por día (en UTC) en un período: el consumo diario de la plataforma. */
 export async function getDailyEmailUsage(range: UsageRange): Promise<DailyEmailUsage[]> {
   const rows = await db.$queryRaw<Array<{ day: Date; sent: bigint; failed: bigint; skipped: bigint }>>`
