@@ -1,6 +1,6 @@
 # WhatsApp: manual (disponible) y automático (diseño futuro)
 
-**Estado:** el WhatsApp **manual** está implementado y es gratuito en todos los planes. El WhatsApp **automático** es solo un diseño: no hay código, tablas, cuentas de Meta ni cobros. Los paquetes y precios de abajo son **preliminares y no se publican**.
+**Estado:** el WhatsApp **manual** está implementado y es gratuito en todos los planes. El WhatsApp **automático** está implementado como **integración opcional de alta asistida** (decisión D-67; ver `docs/WHATSAPP_ONBOARDING.md`). El resto de este documento es el análisis previo: los **paquetes, recargas y precios que describe quedaron descartados del alcance inicial** y no se publican.
 
 ## 1. WhatsApp manual (disponible hoy)
 

@@ -111,3 +111,14 @@ Los riesgos de roles que seguían abiertos (`docs/MULTI_PROFESSIONAL.md` §10) q
 - Rate limiting compartido (Redis) si la web pasa a más de una instancia.
 - Rotación de secretos: runbooks por escrito (`AUTH_SECRET` invalida todas las sesiones).
 - Login con `bcryptjs` (JavaScript puro): ≈ 4 ingresos por segundo y por proceso (medido, ver `docs/PRODUCTION_READINESS.md` §14); sobra para la escala prevista, pero un ataque de fuerza bruta distribuido consumiría CPU antes de llegar al límite por cuenta.
+
+## WhatsApp automático
+
+- **Credenciales**: token y secreto de aplicación de cada negocio se guardan cifrados (AES-256-GCM, vector aleatorio por cifrado) con una clave de plataforma fuera de la base (`WHATSAPP_ENCRYPTION_KEY`, con rotación). Nunca se devuelven al navegador, a registros ni a auditoría: solo los últimos 4 caracteres del token. Probado en `test/whatsapp-admin.test.ts` y `test/whatsapp-core.test.ts`.
+- **Administración**: solo administradores de la plataforma; cada acción vuelve a verificar el permiso en el servidor y queda auditada. El negocio solo puede pedir la activación y elegir sus avisos: no ve credenciales ni cambia el límite.
+- **Webhook**: firma `X-Hub-Signature-256` con el secreto de la conexión del `phone_number_id` indicado (nada del cuerpo se toma como cierto antes de validarla); token de verificación guardado como hash; reenvíos idempotentes.
+- **Aislamiento entre negocios**: una acción por WhatsApp exige que el turno sea del mismo negocio que la conexión y que responda el teléfono del cliente del turno; consumo, límites, historial y consentimientos son por negocio. Probado en `test/whatsapp-webhook.test.ts` y `test/whatsapp-delivery.test.ts`.
+- **Consentimiento y baja**: solo se envía con consentimiento versionado; BAJA lo revoca y anula lo pendiente. Cancelar por WhatsApp requiere una segunda confirmación.
+- **Entrega**: cada aviso se envía a lo sumo una vez; un estado incierto no se reenvía; token vencido apaga la conexión.
+- **Demos**: la demo pública nunca envía WhatsApp real; la supervisada solo a números autorizados.
+

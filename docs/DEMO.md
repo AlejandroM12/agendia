@@ -23,10 +23,10 @@
 3. Sin infraestructura nueva: usa el worker existente.
 
 ## 4. Cómo hacer una demostración real supervisada
-1. Entrá a `/admin` → «Demostración supervisada» → ingresá tu correo y el de la persona que mira (de 1 a 5).
+1. Entrá a `/admin` → «Demostración supervisada» → ingresá tu correo y/o tu celular con característica (de 1 a 8, separados por coma).
 2. Anotá el correo y la contraseña que se muestran (una sola vez) e ingresá en `/login`.
-3. Reservá desde `/<slug>` con uno de esos correos: el aviso llega de verdad a ese correo; cualquier otro destinatario se simula.
-4. Cuando exista el WhatsApp real, esta misma lista autorizará los números permitidos (nunca un número que no esté expresamente autorizado).
+3. Reservá desde `/<slug>` con uno de esos datos: el aviso llega de verdad a ese correo o celular; cualquier otro destinatario se simula.
+4. Para ver **WhatsApp real**, conectá la demo al número de prueba de Meta desde `/admin/negocios/<id>` (procedimiento en `docs/WHATSAPP_ONBOARDING.md` §5) y reservá con el consentimiento de WhatsApp tildado. Nunca sale un mensaje a un número que no esté expresamente autorizado. La demo **pública** no envía WhatsApp real.
 
 ## 5. Pendiente
 - El envío real por WhatsApp (Etapa 1; depende de la decisión del proveedor, `docs/WHATSAPP_PROVEEDORES.md`).
