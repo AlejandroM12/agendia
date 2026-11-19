@@ -73,3 +73,14 @@ Pendiente antes de fijar precios: tarifas efectivas de Meta para Argentina por c
 ### Qué no se hizo
 
 No se creó código, tablas, migraciones ni dependencias; no se vinculó ninguna cuenta de Meta ni se contrató ningún servicio; la landing no menciona WhatsApp automático ni estos precios (hay una prueba que lo verifica).
+
+
+## 3. Consistencia con la etapa 5 y otras funciones futuras (revisión)
+
+- **WhatsApp manual** sigue siendo la única forma disponible, en **todos** los planes y licencias, sin costo adicional, y así se comunica (landing, FAQ, «Mi plan»): «mensajes preparados que enviás vos». **Ningún texto comercial promete envíos automáticos**; hay pruebas de E2E que comprueban que la landing no menciona WhatsApp automático.
+- **WhatsApp automático** sigue siendo **solo un diseño**: no hay código, tablas, cuentas de Meta ni cobros, y no forma parte del Plan Profesional, del Equipo ni de las licencias. Los paquetes y precios de la §2 son **preliminares y no se publican**. Se evalúa en una etapa posterior (propuesta en el informe de cierre de la etapa 5), después de validar Mercado Pago y el lanzamiento.
+- **Otras funciones futuras, no implementadas ni anunciadas:**
+  - **PWA instalable** (ícono en el celular, uso sin conexión limitado) y **notificaciones *push***: requerirían un *service worker*, un manifiesto y claves VAPID; las *push* no reemplazan al correo ni son un requisito. Se evalúan después de la salida a producción.
+  - **Señas (depósitos) online con Mercado Pago:** cobrar un anticipo al reservar exige pagos por negocio (cuentas conectadas de cada profesional), conciliación, reembolsos y condiciones legales propias. No se implementó ni se anuncia.
+  - **Google Calendar** y **aplicaciones nativas:** fuera de alcance.
+- La **recepción de mensajes** de clientes por WhatsApp (respuestas) tampoco existe; el negocio las recibe en su propio WhatsApp.

@@ -43,31 +43,39 @@ Consultada en los sitios de desarrolladores de Mercado Pago (Argentina y regiona
 | No confiar en el navegador | el `?retorno=1` solo muestra un aviso; no activa nada. Los **lugares del Plan Equipo** exigen un cobro aprobado consultado a la API | ✔ |
 | Secretos | `MERCADOPAGO_ACCESS_TOKEN` y `MERCADOPAGO_WEBHOOK_SECRET` solo por entorno; sin ellos no se ofrece el pago online | ✔ |
 
-## 4. Estrategia de cambio de plan (sin asumir lo que la API no documenta)
+## 4. Cambios de plan: alternativas y recomendación (sin asumir lo que la API no documenta)
 
-Cada plan es **su propia suscripción**; no se modifica el importe de una autorizada. El cambio se hace efectivo **solo** con la nueva autorizada **y su primer cobro aprobado y verificado**.
+**Objetivo:** que el cliente **no pierda injustificadamente el período que ya pagó**, sin cobrar dos veces y sin habilitar lugares sin un cobro verificado. Cada plan es **su propia suscripción**; no se modifica el importe de una autorizada. Un cambio se hace efectivo **solo** con la suscripción nueva autorizada **y su primer cobro aprobado y verificado**.
 
-**Profesional → Equipo**
-1. El propietario confirma (plan actual y nuevo, importe, lugares). Se crea una suscripción **Equipo** nueva (cobro inmediato al autorizar) y se guarda como **cambio pendiente** (`subscriptions.pendingPlanId/pendingProviderSubscriptionId`). El Plan Profesional **sigue vigente y cobrando**; los lugares no cambian.
-2. Cuando llega un cobro aprobado de la nueva (importe y moneda verificados, suscripción consultada y `authorized`): una transacción atómica e idempotente pasa el plan, el importe contratado y el pago verificado a la nueva y deja la anterior **marcada para cancelar** (`retiredProviderSubscriptionId`); se cancela en Mercado Pago y, si falla, el worker **reintenta**.
-3. **Consecuencia que se informa:** durante unos instantes pueden convivir las dos autorizaciones, pero la anterior se cancela antes de su próximo cobro; **lo ya pagado del Plan Profesional del mes no se reintegra ni se prorratea automáticamente** (*pendiente de decisión comercial*).
-4. Si la persona abandona o cancela la nueva, el cambio se descarta sin tocar lo vigente. Pedir otro cambio cancela el anterior sin autorizar.
+### Profesional → Equipo: alternativas evaluadas
 
-**Equipo → Profesional**
-1. Se crea una suscripción **Profesional** con **`start_date` = fin del período ya pago** y se guarda como cambio pendiente (con la selección de profesionales que siguen recibiendo reservas).
-2. Cuando la nueva queda **autorizada** (antes de que empiece a cobrar) se **cancela la de Equipo** (antes de su próximo cobro): no hay doble cobro y el Equipo rige hasta el último día pago (la cuenta queda «cancelada con período pago»).
-3. Con el primer cobro aprobado de la Profesional se hace efectivo el plan menor y empieza el período de adaptación (`docs/COMMERCIAL.md` §6).
-4. **Riesgo documentado:** si el primer cobro de la Profesional falla, la cuenta queda cancelada al terminar el período y la persona debe contratar de nuevo; se ve en `/admin` («cambio sin confirmar»). Es el costo de no cobrar dos veces.
+- **A. Cobrar el Equipo hoy y cancelar el Profesional.** Los 5 lugares llegan enseguida, pero **lo ya pagado del Profesional se pierde** (no hay prorrateo automático en lo documentado). Es injusto salvo que se compense a mano. *Implementado como opción «Hoy», con el aviso explícito; no es la predeterminada.*
+- **B. Empezar el Equipo al terminar el período ya pago (`start_date` = fin del período).** El cliente conserva todo lo abonado, **no paga nada extra hoy**, no hay doble cobro (la anterior se cancela al autorizarse la nueva, antes de su próximo cobro) y los 5 lugares llegan con el primer cobro del Equipo. Costo: **no puede usar más de 2 profesionales hasta renovar**. *Implementado, es la opción predeterminada y recomendada.*
+- **C. Habilitar los 5 lugares ya, antes de cobrar.** Descartada: viola la regla «nunca expandir lugares sin pago verificado» (y sería el primer paso de un abuso: contratar, usar, no pagar).
+- **D. Cobrar el Equipo hoy y compensar con un reintegro parcial del Profesional** (monto proporcional a los días no usados). Mercado Pago permite reembolsos (totales o parciales) sobre los pagos desde el panel o la API de pagos, pero **no se verificó en el sandbox** que aplique a cobros de suscripciones ni cómo se informa. Sería una operación **manual y auditada de AtajoLab**, no un prorrateo automático. *Pendiente de prueba real y de decisión comercial; no implementado.*
+- **E. Cambiar el importe de la suscripción vigente con `PUT /preapproval/{id}`.** La documentación consultada no aclara si exige reautorización, cuándo rige ni qué pasa con un cobro ya generado. No simplifica el problema del período pago y **no se usa** hasta probarlo en sandbox.
 
-**Alternativa a evaluar en el sandbox:** `PUT /preapproval/{id}` con un importe nuevo evitaría crear una suscripción. **No se usa** hasta comprobar (a) si exige reautorización, (b) cuándo rige y (c) qué pasa con un cobro ya generado. Si resultara seguro, simplificaría los dos cambios.
+**Recomendación:** ofrecer **B por defecto** («al terminar mi período», sin costo extra hoy) y **A como «Hoy»**, con el aviso de que lo ya abonado no se devuelve solo. Si más adelante se quiere «Hoy» sin pérdida, la vía es **D** (reintegro parcial manual), una vez validado el reembolso de cobros de suscripción en el sandbox. Nada de esto inventa prorrateos: el cliente nunca paga dos veces el mismo período sin saberlo, y nunca pierde algo que no se le haya mostrado antes de confirmar.
 
-**Continuidad:** nunca se cancela una suscripción vigente antes de tener la nueva autorizada (upgrade) y nunca se habilitan lugares sin cobro verificado.
+### Cómo se ejecuta (`modules/billing/plan-change.ts`, `subscriptions.ts`)
+
+**Profesional → Equipo, al renovar (B)**
+1. El propietario confirma (plan actual y nuevo, importe, «Rige desde <fecha>», «Pagás hoy: nada»). Se crea la suscripción **Equipo** con `start_date` = fin del período ya pago y se guarda como **cambio pendiente**. El Profesional sigue vigente y cobrando.
+2. Cuando la nueva queda **autorizada** (todavía sin cobrar) se **cancela la del Profesional** (antes de su próximo cobro). El acceso ya pago sigue hasta fin de período (cuenta «cancelada con período pago», 2 lugares).
+3. Con el **primer cobro aprobado** del Equipo (importe y moneda verificados, suscripción consultada y `authorized`) una transacción atómica e idempotente pasa el plan, el importe contratado y el pago verificado: recién ahí rigen los 5 lugares.
+4. **Riesgo documentado:** si ese primer cobro falla, la cuenta queda cancelada al terminar el período; se ve en `/admin` («cambio sin confirmar») y la persona debe contratar de nuevo.
+
+**Profesional → Equipo, hoy (A):** suscripción Equipo con cobro inmediato; con el primer cobro aprobado rige el plan y se cancela la anterior (con reintento desde el worker si Mercado Pago falla). **Lo ya pagado del Profesional no se reintegra solo.**
+
+**Equipo → Profesional:** igual que B pero con el plan menor (`start_date` = fin del período pago), y al regir empieza el período de adaptación (`docs/COMMERCIAL.md` §6).
+
+**Siempre:** un cambio abandonado se descarta sin tocar lo vigente; pedir otro cancela el anterior sin autorizar; nunca se cancela una suscripción vigente antes de tener la nueva autorizada; nunca quedan dos cobrando.
 
 ## 5. Lo que se probó y con qué (honesto)
 
 | Qué | Cómo | Resultado |
 |---|---|---|
-| Lógica de contratación, cambios, importes, org equivocada, duplicados, desorden, idempotencia, cancelaciones, reintento de baja | pruebas de integración con **PostgreSQL real** y Mercado Pago **simulado** (`test/plan-change.test.ts`, `test/billing.test.ts`, `test/licenses.test.ts`, `test/commercial-actions.test.ts`) | ✔ |
+| Lógica de contratación, cambios (inmediatos y al fin del período), importes, org equivocada, duplicados, desorden, idempotencia, cancelaciones, reintento de baja | pruebas de integración con **PostgreSQL real** y Mercado Pago **simulado** (`test/plan-change.test.ts`, `test/billing.test.ts`, `test/licenses.test.ts`, `test/commercial-actions.test.ts`) | ✔ |
 | Firma del webhook | pruebas unitarias con firmas generadas localmente | ✔ |
 | Formato real de las respuestas de la API, orden real de los avisos, campo `summarized`, comportamiento de `start_date`, reintentos y bajas automáticas, reembolsos | **no probado**: no hay credenciales de sandbox | **Pendiente de prueba real** |
 | Recepción del webhook en una URL pública con la firma real | no probado | **Pendiente de prueba real** |
@@ -75,15 +83,29 @@ Cada plan es **su propia suscripción**; no se modifica el importe de una autori
 
 > La reconciliación **no** hace efectivo un cambio de plan por el resumen de cobros (`summarized`) de la suscripción: ese campo no está confirmado en la documentación consultada. Si el aviso de un cobro se pierde, el cambio queda pendiente y visible en `/admin` hasta conciliarlo a mano o validar un mecanismo en el sandbox.
 
-## 6. Qué falta para validar en sandbox (bloqueante para cobrar)
+## 6. Procedimiento exacto para validar en el sandbox (bloqueante para cobrar)
 
-1. Crear en Mercado Pago una aplicación de **pruebas** y dos usuarios de prueba (vendedor y comprador) y cargar `MERCADOPAGO_ACCESS_TOKEN` (de **prueba**, `TEST-…`) y `MERCADOPAGO_WEBHOOK_SECRET`. *Pendiente de configuración.*
-2. Exponer una URL pública del entorno de prueba (no se tocó DNS ni se contrató nada) y registrar el webhook con los temas `subscription_preapproval`, `subscription_authorized_payment` y `payment`.
-3. Contratar el Plan Profesional y el Plan Equipo con el comprador de prueba; comprobar autorización, primer cobro, `lastPaymentAt` y el importe.
-4. Probar Profesional → Equipo y Equipo → Profesional: que nunca queden dos cobros activos, que la baja de la anterior ocurra y que `start_date` difiera el primer cobro.
-5. Probar rechazos (tarjetas de prueba), reintentos, baja automática tras 3 rechazos, cancelación por la persona, y reembolso / contracargo.
-6. Probar la compra de la Licencia (Profesional y Equipo) con Checkout Pro y confirmar que el aviso de `payment` llega firmado.
-7. Probar el `PUT /preapproval/{id}` con un importe nuevo y decidir si simplifica los cambios.
-8. Repetir con eventos duplicados, desordenados y perdidos (apagar el webhook y comprobar la conciliación).
+**Reglas:** solo credenciales de **prueba** (`TEST-…`), usuarios de prueba, tarjetas de prueba; ninguna credencial productiva; ningún cobro real. Todo en una base **descartable** local o en un entorno de pruebas, **no** en producción.
 
-Hasta completar esto **Agendia no debe cobrar**. Detalle histórico del checklist: `docs/PRODUCTION_READINESS.md` §6.
+**0. Preparación (pendiente de configuración, lo hace el titular de la cuenta de Mercado Pago)**
+1. En «Tus integraciones» crear una aplicación de **pruebas** para suscripciones y Checkout Pro y copiar el *Access Token* de prueba.
+2. Crear dos **usuarios de prueba** (vendedor y comprador) desde las herramientas de Mercado Pago y anotar el email del comprador (es el `payerEmail` que se ingresa en «Mi plan»).
+3. Tener una URL pública **solo de pruebas** para el webhook (por ejemplo un túnel temporal a `localhost`; no se toca DNS ni producción) y registrar el webhook de pruebas con los temas `subscription_preapproval`, `subscription_authorized_payment` y `payment`; copiar el secreto.
+4. Variables locales (no versionadas): `MERCADOPAGO_ACCESS_TOKEN=TEST-…`, `MERCADOPAGO_WEBHOOK_SECRET=…`, `PUBLISH_TEAM_PLANS=1`, `APP_URL`/`AUTH_URL` con la URL pública del túnel.
+5. Preparar los datos: `npm run demo:seed` (negocios ficticios) o registrar una cuenta nueva.
+
+**1. Contratar el Plan Profesional.** «Mi plan» → Plan Profesional → autorizar con el comprador de prueba. Comprobar: suscripción `pending` → `authorized`; `contractedAmount = 9900`; primer cobro; `lastPaymentAt`; la cuenta pasa a activa; un `payment_events` por aviso, todos procesados; `/admin/negocios/<id>` sin discrepancias.
+**2. Contratar el Plan Equipo** (otra cuenta): ídem con 19.900 y confirmar que los 5 lugares aparecen **solo** tras el cobro aprobado (autorizar sin cobro no los da).
+**3. Profesional → Equipo «al terminar mi período»:** que la suscripción nueva tenga `start_date` correcto, que al autorizarla se cancele la anterior, que **nunca haya dos cobros activos** y que el primer cobro habilite los 5 lugares.
+**4. Profesional → Equipo «hoy»:** cobro inmediato, baja de la anterior (forzar un fallo de la baja y comprobar el reintento del worker).
+**5. Equipo → Profesional:** selección de profesionales, período de adaptación de 7 días y restricción de reservas nuevas a su fin.
+**6. Rechazos y bajas:** tarjetas de prueba que rechacen; observar reintentos (hasta 4), estado `recycling`, baja automática tras 3 cuotas rechazadas, y cómo llegan los avisos.
+**7. Cancelación por la persona** (acceso hasta fin del período ya pago) y **reembolso / contracargo** (queda `subscription.payment_reversed`; no cambia el acceso solo).
+**8. Reembolso parcial de un cobro de suscripción** (alternativa D del §4): ¿se puede?, ¿cómo se informa?
+**9. `PUT /preapproval/{id}` con un importe nuevo** (alternativa E): ¿exige reautorización?, ¿cuándo rige?
+**10. Licencias con Checkout Pro** (Profesional 149.000 y Equipo 249.000): cobro aprobado, rechazado, pendiente; confirmar que el aviso de `payment` llega **firmado** y que el importe y la orden se verifican.
+**11. Eventos duplicados, desordenados y perdidos:** reenviar un aviso, enviarlos fuera de orden, apagar el webhook y comprobar que la conciliación (`/admin/negocios/<id>` → «Conciliar suscripción» y el worker) los recupera.
+**12. Registrar los resultados** (fecha, versión, qué se probó, capturas de los avisos) en este documento y marcar cada fila de §5 como «Probado en sandbox».
+
+**Criterio de salida:** los puntos 1–11 sin cobros duplicados, sin lugares habilitados sin cobro, con importes verificados y sin eventos sin procesar. Hasta entonces: **bloqueo comercial** («no cobrar»).
+Detalle histórico del checklist: `docs/PRODUCTION_READINESS.md` §6.

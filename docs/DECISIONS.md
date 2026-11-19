@@ -277,3 +277,40 @@
 **Estado:** CONFIRMADO.
 **Decisión:** para volver a una versión sin roles, `scripts/prepare-rollback.mjs` aparta a tablas de respaldo las membresías que no son del propietario (restaurables); la versión anterior trataría a cualquier administrador como propietario, así que dejarlos no es una opción segura.
 
+
+### D-57 · Fuente única de precios y regla de no vender ante una diferencia
+**Estado:** CONFIRMADO (implementado, sin publicar).
+**Decisión:** el precio de lista sale de `lib/brand.ts` (variables `PRICE_*`, leídas en ejecución); el precio contratable es la fila de `plans`; si difieren, el plan **no se vende** y `/admin` ofrece alinearlos (auditado). Se eliminó el campo libre de precio. Las suscripciones vigentes conservan el importe autorizado. Migración idempotente: Equipo 19.900 y Profesional 14.000 → 9.900 solo si no se había cambiado.
+**Por qué:** evitar que el precio mostrado, el contratado y el enviado a Mercado Pago difieran. **Cómo aplicarlo:** cambiar `PRICE_*` y la tabla `plans` juntos; ver `docs/COMMERCIAL.md` §2.
+
+### D-58 · Los lugares del Plan Equipo exigen un cobro aprobado verificado
+**Estado:** CONFIRMADO.
+**Decisión:** el cupo de 5 solo rige con `lastPaymentAt` (cobro aprobado consultado a la API) y suscripción vigente; volver de la pantalla de pago o tener la suscripción autorizada no alcanza. Importe, moneda y organización se verifican en cada sincronización.
+
+### D-59 · Cambio de plan: una suscripción nueva por plan; «al renovar» por defecto
+**Estado:** CONFIRMADO (**pendiente de prueba en sandbox**).
+**Decisión:** no se asume que Mercado Pago permita modificar el importe ni prorratear. Profesional → Equipo se ofrece **al terminar el período ya pago** (predeterminado, sin perder lo abonado) u **hoy** (con aviso de que lo pagado no se reintegra solo); Equipo → Profesional siempre al terminar el período. Alternativa de reintegro parcial manual y `PUT /preapproval` quedan **pendientes de prueba y decisión comercial**. Ver `docs/MERCADOPAGO.md` §4.
+
+### D-60 · Exceso de cupo: 7 días de adaptación y restricción solo de reservas nuevas
+**Estado:** CONFIRMADO (configurable con `CAPACITY_GRACE_DAYS`; **pendiente de confirmación comercial** de los valores).
+**Decisión:** nunca se borra ni se cancela nada; terminado el período los excedentes dejan de recibir reservas nuevas según la elección del propietario o un criterio fijo de continuidad; pueden reprogramar sus turnos hasta 30 días después del fin del período; recontratar el Equipo lo revierte.
+
+### D-61 · Publicación comercial por interruptor de ejecución y activación automática
+**Estado:** CONFIRMADO (**apagado**).
+**Decisión:** `PUBLISH_TEAM_PLANS=1` publica los planes y habilita equipo y cuentas para todos según plan, sin activación manual por compra; `TEAM_FEATURES_PAUSED=1` es el interruptor de emergencia; por negocio se sigue pudiendo habilitar desde `/admin/negocios/<id>` (auditado). Una instalación independiente incluye equipo y cuentas siempre.
+
+### D-62 · Solo lectura: los turnos ya confirmados siguen gestionables
+**Estado:** CONFIRMADO.
+**Decisión:** con la prueba terminada o la suscripción cancelada se pueden cancelar y cerrar turnos confirmados, pero no crear ni mover turnos ni recibir reservas; una cuenta suspendida no puede nada. **Sin borrados.** La retención de datos de cuentas inactivas **queda sin definir** (decisión legal).
+
+### D-63 · Sesiones revocables, auditoría ampliada y avisos internos opt-in
+**Estado:** CONFIRMADO.
+**Decisión:** una fila por inicio de sesión (`user_sessions`, `sid` en el JWT); se puede cerrar una o todas las demás. Auditoría de horarios, bloqueos, reglas de reserva, cancelaciones y acciones comerciales sin datos personales. Los avisos internos de cuentas nuevas arrancan apagados. La bandera de invitaciones sin correo se ignora fuera de `localhost` y en licencias. Las páginas de plataforma verifican el permiso por sí mismas.
+
+### D-64 · Pruebas con una base aislada por ejecución
+**Estado:** CONFIRMADO.
+**Decisión:** cada `vitest run` crea su base desde una plantilla migrada y la borra al terminar; timeouts de 60 s. **La causa de la falla intermitente de `usage.test.ts` no se pudo reproducir** (7 procesos en paralelo, todos en verde); las hipótesis son agotamiento de conexiones o de tiempo en `beforeAll` con la máquina saturada y datos compartidos con otras ejecuciones, y el aislamiento elimina ambas. Si reaparece, investigar de nuevo.
+
+### D-65 · Documentos legales como borradores no publicados
+**Estado:** PENDIENTE DE REVISIÓN.
+**Decisión:** `docs/legal/` contiene borradores marcados como no validados; no se publican ni se afirma cumplimiento legal; faltan los datos del titular (`docs/LEGAL_REVIEW.md` §5).

@@ -69,10 +69,10 @@ Todas están documentadas en `deploy/.env.production.example`. `.env.production`
 | `CONTACT_EMAIL` | Email de contacto que muestra el sitio y que recibe los avisos de licencias vendidas | Tuyo |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Envío de emails | Resend (abajo) |
 | `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET` | Cobros | Mercado Pago (abajo) |
-| `PRICE_MONTHLY`, `PRICE_ONE_TIME`, `PRICE_LICENSE_RENEWAL` | Precios que muestra el sitio; `PRICE_ONE_TIME` es además lo que se cobra por la licencia | Decisión comercial |
+| `PRICE_MONTHLY`, `PRICE_TEAM_MONTHLY`, `PRICE_ONE_TIME`, `PRICE_LICENSE_TEAM`, `PRICE_LICENSE_RENEWAL` | Precios que muestra el sitio; `PRICE_ONE_TIME` es además lo que se cobra por la licencia | Decisión comercial |
 | `COMPOSE_PROFILES`, `OFFSITE_REMOTE` | Copia externa de backups | Sección 7 |
 
-Los precios y el dominio se fijan en las páginas públicas **al construir la imagen**: después de cambiarlos hay que desplegar de nuevo (`./deploy/deploy.sh`). El precio que efectivamente se cobra en las suscripciones se edita en `/admin` y tiene que coincidir con `PRICE_MONTHLY`.
+**Desde la etapa 5** la landing y `/precios` leen los precios y la publicación de planes **en ejecución** (ver §11): alcanza con reiniciar `web`. El dominio y los datos de `sitemap`/`robots` se siguen fijando **al construir la imagen**: después de cambiarlos hay que desplegar de nuevo (`./deploy/deploy.sh`). El precio que efectivamente se cobra en las suscripciones se edita en `/admin` y tiene que coincidir con `PRICE_MONTHLY`.
 
 **Rotar `AUTH_SECRET`** cierra todas las sesiones. **Rotar `CRON_SECRET`** no tiene efecto visible. En ambos casos: editar el valor y `docker compose --env-file .env.production up -d`.
 
@@ -242,3 +242,59 @@ Cada licencia vendida (`/admin` → "Licencia independiente" → orden **Pagada*
 ## 10. Desarrollo local
 
 Ver `README.md`. El worker se prueba con `CRON_SECRET=... npm run worker` contra `npm run dev`.
+
+
+## 11. Etapa 5: despliegue controlado por fases (documentado, NO ejecutado)
+
+> **Nada de esto se ejecutó.** No hay despliegue, no se accedió a producción, no se tocó Hetzner, Cloudflare ni DNS, y los planes con equipo **no están publicados**. Este apartado **reemplaza** lo que el «Despliegue acumulado» de §5 dice sobre precios fijados al construir y sobre cambiar el precio en `/admin`: ahora el precio de lista se lee **en ejecución** y la migración corrige el precio del Profesional (14.000 → 9.900, solo si todavía tiene ese valor); `/admin` ya no tiene un campo libre de precio.
+> Etiquetas: **Implementado** · **Probado localmente** · **Pendiente de activación** · **Pendiente de prueba real**. Descripción funcional: `docs/COMMERCIAL.md`.
+
+### 11.1 Migraciones nuevas (todas aditivas, probadas sobre el esquema anterior)
+1. `20261119000000_commercial_plans`: columnas comerciales de organización (`intendedPlan`, `workMode`, período de adaptación), `professionals.keepBookable`, columnas de cambio de plan en `subscriptions`, `license_orders.tier`, valor de enum `NotificationType.account_notice`; **crea el Plan Equipo (19.900)** y pasa el Plan Profesional de 14.000 a 9.900 **solo si conserva ese valor**. Idempotente.
+2. `20261119000100_subscription_contract`: `contractedAmount`, `contractedCurrency` y `retiredProviderSubscriptionId` en `subscriptions`.
+3. `20261119000200_user_sessions`: tabla `user_sessions`.
+Ninguna borra ni reescribe datos de clientes, turnos, profesionales ni suscripciones. Verificación local: `test/commercial-migration.test.ts`.
+
+### 11.2 Variables de entorno nuevas (`.env.example`, `docker-compose.yml`)
+- `PUBLISH_TEAM_PLANS` — **vacía** (apagada). Publica ambos planes y activa equipo y cuentas para todos según plan. Se lee en ejecución.
+- `TEAM_FEATURES_PAUSED` — vacía. Interruptor de emergencia.
+- `CAPACITY_GRACE_DAYS` — `7`. Días de adaptación al bajar de plan.
+- `PRICE_TEAM_MONTHLY` (19900), `PRICE_LICENSE_TEAM` (249000), junto con `PRICE_MONTHLY` (9900) y `PRICE_ONE_TIME` (149000): precio de lista. **Deben coincidir** con la tabla `plans`; si no, el plan no se vende (y `/admin` lo muestra).
+- `LICENSE_TIER` — solo instalaciones independientes (`profesional`|`equipo`).
+- `TEAM_MODE_ENABLED`, `TEAM_ACCOUNTS_ENABLED` — siguen **vacías** en producción.
+- **Solo pruebas, nunca en producción:** `ALLOW_REGISTRATION_WITHOUT_EMAIL`, `ALLOW_INVITATIONS_WITHOUT_EMAIL` (esta última se ignora fuera de `localhost` y en licencias).
+
+### 11.3 Fase A — actualización técnica (sin publicar nada)
+Objetivo: código nuevo en producción con **todo lo de equipo apagado**.
+1. Antes: CI verde en `main`, `git log HEAD..origin/main` revisado, copia de seguridad (`deploy/backup.sh`) **y** simulacro de restauración (`deploy/restore.sh <copia>` sin `--replace`).
+2. `.env.production`: `PUBLISH_TEAM_PLANS=`, `TEAM_FEATURES_PAUSED=`, `TEAM_MODE_ENABLED=`, `TEAM_ACCOUNTS_ENABLED=` vacías; `PRICE_*` con los valores acordados.
+3. `./deploy/deploy.sh` (copia previa → build → migraciones antes de `web` → comprobación de salud). `./deploy/instance.sh update-all` para las licencias.
+4. Verificar: contenedores, `/api/health`, `prisma migrate status` sin pendientes, `node scripts/verify-team-data.mjs` en «OK», precios en la landing ($9.900 / $149.000) y **ausencia de «Plan Equipo»**, una reserva de un profesional como siempre, WhatsApp manual, una cuenta de prueba con prueba de 14 días, `/admin` sin discrepancias de precio (`plans.mensual = 9900`, `equipo = 19900`), `/dashboard/equipo` dice «no habilitado».
+5. Con Mercado Pago **sin credenciales** el pago online no se ofrece (se mantiene el contacto).
+
+### 11.4 Fase B — piloto controlado
+1. Elegir **un negocio propio de prueba**; habilitarlo desde `/admin/negocios/<id>` (modo equipo y cuentas) o con `scripts/team-mode.mjs <enlace> on` y `accounts-on`.
+2. Probar: varios profesionales, reservas simultáneas, **correos reales**, invitación real aceptada desde otra cuenta, permisos, revocar acceso, cambio de negocio, **dispositivos físicos** (celular), y revisar consumo de correo y métricas en `/admin`.
+3. Verificar los avisos: fin de prueba (forzando fechas en el piloto), exceso de cupo, sesiones desde dos dispositivos.
+4. **Criterio de salida:** sin errores en logs, sin turnos superpuestos (`verify-team-data.mjs`), correos correctos y aceptación del piloto.
+
+### 11.5 Fase C — integración comercial (Mercado Pago en sandbox)
+Solo con credenciales de **prueba**. Seguir **paso a paso** `docs/MERCADOPAGO.md` §6 (contratación de ambos planes, cambios en las dos direcciones, rechazos, cancelación, reembolsos, licencias con Checkout Pro, eventos duplicados y perdidos). Verificar precios efectivos y notificaciones. **Criterio de salida:** los puntos 1–11 del §6 sin cobros duplicados ni lugares sin cobro. **Mientras no se cumpla, no se cobra.**
+Además: textos legales aprobados y publicados (`docs/LEGAL_REVIEW.md`) y decisión sobre el reintegro de «Hoy» y sobre la renovación de licencias.
+
+### 11.6 Fase D — lanzamiento público
+1. Decisiones comerciales y legales cerradas; credenciales **de producción** de Mercado Pago cargadas **por vos**, y una compra real de prueba de importe mínimo supervisada.
+2. Poner `PUBLISH_TEAM_PLANS=1` y reiniciar `web` y `worker` (**no hace falta reconstruir la imagen**). Verificar landing con ambos planes, registro con `?plan=equipo`, onboarding «¿Cómo trabajás?», «Mi plan» y que un negocio pueda pasar a Equipo.
+3. Monitoreo: salud, correos fallidos, eventos de pago sin procesar, espacio de disco y copias.
+4. **Interruptor de emergencia:** `TEAM_FEATURES_PAUSED=1` y reiniciar detiene la activación automática y la venta del Plan Equipo sin borrar nada.
+5. El material de campañas se publica **después**, con la aprobación correspondiente.
+
+### 11.7 Rollback de la etapa 5
+- **Preferible: avanzar (roll-forward)** con una corrección, porque las migraciones son aditivas y la versión nueva es compatible hacia atrás con los datos.
+- **Primer paso, siempre:** `PUBLISH_TEAM_PLANS=` vacío y reiniciar (la oferta vuelve a verse como antes) y/o `TEAM_FEATURES_PAUSED=1`.
+- **Si hay que volver a una versión anterior de la aplicación:** copia de seguridad → `node scripts/prepare-rollback.mjs` (inspeccionar) → `--apply` (aparta fotos de profesionales, avisos `professional_change` y `account_notice`, y membresías que no son del propietario; **cierra las sesiones de quien tenga alguna revocada**) → desplegar la imagen anterior. `--restore` al volver a la nueva. Nada se borra.
+- **No sube permisos:** el script quita los accesos de administradores y profesionales antes de que una versión sin roles los trate como propietarios. Una versión anterior que ya conocía el Plan Equipo da sus 5 lugares a quien lo tenga; las anteriores no limitan cupos.
+- **Suscripciones en curso:** un cambio de plan pendiente queda como está (columnas ignoradas por la versión anterior); no cancelar nada en Mercado Pago a mano sin revisar `/admin/negocios/<id>`.
+
+### 11.8 Verificación local previa (hecha)
+`npm run lint`, `npm run typecheck`, `npm run build`, `npm test` (base aislada por ejecución), `npx playwright test` (incluye los proyectos `published-*`, con la oferta publicada en otro puerto), `node scripts/check-standalone-install.mjs` y `npm run loadtest:local`. Resultados reales en el informe de la etapa y en `docs/PRODUCTION_READINESS.md` §14.

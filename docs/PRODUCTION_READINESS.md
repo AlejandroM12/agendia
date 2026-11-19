@@ -313,3 +313,54 @@ Búsquedas de noviembre de 2026; confirmar siempre en el sitio oficial antes de 
 - Mercado Pago (suscripciones): mercadopago.com.ar/developers/es/docs/subscriptions
 - Dólar oficial: cronista.com · c5n.com (6–7 de noviembre de 2026)
 - Monotributo: hacecuentas.com/datos-monotributo-2026 · cotizacion-dolar.com.ar/economia/categorias-monotributo-agosto-2026.html
+
+
+## 14. Etapa 5: oferta final, rentabilidad, carga, copias y operación
+
+> **Medido** = salió de una prueba que se corrió (con fecha y entorno). **Estimado** = hipótesis que hay que reemplazar por datos reales. Nada de esto se midió contra el VPS de producción ni se extrapola a él. No se contrató nada ni se aumentó ningún recurso.
+
+### 14.1 Oferta usada en los cálculos
+Plan Profesional ARS 9.900/mes (hasta 2), Plan Equipo ARS 19.900/mes (hasta 5), Licencia Profesional ARS 149.000 (hasta 2), Licencia Equipo ARS 249.000 (hasta 5). Prueba de 14 días. Sin planes anuales. **Renovación de licencias: sin precio definido.** Las hipótesis de §5 (tipo de cambio ARS 1.560/US$, 120 turnos por profesional y mes, 2,5 correos por turno, comisión 2,2 %–7,9 %, VPS de 2 vCPU y 4 GB) **siguen siendo estimaciones sin verificar**.
+
+### 14.2 Rentabilidad: escenarios de 10, 25, 50 y 100 negocios (estimado)
+Los importes de las tablas de §5 se mantienen (ingresos − infraestructura ≈ ARS 72.500 − comisión). Resumen **antes de tiempo de soporte e impuestos**:
+- **10 negocios:** margen de ≈ ARS 1.900–2.400 por negocio y por mes con solo Plan Profesional; ≈ 4.600–5.400 con la mezcla 70/30. **No cubre ni una hora de soporte por negocio.**
+- **25 negocios:** ≈ ARS 6.200–6.800 por negocio (solo Profesional); ≈ 9.200–9.900 (mezcla).
+- **50 negocios:** ≈ ARS 7.700–8.200 (solo Profesional); ≈ 10.400–11.200 (mezcla).
+- **100 negocios:** ≈ ARS 8.400–9.000 (solo Profesional); ≈ 11.200–11.900 (mezcla).
+- **Tiempo de soporte y de configuración (estimado, no medido):** ~1 h de alta asistida y ~0,5 h por mes de soporte por negocio. **El tiempo no es gratis**: para saber si una hora de soporte es rentable, dividí el margen por negocio de arriba por lo que valga tu hora; con 10 negocios no alcanza ni a una hora mensual. Con el onboarding nuevo («¿Cómo trabajás?») se espera reducir el alta asistida, **sin medición todavía**.
+- **Comisión de Mercado Pago:** 2,2 %–7,9 % del cobro (**sin verificar** para suscripciones; verificar en el simulador de la cuenta). Para el Plan Profesional son ≈ ARS 218–782 por cobro y para el Equipo ≈ 438–1.572.
+- **Cambio de plan:** subir a Equipo «al renovar» no agrega costo; «hoy» puede implicar un reintegro parcial manual (decisión pendiente) que reduciría el margen de ese mes.
+
+### 14.3 Consumo de correo (estimado, mejorado por el opt-in)
+- **Cliente final** (confirmación, recordatorio, cambios, cancelación): esenciales, sin cambios.
+- **Internos** (`*_owner`): al propietario, como antes. **Las cuentas nuevas de profesionales y administradores arrancan con avisos internos apagados**, así que el escenario de ≈ 82.000 correos/mes para 100 negocios (supuesto: todos los profesionales con cuenta y avisos activos) pasa a ser **un techo**; el valor esperado queda **cerca de ≈ 58.500** y sube solo con quienes los activen. *Estimado.*
+- **Avisos de la cuenta** (`account_notice`): como máximo 2 por prueba y 2 por evento de exceso de cupo, por propietario: ≈ cientos por mes con 100 negocios. *Estimado, despreciable.*
+- **Métricas:** `/admin` muestra el mes por tipo y por negocio (cliente / interno / cuenta). No se agregó ningún plan de correo.
+- **Pendiente:** el límite mensual vigente del plan de Resend que se elija (verificar).
+
+### 14.4 Licencias independientes
+Sin cambios en el análisis de §5: la **Licencia Profesional** deja un margen del primer año de ≈ ARS 39.000–90.000 antes de tiempo (puede acercarse a cero con unas pocas horas de soporte) y la **Licencia Equipo** ≈ ARS 112.000–173.000. El ingreso es único y los costos se repiten: **la renovación desde el segundo año, que no está definida, es lo que decide si es sostenible** (mínimo de cobertura de infraestructura ≈ ARS 56.000–98.000 por año para el Profesional y ≈ 70.000–117.000 para el Equipo, sin soporte). *Estimado.* Opciones si no renuevan: `docs/LICENSES.md` §4.
+
+### 14.5 Prueba de carga local (medido)
+**Entorno:** Windows 11, AMD Ryzen 5 5600G (12 hilos), 15,3 GB de RAM, Node 24.15, PostgreSQL 17 en Docker **en la misma máquina**, base descartable, 2026-11-14. **No** incluye servidor web, red, TLS ni el VPS: no se puede trasladar a producción. Envío de correo simulado. Ejecutable con `npm run loadtest:local` (resultado en `test-results/loadtest-local.json`).
+**Escenario:** 100 negocios (60 con 1 profesional, 30 con 2–3, 10 con 5), 190 profesionales, 15.000 turnos futuros, 6.000 clientes (sembrados en ≈ 9,5 s).
+- **Disponibilidad (7 días, negocios con equipo):** secuencial p50 5,3 ms, p95 7,8 ms; **20 en paralelo** p50 97 ms, p95 109 ms (≈ 200 consultas por segundo). Equipo público (`listPublicTeam`): p50 8,4 ms, p95 12,5 ms.
+- **Reservas simultáneas:** 40 clientes al mismo horario en un negocio de 5 profesionales → **exactamente 5 aceptadas**, p50 ≈ 950 ms (los candidatos se serializan por profesional). 300 reservas repartidas entre negocios con 30 en paralelo: p50 198 ms, p95 294 ms, ≈ 141 por segundo; 270 aceptadas (**las 30 rechazadas caen en domingo, sin horario de atención**, no son errores). **Turnos superpuestos en toda la base: 0.**
+- **Agenda del administrador (un día):** p50 11,6 ms, p95 17,1 ms. **Vistas del profesional (agenda + clientes):** p50 9,4 ms, p95 14,8 ms.
+- **Cambio de negocio** (`listWorkspaces`, 3 membresías): p50 6 ms, p95 8 ms.
+- **Inicio de sesión:** 40 ingresos con 4 en paralelo: p50 980 ms, p95 1.067 ms → **≈ 4 ingresos por segundo por proceso** (`bcryptjs` bloquea el hilo). Alcanza para la escala prevista; un ataque distribuido consumiría CPU antes de llegar al límite por cuenta.
+- **Worker:** 3.550 notificaciones procesadas en 17,4 s (≈ 204 por segundo, envío simulado: mide la cola y las consultas, no a Resend).
+- **Memoria:** 380 MB de RSS (pico 381 MB) para todo el proceso de pruebas.
+**No medido:** servidor web real, concurrencia HTTP, picos de memoria del VPS, `next build` junto a los backups, carga de imágenes.
+**Prueba de capacidad autorizada, a ejecutar más adelante (no se hizo):** con tu autorización, contra una copia aislada del servidor o fuera de horario, sin tráfico real: sembrar el escenario con `npm run demo:seed` o la siembra de `loadtest/`, ejecutar ráfagas HTTP controladas sobre `/{slug}`, las acciones de reserva y el ingreso, medir CPU, memoria, conexiones a PostgreSQL y latencia desde el VPS, y recién entonces estimar cuántos negocios soporta. Sin esa prueba **no se promete** una cantidad de negocios.
+
+### 14.6 Copias de seguridad y restauración
+- **Documentado y definido en el compose** (no verificado en producción, no se accedió): servicio `backup` con `pg_dump` diario a las 06:00 UTC, rotación de 7 diarias y 4 semanales, compresión y verificación (`gzip -t`); servicio `offsite` (rclone) opcional con retención externa de 90 días (`COMPOSE_PROFILES`, `OFFSITE_REMOTE`); `deploy/instance.sh backup` para licencias; `deploy/restore.sh` con **simulacro** sin `--replace` y reemplazo con confirmación y copia previa.
+- **Simulacro medido (local, aislado, 2026-11-14):** `pg_dump --no-owner --no-privileges | gzip` de la base de desarrollo (480 organizaciones, 494 usuarios, 336 turnos, 605 profesionales) → archivo de 575.314 bytes, `gzip -t` correcto → restauración en una base temporal → **mismos conteos** en todas las tablas comprobadas, restricción `appointments_no_overlap` presente y `prisma migrate status` «up to date». Se reprodujeron los pasos de `restore.sh` contra el contenedor local; **el script en sí no se ejecutó** porque exige el compose de producción.
+- **Pendiente de configuración / verificación real:** que la copia externa esté activa y su destino (no verificado), alertas de falla de backup y de espacio en disco, y repetir el simulacro **sobre una copia real del servidor** una vez por mes (`docs/DEPLOYMENT.md` §7). **Una copia nunca restaurada no es una copia.**
+- **Monitoreo y alertas:** salud en `/api/health`, logs de Docker con rotación, métricas de correo y pagos en `/admin`. **No hay alertas automáticas de disponibilidad o consumo configuradas que se pueda afirmar** (monitor externo: *pendiente de configuración*).
+- **Actualizaciones seguras de versión:** `deploy.sh` (copia previa → build → migraciones → salud) y `instance.sh update` (copia previa por instancia); procedimiento y rollback en §11 de `docs/DEPLOYMENT.md`.
+
+### 14.7 Resultados de pruebas (ver el informe de la etapa para los números exactos de cierre)
+Pruebas con PostgreSQL real y una base aislada por ejecución; Mercado Pago **simulado**; verificación de instalaciones independientes **local** (36/36); E2E con la oferta publicada y sin publicar. **Qué NO se probó contra servicios reales:** Mercado Pago (sandbox o producción), Resend con envíos reales, dispositivos físicos, WhatsApp real, el VPS.

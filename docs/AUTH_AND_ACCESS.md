@@ -113,3 +113,22 @@ Migración `20261118000000_accounts_and_invitations` (aditiva, atómica, con una
 ## 13. Mejora futura: instalación como aplicación (PWA)
 
 No existe un manifiesto ni un service worker y no se implementó. Sería una mejora acotada para quienes consultan su agenda en el celular durante el día: manifiesto + icono (ya hay `public/icon.svg`), `display: standalone` y caché solo de recursos estáticos (nunca de datos de agenda). Las notificaciones push son otra decisión (proveedor, permisos y costo). La experiencia móvil de esta etapa ya es la base: barra inferior, botones táctiles, sesión persistente de 30 días.
+
+
+## 14. Etapa 5: sesiones, auditoría, interruptores y avisos
+
+**Sesiones revocables** (`lib/sessions.ts`, tabla `user_sessions`, migración `20261119000200_user_sessions`): cada inicio de sesión crea una fila y el JWT lleva su id (`sid`). `lib/dal.ts` la comprueba en la misma consulta que ya lee al usuario; una revocada deja de valer **en el siguiente pedido**. Desde «Mi cuenta» → «Sesiones abiertas» se puede cerrar una sesión o todas las demás; «Cerrar sesión» revoca solo la actual; cambiar o restablecer la contraseña cierra todas (`sessionVersion`). Los tokens anteriores (sin `sid`) siguen regidos por `sessionVersion`, así que desplegar no cierra sesiones ajenas. Se guarda solo «Chrome en Windows», nunca la IP. Un propietario **no** cierra sesiones de otra persona (puede tener otros negocios): le **revoca el acceso** al suyo, que corta de inmediato. Se purgan las sesiones inactivas o revocadas hace más de 40 días (solo de esta tabla).
+
+**Auditoría:** ver `docs/SECURITY.md` (lista completa). `lib/audit.ts` (`recordAudit`) no guarda datos personales ni motivos escritos.
+
+**Interruptores** (`lib/features.ts`): `TEAM_MODE_ENABLED`, `TEAM_ACCOUNTS_ENABLED` (globales) y sus equivalentes por negocio; `PUBLISH_TEAM_PLANS` activa ambos para todos según el plan; `TEAM_FEATURES_PAUSED` es el interruptor de emergencia. Una **instalación independiente** tiene siempre disponibles las funciones de equipo y cuentas, limitadas por el nivel de la licencia. Relación con plan y suscripción: `docs/COMMERCIAL.md` §3.
+
+**Avisos internos:** las membresías nuevas (profesional o administrador) arrancan con `notifyBookings = false` (opt-in desde «Mi cuenta»); lo ya configurado no cambia.
+
+**Solo lectura y turnos confirmados:** `requireScopedManage` / `canManageExisting` permiten cancelar y cerrar turnos ya confirmados con la prueba terminada o la suscripción cancelada; crear y mover siguen bloqueados; una cuenta suspendida no puede nada.
+
+**Exceso de cupo:** un profesional restringido (`modules/team/capacity.ts`) conserva su cuenta, sus permisos y sus turnos confirmados; solo deja de recibir reservas nuevas. Ver `docs/COMMERCIAL.md` §6.
+
+**Plataforma:** `/admin` y `/admin/negocios/<id>` verifican `isPlatformAdmin` en cada página y acción; son independientes de los administradores de un negocio.
+
+**Acceso histórico a clientes y 2FA:** evaluación en `docs/SECURITY.md`.

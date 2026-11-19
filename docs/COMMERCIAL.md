@@ -91,7 +91,10 @@ Tres modos de uso (probados): **individual** (un profesional, sin interruptores)
 ## 6. Cambios de plan y reducción de lugares
 
 ### Profesional → Equipo
-Confirmación (`/dashboard/facturacion/cambiar?plan=equipo`): plan actual y nuevo, precio, lugares, cuándo rige y cuánto se paga hoy. **El plan nuevo rige recién cuando Mercado Pago confirma la autorización y un cobro aprobado** (ver `docs/MERCADOPAGO.md` §4). Mientras tanto «Mi plan» muestra «cambio en curso» y los lugares no cambian. **Pendiente de decisión comercial:** si se reintegra o acredita lo ya pagado del Plan Profesional del mes; hoy se informa que no se reintegra automáticamente.
+Confirmación (`/dashboard/facturacion/cambiar?plan=equipo`): plan actual y nuevo, precio, lugares, cuándo rige y cuánto se paga hoy. Hay dos momentos (alternativas completas en `docs/MERCADOPAGO.md` §4):
+- **Al terminar mi período (predeterminado y recomendado):** no se paga nada extra hoy, **no se pierde nada de lo abonado**, y los 5 lugares llegan con el primer cobro del Equipo.
+- **Hoy:** cobra el Equipo ya; **lo ya pagado del Profesional no se reintegra solo** (el aviso lo dice). Una compensación proporcional solo podría hacerse con un reintegro parcial manual, **no validado todavía en el sandbox**.
+En ambos casos el plan nuevo rige **recién con un cobro aprobado y verificado**; mientras tanto «Mi plan» muestra «cambio en curso» y los lugares no cambian. *Pendiente de decisión comercial:* si se ofrece el reintegro proporcional para «Hoy».
 
 ### Equipo → Profesional (política implementada y probada)
 1. La baja se programa para el **fin del período ya pago**; se informa que el Plan Profesional admite 2, se **lista a los profesionales activos** con sus turnos futuros y el propietario **elige quiénes siguen recibiendo reservas** (`professionals.keepBookable`). Puede reasignar o resolver turnos antes (flujo existente de la agenda).

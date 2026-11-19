@@ -385,3 +385,22 @@ Detalle completo en **`docs/AUTH_AND_ACCESS.md`** (modelo, matriz de permisos, a
 6. **Pendientes de seguridad a evaluar:** autenticación de dos pasos opcional para propietarios, revocación de sesiones individuales, y auditoría de horarios.
 Nada de esto se publica ni se cobra hasta tu aprobación.
 
+
+## 17. Etapa 5: integración comercial (implementada, sin activar ni publicar)
+
+La propuesta de §16 quedó **implementada y probada localmente**. Referencias: **`docs/COMMERCIAL.md`** (oferta, fuente única de precios, relación plan ↔ lugares ↔ suscripción ↔ interruptores, cambios de plan, reducción de lugares, fin de prueba, notificaciones, plataforma), **`docs/MERCADOPAGO.md`** (integración, alternativas de cambio de plan, validación en sandbox), **`docs/LICENSES.md`**, **`docs/LEGAL_REVIEW.md`**, `docs/AUTH_AND_ACCESS.md` §14, `docs/SECURITY.md` y `docs/DEPLOYMENT.md` §11. Estado por punto de la propuesta:
+
+1. **Ofertas y cupos — implementado.** Profesional (hasta 2, ARS 9.900) y Equipo (hasta 5, ARS 19.900) con una sola fuente de precios (`lib/brand.ts`); `Plan.code` `equipo` creado por migración; cupo del Equipo **solo con pago verificado**; contratación, cambio y cancelación desde «Mi plan» (solo propietario). *Pendiente de prueba real:* Mercado Pago.
+2. **Exceso de cupo — implementado** (política de §15.10, alternativa elegida): período de adaptación de 7 días configurable, el propietario elige quiénes siguen recibiendo reservas, criterio de continuidad determinista si no elige, restricción **solo de reservas nuevas**, nada se borra ni se cancela, tope de reprogramación, recuperación al recontratar. `modules/team/capacity.ts`.
+3. **Licencias — implementado:** `LICENSE_TIER` (2 o 5), `instance.sh create … [profesional|equipo]`, equipo y cuentas incluidos; verificación local de una instalación completa (36/36). *Pendiente de decisión comercial:* renovación y opciones si no renuevan.
+4. **Landing y onboarding — implementado detrás de `PUBLISH_TEAM_PLANS` (apagado):** landing con situaciones reales, dos planes, licencias aparte, FAQ ampliada, registro con intención de plan, onboarding «¿Cómo trabajás?». **Las piezas de marketing se difieren** hasta después del despliegue y las pruebas reales.
+5. **Operación — implementado:** `/admin/negocios/<id>`, métricas de correo por tipo, interruptores por negocio con auditoría, demos reproducibles (`npm run demo:seed`), prueba de carga local, simulacro de restauración. *Pendiente:* prueba de capacidad autorizada sobre el VPS.
+6. **Seguridad — implementado:** sesiones revocables, auditoría de horarios y bloqueos, interruptor de invitaciones blindado, protección en cada página de plataforma. *Evaluado, no implementado:* 2FA; acceso histórico de profesionales a clientes (opciones documentadas).
+
+**Cambios de comportamiento que conviene recordar**
+- Las cuentas nuevas (profesionales y administradores) arrancan con **avisos internos apagados**.
+- En **solo lectura** se pueden seguir cancelando y cerrando turnos ya confirmados.
+- **Cambiar de Profesional a Equipo** se ofrece «al terminar mi período» (predeterminado) u «hoy».
+- Una **instalación independiente** incluye siempre equipo y cuentas.
+
+**Sigue fuera de alcance (futuro, sin implementar):** WhatsApp automático (`docs/WHATSAPP_AUTOMATION.md`), señas online con Mercado Pago, PWA instalable y notificaciones *push*, Google Calendar, aplicaciones nativas.
