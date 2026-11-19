@@ -73,6 +73,21 @@ export type AuthorizedPayment = {
   payment?: { id?: number | string; status?: string | null } | null;
 };
 
+/** Error de la API con su código HTTP, para distinguir «no existe» (404) de un fallo real. */
+export class MercadoPagoError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "MercadoPagoError";
+  }
+}
+
+export function isNotFound(error: unknown): boolean {
+  return error instanceof MercadoPagoError && error.status === 404;
+}
+
 /** Esperas entre reintentos de una consulta (GET) ante un límite de uso (429) o un error transitorio del servidor. */
 const RETRY_DELAYS_MS = [700, 1800];
 const TRANSIENT = new Set([429, 502, 503, 504]);
@@ -95,7 +110,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    throw new Error(`Mercado Pago respondió ${response.status} en ${method} ${path}: ${text.slice(0, 300)}`);
+    throw new MercadoPagoError(response.status, `Mercado Pago respondió ${response.status} en ${method} ${path}: ${text.slice(0, 300)}`);
   }
   return (await response.json()) as T;
 }

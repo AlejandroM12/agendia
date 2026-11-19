@@ -70,7 +70,12 @@ export async function POST(request: Request) {
   if (event.processedAt) return NextResponse.json({ ok: true, duplicate: true });
 
   try {
-    await processPaymentEvent({ type: event.type, resourceId: event.resourceId });
+    const result = await processPaymentEvent({ type: event.type, resourceId: event.resourceId });
+    if (result.outcome === "ignored") {
+      // Queda registrado y visible (no se oculta): se atendió el aviso, pero no corresponde a nada nuestro.
+      await db.paymentEvent.update({ where: { id: event.id }, data: { processedAt: new Date(), error: `ignorado: ${result.reason}`.slice(0, 500) } });
+      return NextResponse.json({ ok: true, ignored: true });
+    }
     await db.paymentEvent.update({ where: { id: event.id }, data: { processedAt: new Date(), error: null } });
     return NextResponse.json({ ok: true });
   } catch (error) {

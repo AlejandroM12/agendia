@@ -173,6 +173,70 @@ describe("suscripciones", () => {
   });
 });
 
+describe("webhook — avisos sobre recursos que no son nuestros (p. ej. «Simular notificación»)", () => {
+  const unknownId = "123456";
+
+  function signedRequest(type: string, dataId: string, eventId: string) {
+    const requestId = `req-${Math.random().toString(36).slice(2, 8)}`;
+    return new Request(`http://localhost/api/webhooks/mercadopago?data.id=${dataId}&type=${type}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-request-id": requestId, "x-signature": sign(dataId, requestId) },
+      body: JSON.stringify({ action: "updated", application_id: "1", data: { id: dataId }, date: "2021-11-01T02:02:02Z", entity: "preapproval", id: eventId, type, version: 8 }),
+    });
+  }
+
+  const eventId = `evt-sim-${Date.now()}`;
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    await db.paymentEvent.deleteMany({ where: { providerEventId: { startsWith: "evt-sim-" } } });
+  });
+
+  function configure() {
+    vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", "TEST-token");
+    vi.stubEnv("MERCADOPAGO_WEBHOOK_SECRET", SECRET);
+    vi.stubEnv("MERCADOPAGO_MODE", "live");
+  }
+
+  it("una suscripción desconocida se ignora de forma explícita: 200, registrada como ignorada y sin consultar a Mercado Pago", async () => {
+    configure();
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ message: "Preapproval not found", status: 404 }), { status: 404 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const response = await webhook(signedRequest("subscription_preapproval", unknownId, eventId));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, ignored: true });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const stored = await db.paymentEvent.findFirstOrThrow({ where: { providerEventId: eventId } });
+    expect(stored.processedAt).not.toBeNull();
+    expect(stored.error).toContain("ignorado: suscripción desconocida");
+  });
+
+  it("un cobro que Mercado Pago dice que no existe se ignora y queda registrado", async () => {
+    configure();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ message: "not found", status: 404 }), { status: 404 })));
+    const response = await webhook(signedRequest("subscription_authorized_payment", unknownId, `${eventId}-ap`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ignored: true });
+    expect((await db.paymentEvent.findFirstOrThrow({ where: { providerEventId: `${eventId}-ap` } })).error).toContain("ignorado: cobro inexistente");
+  });
+
+  it("un pago que Mercado Pago dice que no existe se ignora; un fallo real de la API sigue devolviendo 500 para que reintente", async () => {
+    configure();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })));
+    expect((await webhook(signedRequest("payment", unknownId, `${eventId}-pay`))).status).toBe(200);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 503 })));
+    expect((await webhook(signedRequest("payment", "98765", `${eventId}-pay2`))).status).toBe(500);
+  });
+
+  it("la firma sigue siendo obligatoria: el mismo aviso sin firma válida es 401 y no se registra", async () => {
+    configure();
+    const request = signedRequest("subscription_preapproval", unknownId, `${eventId}-bad`);
+    const forged = new Request(request.url, { method: "POST", headers: { "content-type": "application/json", "x-request-id": "r", "x-signature": "ts=1,v1=" + "0".repeat(64) }, body: await request.text() });
+    expect((await webhook(forged)).status).toBe(401);
+    expect(await db.paymentEvent.count({ where: { providerEventId: `${eventId}-bad` } })).toBe(0);
+  });
+});
+
 describe("webhook — entregas simultáneas del mismo evento", () => {
   it("diez entregas a la vez del mismo evento responden 200, sin errores 500, y dejan un solo registro", async () => {
     const preapprovalId = `pre${Date.now()}${Math.random().toString(36).slice(2, 8)}`;

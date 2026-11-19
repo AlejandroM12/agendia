@@ -9,7 +9,9 @@ import {
   getAuthorizedPayment,
   getPayment,
   getPreapproval,
+  isNotFound,
   searchAuthorizedPayments,
+  type Payment,
   isMercadoPagoConfigured,
   type AuthorizedPayment,
   type Preapproval,
@@ -262,28 +264,60 @@ export async function promotePendingPlan(subscriptionId: string, pendingProvider
   return true;
 }
 
-/** Procesa un evento de webhook ya validado y registrado. */
-export async function processPaymentEvent(event: { type: string; resourceId: string | null }): Promise<void> {
-  if (!event.resourceId) return;
+export type EventOutcome = { outcome: "processed" } | { outcome: "ignored"; reason: string };
+
+const ignored = (reason: string): EventOutcome => ({ outcome: "ignored", reason });
+
+/**
+ * Procesa un evento de webhook ya validado y registrado.
+ *
+ * Un aviso sobre un recurso que no es nuestro (por ejemplo el id de ejemplo de «Simular notificación») se IGNORA de
+ * forma explícita —el webhook responde 200 y el evento queda registrado como ignorado— en vez de fallar para que
+ * Mercado Pago lo reintente durante horas. Un recurso NUESTRO que no se puede consultar (404 transitorio, 429, caída)
+ * sigue fallando: el webhook responde 500 y Mercado Pago reintenta. Un cobro ignorado por error lo recupera la
+ * conciliación (`reconcileSubscriptions`).
+ */
+export async function processPaymentEvent(event: { type: string; resourceId: string | null }): Promise<EventOutcome> {
+  if (!event.resourceId) return ignored("sin id de recurso");
 
   if (event.type === "subscription_preapproval") {
+    const known = await db.subscription.findFirst({
+      where: { OR: [{ providerSubscriptionId: event.resourceId }, { pendingProviderSubscriptionId: event.resourceId }] },
+      select: { id: true },
+    });
+    if (!known) return ignored("suscripción desconocida: no es de esta instalación");
     await applyPreapprovalState(await getPreapproval(event.resourceId));
-    return;
+    return { outcome: "processed" };
   }
 
   if (event.type === "subscription_authorized_payment") {
-    const payment = await getAuthorizedPayment(event.resourceId);
-    if (!payment.preapproval_id) return;
+    let payment: AuthorizedPayment;
+    try {
+      payment = await getAuthorizedPayment(event.resourceId);
+    } catch (error) {
+      if (isNotFound(error)) return ignored("cobro inexistente en Mercado Pago");
+      throw error;
+    }
+    if (!payment.preapproval_id) return ignored("cobro sin suscripción asociada");
     await applyAuthorizedPayment(payment);
-    return;
+    return { outcome: "processed" };
   }
 
   // Pagos únicos: solo interesan los de una licencia (los cobros de una
   // suscripción también llegan como "payment", y se ignoran acá).
   if (event.type === "payment") {
-    await applyLicensePayment(await getPayment(event.resourceId));
+    let payment: Payment;
+    try {
+      payment = await getPayment(event.resourceId);
+    } catch (error) {
+      if (isNotFound(error)) return ignored("pago inexistente en Mercado Pago");
+      throw error;
+    }
+    await applyLicensePayment(payment);
+    return { outcome: "processed" };
   }
   // Otros tipos de evento se registran y nada más.
+  return ignored(`tipo de evento sin acción: ${event.type}`);
 }
 
 /**
