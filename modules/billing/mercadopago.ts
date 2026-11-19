@@ -12,8 +12,43 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 const API = "https://api.mercadopago.com";
 
+/**
+ * Modo de las credenciales cargadas, que se declara a mano (`MERCADOPAGO_MODE`) porque un access token de
+ * prueba y uno de producción no se distinguen por el prefijo:
+ *  - `live`: credenciales de producción; cualquiera puede pagar.
+ *  - `test`: credenciales de prueba; solo pueden pagar las cuentas de `MERCADOPAGO_TEST_EMAILS`, así un
+ *    token de prueba cargado en el servidor público no habilita «pagos» que no cobran nada a visitantes reales.
+ * Sin modo declarado el pago online queda apagado (el valor por defecto es el seguro).
+ */
+export type MercadoPagoMode = "live" | "test";
+
+export function mercadoPagoMode(): MercadoPagoMode | null {
+  const value = process.env.MERCADOPAGO_MODE?.trim().toLowerCase();
+  return value === "live" || value === "test" ? value : null;
+}
+
+function testEmails(): string[] {
+  return (process.env.MERCADOPAGO_TEST_EMAILS ?? "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function isMercadoPagoConfigured(): boolean {
-  return Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN && process.env.MERCADOPAGO_WEBHOOK_SECRET);
+  return Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN && process.env.MERCADOPAGO_WEBHOOK_SECRET && mercadoPagoMode());
+}
+
+/** ¿Esta persona puede iniciar un pago online? En modo `test`, solo si su email está autorizado. */
+export function canPayOnline(email: string | null | undefined): boolean {
+  if (!isMercadoPagoConfigured()) return false;
+  if (mercadoPagoMode() === "live") return true;
+  return Boolean(email) && testEmails().includes(String(email).trim().toLowerCase());
+}
+
+/** ¿Se muestra el formulario público de compra de licencia? En modo `test` solo si hay cuentas autorizadas. */
+export function onlinePaymentVisible(): boolean {
+  if (!isMercadoPagoConfigured()) return false;
+  return mercadoPagoMode() === "live" || testEmails().length > 0;
 }
 
 export type Preapproval = {
@@ -38,16 +73,26 @@ export type AuthorizedPayment = {
   payment?: { id?: number | string; status?: string | null } | null;
 };
 
+/** Esperas entre reintentos de una consulta (GET) ante un límite de uso (429) o un error transitorio del servidor. */
+const RETRY_DELAYS_MS = [700, 1800];
+const TRANSIENT = new Set([429, 502, 503, 504]);
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
   if (!token) throw new Error("Mercado Pago no está configurado.");
 
-  const response = await fetch(`${API}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
-  });
+  let response: Response;
+  // Solo las consultas se reintentan: repetir un POST podría crear dos suscripciones o dos preferencias.
+  for (let attempt = 0; ; attempt++) {
+    response = await fetch(`${API}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (method !== "GET" || !TRANSIENT.has(response.status) || attempt >= RETRY_DELAYS_MS.length) break;
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+  }
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new Error(`Mercado Pago respondió ${response.status} en ${method} ${path}: ${text.slice(0, 300)}`);
@@ -55,7 +100,47 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return (await response.json()) as T;
 }
 
-export function createPreapproval(params: {
+export type CredentialsKind = "test" | "live" | "unknown";
+
+let detected: CredentialsKind | null = null;
+
+/**
+ * ¿Las credenciales cargadas son de una cuenta de PRUEBA o de producción? Mercado Pago ya no distingue el access token
+ * por el prefijo (los dos empiezan con `APP_USR-`), pero la cuenta dueña de un token de prueba es un usuario de prueba
+ * (`GET /users/me` trae la etiqueta `test_user`). Se consulta una vez por proceso y se recuerda.
+ */
+export async function detectCredentialsKind(): Promise<CredentialsKind> {
+  if (detected) return detected;
+  try {
+    const me = await request<{ tags?: string[] | null }>("GET", "/users/me");
+    detected = Array.isArray(me.tags) && me.tags.includes("test_user") ? "test" : "live";
+    return detected;
+  } catch {
+    return "unknown"; // no se recuerda: se vuelve a intentar en la próxima operación
+  }
+}
+
+/** Solo para pruebas: olvida el tipo detectado. */
+export function resetDetectedCredentialsKind() {
+  detected = null;
+}
+
+/**
+ * Corta cualquier operación que mueva dinero si `MERCADOPAGO_MODE` contradice a las credenciales: credenciales de prueba
+ * declaradas como `live` (el sitio ofrecería «pagos» que no cobran) o credenciales de producción declaradas como `test`
+ * (una cuenta autorizada podría generar un cobro real sin querer).
+ */
+export async function assertCredentialsMatchMode(): Promise<void> {
+  const mode = mercadoPagoMode();
+  if (!mode) throw new Error("Mercado Pago: falta MERCADOPAGO_MODE (live o test).");
+  const kind = await detectCredentialsKind();
+  if (kind === "unknown") return;
+  if ((mode === "live" && kind === "test") || (mode === "test" && kind === "live")) {
+    throw new Error(`Mercado Pago: MERCADOPAGO_MODE=${mode}, pero las credenciales cargadas son de ${kind === "test" ? "PRUEBA" : "PRODUCCIÓN"}. No se crea ningún cobro.`);
+  }
+}
+
+export async function createPreapproval(params: {
   organizationId: string;
   payerEmail: string;
   reason: string;
@@ -65,6 +150,7 @@ export function createPreapproval(params: {
   /** Primer cobro diferido (cambio de plan al fin del período ya pago). Por defecto, al autorizar. */
   startDate?: Date;
 }): Promise<Preapproval> {
+  await assertCredentialsMatchMode();
   return request<Preapproval>("POST", "/preapproval", {
     reason: params.reason,
     external_reference: params.organizationId,
@@ -90,6 +176,18 @@ export const cancelPreapproval = (id: string) =>
 export const getAuthorizedPayment = (id: string) =>
   request<AuthorizedPayment>("GET", `/authorized_payments/${encodeURIComponent(id)}`);
 
+/**
+ * Cobros de una suscripción (`GET /authorized_payments/search?preapproval_id=`). Es lo que permite recuperar un cobro
+ * cuyo aviso (webhook) no llegó. Verificado contra el sandbox el 2026-11-19.
+ */
+export async function searchAuthorizedPayments(preapprovalId: string): Promise<AuthorizedPayment[]> {
+  const result = await request<{ results?: AuthorizedPayment[] }>(
+    "GET",
+    `/authorized_payments/search?${new URLSearchParams({ preapproval_id: preapprovalId })}`,
+  );
+  return result.results ?? [];
+}
+
 export type Payment = {
   id: number | string;
   status: "approved" | "rejected" | "pending" | "in_process" | "cancelled" | "refunded" | "charged_back" | string;
@@ -102,7 +200,7 @@ export type Payment = {
 export type Preference = { id: string; init_point?: string | null };
 
 /** Pago único (Checkout Pro). Se usa para la compra de la licencia independiente. */
-export function createPreference(params: {
+export async function createPreference(params: {
   externalReference: string;
   title: string;
   amount: number;
@@ -110,6 +208,7 @@ export function createPreference(params: {
   payer: { email: string; name: string };
   returnUrl: string;
 }): Promise<Preference> {
+  await assertCredentialsMatchMode();
   return request<Preference>("POST", "/checkout/preferences", {
     items: [
       { id: "licencia", title: params.title, quantity: 1, unit_price: params.amount, currency_id: params.currency },

@@ -68,6 +68,7 @@ describe("suscripciones", () => {
     });
     vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", "TEST-token");
     vi.stubEnv("MERCADOPAGO_WEBHOOK_SECRET", SECRET);
+    vi.stubEnv("MERCADOPAGO_MODE", "live");
   });
 
   afterEach(async () => {
@@ -169,5 +170,36 @@ describe("suscripciones", () => {
     const retried = await webhook(webhookRequest(body));
     expect(retried.status).toBe(200);
     expect((await organization()).status).toBe("active");
+  });
+});
+
+describe("webhook — entregas simultáneas del mismo evento", () => {
+  it("diez entregas a la vez del mismo evento responden 200, sin errores 500, y dejan un solo registro", async () => {
+    const preapprovalId = `pre${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+    const eventId = `evt-${preapprovalId}`;
+    vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", "TEST-token");
+    vi.stubEnv("MERCADOPAGO_WEBHOOK_SECRET", SECRET);
+    vi.stubEnv("MERCADOPAGO_MODE", "live");
+    // El recurso no pertenece a ninguna suscripción nuestra: se ignora, pero el evento se registra igual.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ id: preapprovalId, status: "pending" }), { status: 200 })));
+    try {
+      const deliver = () => {
+        const requestId = `req-${Math.random().toString(36).slice(2, 8)}`;
+        return webhook(
+          new Request(`http://localhost/api/webhooks/mercadopago?data.id=${preapprovalId}&type=subscription_preapproval`, {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-request-id": requestId, "x-signature": sign(preapprovalId, requestId) },
+            body: JSON.stringify({ id: eventId, type: "subscription_preapproval", data: { id: preapprovalId } }),
+          }),
+        );
+      };
+      const responses = await Promise.all(Array.from({ length: 10 }, deliver));
+      expect(responses.map((r) => r.status)).toEqual(Array(10).fill(200));
+      expect(await db.paymentEvent.count({ where: { providerEventId: eventId } })).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+      await db.paymentEvent.deleteMany({ where: { providerEventId: eventId } });
+    }
   });
 });

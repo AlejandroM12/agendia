@@ -10,7 +10,7 @@ import { type ActionState } from "@/lib/action-state";
 import { isStandalone } from "@/lib/deployment";
 import { parsePlanTier } from "@/lib/plans";
 import { teamPlansAvailable } from "@/lib/features";
-import { cancelPreapproval, isMercadoPagoConfigured } from "./mercadopago";
+import { cancelPreapproval, canPayOnline } from "./mercadopago";
 import { discardPendingChange, startPlanChange } from "./plan-change";
 import { applyPreapprovalState } from "./subscriptions";
 
@@ -26,7 +26,7 @@ export async function startSubscriptionAction(_prev: ActionState, formData: Form
   if (!context.permissions.has("billing.manage")) return { message: FORBIDDEN_MESSAGE };
   const { organization, user } = context;
   if (isStandalone()) return { message: "Esta instalación no usa suscripción." };
-  if (!isMercadoPagoConfigured()) {
+  if (!canPayOnline(user.email)) {
     return { message: "El pago online todavía no está habilitado. Escribinos y activamos tu plan." };
   }
   // Los límites no se confían a lo que mande el navegador: el nivel debe ser uno conocido.

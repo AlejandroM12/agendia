@@ -9,6 +9,7 @@ import {
   getAuthorizedPayment,
   getPayment,
   getPreapproval,
+  searchAuthorizedPayments,
   isMercadoPagoConfigured,
   type AuthorizedPayment,
   type Preapproval,
@@ -335,6 +336,11 @@ export async function applyAuthorizedPayment(payment: AuthorizedPayment): Promis
   }
 }
 
+async function hasVerifiedPaymentFor(subscriptionId: string): Promise<boolean> {
+  const row = await db.subscription.findUnique({ where: { id: subscriptionId }, select: { lastPaymentAt: true } });
+  return Boolean(row?.lastPaymentAt);
+}
+
 /**
  * Red de seguridad frente a webhooks perdidos: vuelve a consultar en
  * Mercado Pago las suscripciones vivas (y los cambios de plan pendientes) que no se
@@ -375,10 +381,19 @@ export async function reconcileSubscriptions(limit = 20): Promise<{ checked: num
     try {
       if (subscription.providerSubscriptionId) await applyPreapprovalState(await getPreapproval(subscription.providerSubscriptionId));
       if (subscription.pendingProviderSubscriptionId) {
-        // Se actualiza el estado de la suscripción nueva, pero el cambio de plan NO se hace efectivo
-        // desde acá: exige un cobro aprobado (evento subscription_authorized_payment). Si ese evento
-        // se perdiera, queda pendiente y visible en /admin hasta validarlo (docs/MERCADOPAGO.md §5).
         await applyPreapprovalState(await getPreapproval(subscription.pendingProviderSubscriptionId));
+      }
+      // Cobros cuyo aviso se perdió. Se consultan los cobros de la suscripción y cada uno APROBADO pasa por el mismo
+      // camino y las mismas verificaciones (importe, moneda, suscripción consultada) que el webhook. El resumen de
+      // cobros de la suscripción (`summarized`) sigue sin usarse para nada. La suscripción vigente solo se revisa
+      // mientras no tenga un cobro verificado, para no pisar `lastPaymentAt` en cada vuelta.
+      const toCheck: string[] = [];
+      if (subscription.pendingProviderSubscriptionId) toCheck.push(subscription.pendingProviderSubscriptionId);
+      if (subscription.providerSubscriptionId && !(await hasVerifiedPaymentFor(subscription.id))) toCheck.push(subscription.providerSubscriptionId);
+      for (const preapprovalId of toCheck) {
+        for (const payment of await searchAuthorizedPayments(preapprovalId)) {
+          if (payment.payment?.status === "approved") await applyAuthorizedPayment({ ...payment, preapproval_id: payment.preapproval_id ?? preapprovalId });
+        }
       }
       // Marca la revisión aunque no haya habido cambios.
       await db.subscription.update({ where: { id: subscription.id }, data: { updatedAt: new Date() } });

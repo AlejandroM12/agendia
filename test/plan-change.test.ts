@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { applyAuthorizedPayment, applyPreapprovalState, processPaymentEvent } from "@/modules/billing/subscriptions";
+import { applyAuthorizedPayment, applyPreapprovalState, processPaymentEvent, reconcileSubscriptions } from "@/modules/billing/subscriptions";
 import { previewPlanChange, startPlanChange } from "@/modules/billing/plan-change";
 import { ensurePlan } from "@/modules/billing/catalog";
 import { getProfessionalQuota } from "@/modules/team/professionals";
@@ -18,11 +18,14 @@ type Remote = { id: string; status: string; external_reference?: string; amount:
 let ctx: Ctx;
 let calls: Array<{ method: string; path: string; body: Record<string, unknown> | null }>;
 let remote: Map<string, Remote>;
+/** Cobros que «tiene» Mercado Pago por suscripción (para la búsqueda de cobros de la conciliación). */
+let charges: Map<string, Array<Record<string, unknown>>>;
 let counter = 0;
 
 function installMercadoPago() {
   vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", "TEST-token");
   vi.stubEnv("MERCADOPAGO_WEBHOOK_SECRET", "secret");
+  vi.stubEnv("MERCADOPAGO_MODE", "live");
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -43,6 +46,10 @@ function installMercadoPago() {
           next: new Date(Date.now() + 30 * 24 * 3600000).toISOString(),
         });
         return json({ id, init_point: `https://mp.test/checkout/${id}`, status: "pending" });
+      }
+      if (method === "GET" && path === "/authorized_payments/search") {
+        const id = new URL(url).searchParams.get("preapproval_id") ?? "";
+        return json({ results: charges.get(id) ?? [] });
       }
       const match = path.match(/^\/preapproval\/(.+)$/);
       if (match) {
@@ -101,6 +108,7 @@ beforeEach(async () => {
   ctx = await createSchedulableOrganization();
   calls = [];
   remote = new Map();
+  charges = new Map();
   installMercadoPago();
 });
 
@@ -199,6 +207,65 @@ describe("contratar un plan", () => {
     expect(await applyPreapprovalState(await preapprovalOf("ajeno"))).toBe("ignored");
     await processPaymentEvent({ type: "subscription_preapproval", resourceId: "ajeno" });
     expect(await db.subscription.count({ where: { organizationId: ctx.organization.id } })).toBe(0);
+  });
+});
+
+describe("conciliación de cobros cuyo aviso se perdió", () => {
+  const ageSubscription = () => db.subscription.update({ where: { organizationId: ctx.organization.id }, data: { updatedAt: new Date(Date.now() - 7 * 3600000) } });
+
+  it("un cambio «hoy» cuyo primer cobro aprobado no avisó se hace efectivo al conciliar, una sola vez", async () => {
+    const base = await paidProfessional();
+    await start("equipo", { timing: "now" });
+    const pending = (await sub()).pendingProviderSubscriptionId!;
+    authorize(pending);
+    charges.set(pending, [payment(pending, 19900)]); // Mercado Pago cobró, pero el webhook nunca llegó
+
+    await ageSubscription();
+    await reconcileSubscriptions();
+    await ageSubscription();
+    await reconcileSubscriptions(); // otra vuelta: no repite nada
+
+    const stored = await sub();
+    expect(stored).toMatchObject({ pendingProviderSubscriptionId: null, contractedAmount: 19900 });
+    expect(stored.plan.code).toBe("equipo");
+    expect(await getProfessionalQuota(db, await org())).toMatchObject({ limit: 5, tier: "equipo" });
+    expect(remote.get(base)!.status).toBe("cancelled");
+    expect(await db.auditLog.count({ where: { organizationId: ctx.organization.id, action: "subscription.plan_changed" } })).toBe(1);
+  });
+
+  it("un cobro con otro importe encontrado al conciliar no promueve nada", async () => {
+    await paidProfessional();
+    await start("equipo", { timing: "now" });
+    const pending = (await sub()).pendingProviderSubscriptionId!;
+    authorize(pending);
+    charges.set(pending, [payment(pending, 100)]);
+    await ageSubscription();
+    await reconcileSubscriptions();
+    expect((await sub()).pendingProviderSubscriptionId).toBe(pending);
+  });
+
+  it("un cobro rechazado encontrado al conciliar no promueve nada", async () => {
+    await paidProfessional();
+    await start("equipo", { timing: "now" });
+    const pending = (await sub()).pendingProviderSubscriptionId!;
+    authorize(pending);
+    charges.set(pending, [payment(pending, 19900, "rejected")]);
+    await ageSubscription();
+    await reconcileSubscriptions();
+    expect((await sub()).pendingProviderSubscriptionId).toBe(pending);
+  });
+
+  it("una suscripción nueva con un primer cobro aprobado sin aviso queda con el pago verificado", async () => {
+    const result = await start("profesional");
+    expect(result.ok).toBe(true);
+    const id = (await sub()).providerSubscriptionId!;
+    authorize(id);
+    charges.set(id, [payment(id, 9900)]);
+    await ageSubscription();
+    await reconcileSubscriptions();
+    const stored = await sub();
+    expect(stored.status).toBe("active");
+    expect(stored.lastPaymentAt).not.toBeNull();
   });
 });
 

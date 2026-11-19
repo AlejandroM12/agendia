@@ -17,7 +17,7 @@ import { type AccountOperation, accountOperationAction, alignPlanPricesAction } 
 import { priceDiscrepancies } from "@/modules/billing/catalog";
 import { teamFeaturesPaused, teamPlansPublished } from "@/lib/features";
 import { PLAN_CAPABILITIES, PLAN_TIERS } from "@/lib/plans";
-import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
+import { detectCredentialsKind, isMercadoPagoConfigured, mercadoPagoMode } from "@/modules/billing/mercadopago";
 import { isEmailConfigured } from "@/modules/notifications/email";
 import { getDailyEmailUsage, getEmailsByType, getUsageByOrganization, monthRange, totalUsage } from "@/modules/system/usage";
 
@@ -68,6 +68,16 @@ export default async function AdminPage(props: PageProps<"/admin">) {
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 80) : "";
 
   const range = monthRange();
+  const mpMode = mercadoPagoMode();
+  const mpKind = isMercadoPagoConfigured() ? await detectCredentialsKind() : "unknown";
+  const mpMismatch = (mpMode === "live" && mpKind === "test") || (mpMode === "test" && mpKind === "live");
+  const mpStatus = !isMercadoPagoConfigured()
+    ? "sin configurar o sin modo declarado (el pago online está apagado)"
+    : mpMismatch
+      ? `¡MODO ${mpMode?.toUpperCase()} pero las credenciales son de ${mpKind === "test" ? "PRUEBA" : "PRODUCCIÓN"}! No se crean cobros`
+      : mpMode === "live"
+        ? "configurado (PRODUCCIÓN)"
+        : "configurado en MODO PRUEBA (solo cuentas autorizadas)";
   const [organizations, grouped, discrepancies, failedNotifications, failedEvents, audit, licenseOrders, usage, dailyEmails, emailTypes] = await Promise.all([
     db.organization.findMany({
       where: q
@@ -133,7 +143,9 @@ export default async function AdminPage(props: PageProps<"/admin">) {
       <Section title="Estado de las integraciones">
         <ul className="space-y-1.5 text-sm">
           <li>Email (Resend): <strong>{isEmailConfigured() ? "configurado" : "sin configurar"}</strong> · {failedNotifications} avisos fallidos en 7 días</li>
-          <li>Mercado Pago: <strong>{isMercadoPagoConfigured() ? "configurado" : "sin configurar"}</strong> · {failedEvents} eventos de pago sin procesar</li>
+          <li>
+            Mercado Pago: <strong>{mpStatus}</strong> · {failedEvents} eventos de pago sin procesar
+          </li>
         </ul>
       </Section>
 

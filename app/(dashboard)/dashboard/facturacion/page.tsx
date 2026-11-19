@@ -16,7 +16,7 @@ import { daysRemainingInTrial, getEffectiveStatus } from "@/lib/organization-acc
 import { PLAN_CAPABILITIES, planTierFromCode, type PlanTier } from "@/lib/plans";
 import { formatDateLong, toZoned } from "@/lib/time";
 import { getSellablePlan } from "@/modules/billing/catalog";
-import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
+import { canPayOnline } from "@/modules/billing/mercadopago";
 import { isLiveSubscription } from "@/modules/billing/plan-change";
 import { getCapacityState, rankProfessionalsForCapacity } from "@/modules/team/capacity";
 import { getProfessionalQuota } from "@/modules/team/professionals";
@@ -52,7 +52,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
 
   const tz = organization.timezone;
   const status = getEffectiveStatus(organization);
-  const paymentsReady = isMercadoPagoConfigured();
+  const paymentsReady = canPayOnline(user.email);
   const returned = (await props.searchParams).retorno === "1";
   const date = (d: Date) => formatDateLong(toZoned(d, tz).dateStr);
   const live = isLiveSubscription(subscription) && status !== "suspended";

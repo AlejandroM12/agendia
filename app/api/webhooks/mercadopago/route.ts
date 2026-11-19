@@ -4,6 +4,28 @@ import { db } from "@/lib/db";
 import { verifyWebhookSignature } from "@/modules/billing/mercadopago";
 import { processPaymentEvent } from "@/modules/billing/subscriptions";
 
+function isUniqueViolation(error: unknown): boolean {
+  const text = error instanceof Error ? `${error.name} ${error.message} ${(error as { code?: string }).code ?? ""}` : String(error);
+  return text.includes("P2002") || text.includes("23505") || /unique constraint/i.test(text);
+}
+
+/**
+ * Registra el evento una sola vez. Mercado Pago puede entregar el mismo aviso varias veces y a la vez: con
+ * `upsert` dos entregas simultáneas chocaban con la restricción única y una devolvía 500 sin cuerpo. Se crea y,
+ * si otra entrega ya lo creó, se relee esa fila. Procesarlo dos veces es inofensivo (el estado sale siempre del
+ * recurso consultado a la API y los cambios son idempotentes).
+ */
+async function registerEvent(data: { providerEventId: string; type: string; resourceId: string | null; payload: Prisma.InputJsonValue }) {
+  try {
+    return await db.paymentEvent.create({ data: { provider: "mercadopago", ...data } });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    return db.paymentEvent.findUniqueOrThrow({
+      where: { provider_providerEventId: { provider: "mercadopago", providerEventId: data.providerEventId } },
+    });
+  }
+}
+
 /**
  * Webhook de Mercado Pago.
  *
@@ -39,16 +61,11 @@ export async function POST(request: Request) {
   const type = String(body?.type ?? url.searchParams.get("type") ?? "unknown").slice(0, 80);
   const providerEventId = String(body?.id ?? `${type}:${dataId}:${body?.action ?? ""}`).slice(0, 190);
 
-  const event = await db.paymentEvent.upsert({
-    where: { provider_providerEventId: { provider: "mercadopago", providerEventId } },
-    update: {},
-    create: {
-      provider: "mercadopago",
-      providerEventId,
-      type,
-      resourceId: dataId,
-      payload: (body ?? {}) as Prisma.InputJsonValue,
-    },
+  const event = await registerEvent({
+    providerEventId,
+    type,
+    resourceId: dataId,
+    payload: (body ?? {}) as Prisma.InputJsonValue,
   });
   if (event.processedAt) return NextResponse.json({ ok: true, duplicate: true });
 

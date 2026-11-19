@@ -9,7 +9,7 @@ import { isStandalone } from "@/lib/deployment";
 import { teamPlansAvailable } from "@/lib/features";
 import { parsePlanTier } from "@/lib/plans";
 import { formatDateLong, toZoned } from "@/lib/time";
-import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
+import { canPayOnline } from "@/modules/billing/mercadopago";
 import { previewPlanChange } from "@/modules/billing/plan-change";
 
 export const metadata: Metadata = { title: "Confirmar plan" };
@@ -26,7 +26,7 @@ export default async function ChangePlanPage(props: PageProps<"/dashboard/factur
   const tier = parsePlanTier(search.plan);
   const timing = search.cuando === "ahora" ? "now" : "period_end";
   if (!tier || (tier === "equipo" && !teamPlansAvailable())) notFound();
-  if (!canWrite || !isMercadoPagoConfigured()) redirect("/dashboard/facturacion");
+  if (!canWrite || !canPayOnline(user.email)) redirect("/dashboard/facturacion");
 
   const preview = await previewPlanChange(organization, tier, new Date(), timing);
   if (preview.kind === "same") redirect("/dashboard/facturacion");

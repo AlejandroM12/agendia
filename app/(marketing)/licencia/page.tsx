@@ -8,7 +8,7 @@ import { brand, formatMoney, licenseRenewalText, licenseTerms, offers } from "@/
 import { teamPlansPublished } from "@/lib/features";
 import { licenseDisplayName, parsePlanTier, PLAN_CAPABILITIES } from "@/lib/plans";
 import { isStandalone } from "@/lib/deployment";
-import { isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
+import { onlinePaymentVisible } from "@/modules/billing/mercadopago";
 
 export const metadata: Metadata = {
   title: offers.license,
@@ -87,7 +87,7 @@ export default async function LicensePage(props: PageProps<"/licencia">) {
 
         <div className="rounded-3xl border-2 border-primary bg-card p-6 shadow-lg shadow-primary/5 sm:p-7">
           <h2 className="text-lg font-semibold">Comprar la licencia</h2>
-          {isMercadoPagoConfigured() ? (
+          {onlinePaymentVisible() ? (
             <div className="mt-5">
               <LicenseOrderForm priceLabel={price} terms={terms} tier={tier} />
             </div>

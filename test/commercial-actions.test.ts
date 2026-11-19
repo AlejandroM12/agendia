@@ -51,6 +51,7 @@ beforeEach(async () => {
   tenant = await createSchedulableOrganization();
   vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", "TEST-token");
   vi.stubEnv("MERCADOPAGO_WEBHOOK_SECRET", "secret");
+  vi.stubEnv("MERCADOPAGO_MODE", "live");
 });
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -87,7 +88,8 @@ describe("contratar: autorización y validación en el servidor", () => {
 
   it("con los planes publicados el propietario llega a Mercado Pago con el importe del plan, sin activar nada", async () => {
     vi.stubEnv("PUBLISH_TEAM_PLANS", "1");
-    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (url: unknown, init?: RequestInit) => {
+      if (String(url).endsWith("/users/me")) return new Response(JSON.stringify({ tags: [] }), { status: 200 }); // cuenta de producción
       const body = JSON.parse(String(init?.body));
       return new Response(JSON.stringify({ id: "pre-1", init_point: "https://mp.test/pre-1", status: "pending", ...body }), { status: 200 });
     });
@@ -95,7 +97,7 @@ describe("contratar: autorización y validación en el servidor", () => {
     await actAs("owner");
     const result = await run(() => startSubscriptionAction(undefined, form({ tier: "equipo", payerEmail: "p@example.com" })));
     expect(result).toBe("REDIRECT:https://mp.test/pre-1");
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).auto_recurring).toMatchObject({ transaction_amount: 19900, currency_id: "ARS" });
+    expect(JSON.parse(String(fetchMock.mock.calls.find(([url]) => !String(url).endsWith("/users/me"))?.[1]?.body)).auto_recurring).toMatchObject({ transaction_amount: 19900, currency_id: "ARS" });
     expect((await db.organization.findUniqueOrThrow({ where: { id: tenant.organization.id } })).status).toBe("trial");
   });
 

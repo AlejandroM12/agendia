@@ -10,6 +10,7 @@ import { isEmailConfigured, sendEmail } from "@/modules/notifications/email";
 import { renderEmail } from "@/modules/notifications/templates";
 import {
   createPreference,
+  canPayOnline,
   isMercadoPagoConfigured,
   searchPaymentsByReference,
   type Payment,
@@ -50,7 +51,7 @@ export type CreateLicenseOrderResult = { ok: true; orderId: string; checkoutUrl:
 
 /** Crea la orden y el checkout de Mercado Pago. La orden queda pendiente. */
 export async function createLicenseOrder(input: Omit<LicenseOrderInput, "tier"> & { tier?: PlanTier }): Promise<CreateLicenseOrderResult> {
-  if (!isMercadoPagoConfigured()) {
+  if (!canPayOnline(input.email)) {
     return { ok: false, error: "El pago online todavía no está habilitado. Escribinos y lo coordinamos." };
   }
   // La licencia Equipo no se vende hasta publicar los planes con equipo.

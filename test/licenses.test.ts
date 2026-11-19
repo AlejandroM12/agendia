@@ -31,7 +31,9 @@ describe("compra de la licencia independiente", () => {
     const spy = vi.fn(async (url: unknown, _init?: RequestInit) =>
       String(url).startsWith("https://api.resend.com")
         ? new Response("{}", { status: 200 })
-        : new Response(JSON.stringify(mercadoPago), { status }),
+        : String(url).endsWith("/users/me")
+          ? new Response(JSON.stringify({ tags: [] }), { status: 200 }) // cuenta de producción
+          : new Response(JSON.stringify(mercadoPago), { status }),
     );
     vi.stubGlobal("fetch", spy);
     return spy;
@@ -66,6 +68,7 @@ describe("compra de la licencia independiente", () => {
     suffix = uniqueSuffix();
     vi.stubEnv("MERCADOPAGO_ACCESS_TOKEN", "TEST-token");
     vi.stubEnv("MERCADOPAGO_WEBHOOK_SECRET", SECRET);
+    vi.stubEnv("MERCADOPAGO_MODE", "live");
     vi.stubEnv("RESEND_API_KEY", "re_test");
     vi.stubEnv("EMAIL_FROM", "Agendia <turnos@example.com>");
   });
@@ -94,7 +97,7 @@ describe("compra de la licencia independiente", () => {
       paidAt: null,
     });
 
-    const body = JSON.parse(String(spy.mock.calls[0][1]?.body));
+    const body = JSON.parse(String(spy.mock.calls.find(([url]) => !String(url).endsWith("/users/me"))?.[1]?.body));
     expect(body.external_reference).toBe(licenseReference(result.orderId));
     expect(body.items[0]).toMatchObject({ quantity: 1, unit_price: pricing.oneTime, currency_id: "ARS" });
     expect(emailsSent(spy)).toHaveLength(0); // crear la orden no avisa nada: todavía no hay pago
