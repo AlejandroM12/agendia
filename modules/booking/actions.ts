@@ -175,6 +175,7 @@ export async function bookAppointmentAction(_prev: BookingState, formData: FormD
     customer: { name: customer.data.name, email: customer.data.email, phone: customer.data.phone },
     actor: "customer",
     professional: parseChoice(formData.get("professionalId")),
+    whatsappConsent: formData.get("whatsappConsent") === "on" && (await whatsappAutomaticOn(organization.id)) ? { source: "public_booking" } : null,
     // Un reintento o doble envío del mismo formulario no crea un segundo turno.
     idempotencyKey: typeof formData.get("idempotencyKey") === "string" ? String(formData.get("idempotencyKey")) : null,
   });
@@ -186,6 +187,12 @@ export async function bookAppointmentAction(_prev: BookingState, formData: FormD
     startsAt: result.appointment.startsAt.toISOString(),
     professionalName: await assignedProfessionalName(organization, result.appointment.professionalId),
   };
+}
+
+/** ¿El negocio tiene los avisos por WhatsApp activos? Solo entonces se guarda el consentimiento (no se acumulan datos de más). */
+async function whatsappAutomaticOn(organizationId: string): Promise<boolean> {
+  const connection = await db.whatsappConnection.findUnique({ where: { organizationId }, select: { enabled: true, status: true } });
+  return Boolean(connection?.enabled && connection.status === "connected");
 }
 
 /** Nombre del profesional asignado, solo si el negocio trabaja con varios (con uno solo no se menciona). */

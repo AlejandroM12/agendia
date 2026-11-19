@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { NotificationType, Prisma } from "@prisma/client";
 
+import { whatsappRows } from "@/modules/whatsapp/enqueue";
 type Tx = Prisma.TransactionClient;
 
 type AppointmentRef = {
@@ -104,6 +105,9 @@ export async function enqueueAppointmentNotifications(
   })) {
     push(internalType, email, now);
   }
+
+  // WhatsApp automático (solo con la integración activa y el consentimiento del destinatario).
+  rows.push(...(await whatsappRows(tx, { event, appointment, revision, now, previousProfessionalId: params.previousProfessionalId })));
 
   if (rows.length) await tx.notification.createMany({ data: rows });
 }

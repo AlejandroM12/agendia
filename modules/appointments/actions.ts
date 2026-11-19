@@ -157,6 +157,8 @@ export async function createAppointmentAction(_prev: ActionState, formData: Form
     // Un profesional agenda SIEMPRE en su propia agenda, ignorando lo que diga el formulario.
     professional: restrictedProfessionalId ?? (String(formData.get("professionalId") ?? "") || undefined),
     actorUserId: access.context.user.id,
+    // El negocio declara que el cliente aceptó; solo se registra si tiene WhatsApp automático activo.
+    whatsappConsent: formData.get("whatsappConsent") === "on" && (await whatsappActive(organization.id)) ? { source: "dashboard" } : null,
   });
   if (!result.ok) return { message: result.message };
 
@@ -253,4 +255,9 @@ export async function updateNotesAction(
   });
   revalidatePath(`/dashboard/turnos/${appointmentId}`);
   return { ok: true, message: "Nota guardada." };
+}
+
+async function whatsappActive(organizationId: string): Promise<boolean> {
+  const connection = await db.whatsappConnection.findUnique({ where: { organizationId }, select: { enabled: true, status: true } });
+  return Boolean(connection?.enabled && connection.status === "connected");
 }

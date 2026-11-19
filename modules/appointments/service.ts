@@ -1,5 +1,6 @@
 import "server-only";
 
+import { grantConsent, normalizePhone } from "@/modules/whatsapp/consent";
 import { DEMO } from "@/modules/demo/policy";
 import { randomBytes } from "node:crypto";
 import type { Appointment, AppointmentStatus, Organization, Prisma, ProfessionalSelection } from "@prisma/client";
@@ -240,6 +241,8 @@ export async function createAppointment(params: {
   idempotencyKey?: string | null;
   /** La persona con sesión que lo agenda (para no avisarle a ella misma). */
   actorUserId?: string | null;
+  /** El cliente (o el negocio, en su nombre) aceptó recibir avisos por WhatsApp: se registra antes de encolar los avisos. */
+  whatsappConsent?: { source: "public_booking" | "dashboard" } | null;
 }): Promise<AppointmentResult> {
   const { organization, actor } = params;
   const audience = actor === "customer" ? "public" : "internal";
@@ -373,6 +376,11 @@ export async function createAppointment(params: {
             price: service.price,
           },
         });
+
+        if (params.whatsappConsent) {
+          const phone = normalizePhone(customer.phone, organization.timezone);
+          if (phone) await grantConsent(tx, { organizationId: organization.id, phone, customerId: customer.id, source: params.whatsappConsent.source });
+        }
 
         await enqueueAppointmentNotifications(tx, {
           event: "created",

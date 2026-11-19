@@ -59,6 +59,8 @@ export default async function PublicBookingPage(props: PageProps<"/[slug]">) {
     : [];
 
   const team = bookable ? await loadPublicTeamView(organization) : undefined;
+  const whatsapp = bookable ? await db.whatsappConnection.findUnique({ where: { organizationId: organization.id }, select: { enabled: true, status: true } }) : null;
+  const whatsappConsent = Boolean(whatsapp?.enabled && whatsapp.status === "connected") || (organization.isDemo && organization.demoKind === "public");
 
   return (
     <>
@@ -67,7 +69,7 @@ export default async function PublicBookingPage(props: PageProps<"/[slug]">) {
           <strong>Demo:</strong> negocio ficticio. Podés reservar para probar: no se envía ningún mensaje real.
         </p>
       )}
-      <PublicPage profile={profile} images={images} services={services} team={team} bookable={bookable} />
+      <PublicPage profile={profile} images={images} services={services} team={team} bookable={bookable} whatsappConsent={whatsappConsent} />
     </>
   );
 }

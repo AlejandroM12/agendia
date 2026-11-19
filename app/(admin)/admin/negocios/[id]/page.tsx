@@ -9,6 +9,9 @@ import { requireContext } from "@/lib/dal";
 import { canAccessPlatformAdmin } from "@/lib/deployment";
 import { setOrganizationFeatureAction, reconcileOrganizationAction } from "@/modules/admin/actions";
 import { getOrganizationAdminView } from "@/modules/admin/overview";
+import { WhatsappAdminPanel } from "@/components/admin/whatsapp-admin-panel";
+import { getWhatsappView } from "@/modules/whatsapp/views";
+import { TEMPLATES, WHATSAPP_KINDS } from "@/modules/whatsapp/templates";
 
 export const metadata: Metadata = { title: "Negocio · Plataforma", robots: { index: false } };
 
@@ -33,6 +36,7 @@ export default async function AdminOrganizationPage(props: PageProps<"/admin/neg
   const { id } = await props.params;
   const view = await getOrganizationAdminView(id);
   if (!view) notFound();
+  const whatsapp = await getWhatsappView(id, { messages: 25 });
 
   return (
     <div className="space-y-10" data-testid="admin-org">
@@ -72,6 +76,52 @@ export default async function AdminOrganizationPage(props: PageProps<"/admin/neg
             Conciliar suscripción
           </ConfirmButton>
         </div>
+      </Section>
+
+      <Section title="WhatsApp automático">
+        <dl className="mb-6 rounded-2xl border border-border bg-card px-4" data-testid="whatsapp-state">
+          <Row label="Estado">{whatsapp.exists ? (whatsapp.enabled ? "ACTIVO" : "Desactivado") : "Sin conexión"} · conexión: {whatsapp.status}</Row>
+          {whatsapp.statusDetail && <Row label="Detalle">{whatsapp.statusDetail}</Row>}
+          <Row label="Número / nombre verificado">{whatsapp.displayPhone ?? "—"} / {whatsapp.verifiedName ?? "—"}</Row>
+          <Row label="Calidad del número">{whatsapp.qualityRating ?? "—"}</Row>
+          <Row label="Plantillas">{WHATSAPP_KINDS.map((kind) => `${TEMPLATES[kind].name}: ${whatsapp.templates[kind] ?? "sin sincronizar"}`).join(" · ")}</Row>
+          <Row label="Consumo del mes">{whatsapp.usage.used} de {whatsapp.monthlyLimit} mensajes ({whatsapp.usage.failed} fallidos)</Row>
+          <Row label="Consentimientos">{whatsapp.consents.granted} vigentes · {whatsapp.consents.revoked} dados de baja</Row>
+        </dl>
+        <WhatsappAdminPanel
+          organizationId={id}
+          exists={whatsapp.exists}
+          enabled={whatsapp.enabled}
+          status={whatsapp.status}
+          phoneNumberId={whatsapp.phoneNumberId}
+          wabaId={whatsapp.wabaId}
+          templateLanguage={whatsapp.templateLanguage}
+          credentialsHint={whatsapp.credentialsHint}
+          hasVerifyToken={whatsapp.hasVerifyToken}
+          settings={whatsapp.settings}
+          monthlyLimit={whatsapp.monthlyLimit}
+          testRecipients={whatsapp.testRecipients}
+          webhookUrl={whatsapp.webhookUrl}
+        />
+        <h3 className="mt-8 font-semibold">Últimos mensajes y errores</h3>
+        {whatsapp.messages.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">Todavía no hay mensajes.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-border rounded-2xl border border-border bg-card text-sm">
+            {whatsapp.messages.map((message) => (
+              <li key={message.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+                <span>
+                  {fmt(message.at)} · {message.direction === "outbound" ? "→" : "←"} {message.kind}
+                  {message.isTest ? " (prueba)" : ""} · …{message.phone?.slice(-4) ?? "—"}
+                </span>
+                <span className={message.status === "failed" || message.status === "unknown" ? "font-medium text-destructive" : "text-muted-foreground"}>
+                  {message.status}
+                  {message.errorMessage ? ` — ${message.errorMessage}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
       <Section title="Equipo y cupos">

@@ -39,11 +39,14 @@ export function AppointmentForm({
   defaultDate,
   customer,
   team,
+  whatsappConsent = false,
 }: {
   services: ServiceOption[];
   defaultDate: string;
   customer: { id: string; name: string; detail: string } | null;
   team?: TeamOptions;
+  /** El negocio tiene WhatsApp automático: permite registrar que el cliente aceptó recibir avisos. */
+  whatsappConsent?: boolean;
 }) {
   const form = useForm(createAppointmentAction);
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
@@ -64,6 +67,12 @@ export function AppointmentForm({
     <form {...form.formProps} className="max-w-xl space-y-8">
       <Step number={1} title="Cliente">
         <CustomerPicker initial={customer} />
+        {whatsappConsent && (
+          <label className="mt-3 flex items-start gap-2.5 text-sm text-muted-foreground">
+            <input type="checkbox" name="whatsappConsent" className="mt-0.5 size-4 shrink-0 accent-primary" />
+            <span>El cliente aceptó recibir por WhatsApp los avisos de su turno (confirmación, recordatorio y cambios).</span>
+          </label>
+        )}
       </Step>
 
       <Step number={2} title="Servicio">

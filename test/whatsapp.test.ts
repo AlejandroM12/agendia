@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { callingCodeForTimezone, toWhatsAppNumber, whatsAppUrl } from "@/lib/phone";
@@ -253,28 +253,11 @@ describe("WhatsApp manual no envía nada", () => {
     fetchSpy.mockRestore();
   });
 
-  it("no hay proveedores, tablas ni estados de entrega de WhatsApp: no se registra ningún envío", () => {
-    const sources: string[] = [];
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const path = join(dir, entry.name);
-        if (entry.isDirectory()) walk(path);
-        else if (/\.(ts|tsx)$/.test(entry.name)) sources.push(path);
-      }
-    };
-    for (const dir of ["modules", "lib", "components", "app"]) walk(dir);
-
-    const whatsapp = sources.filter((file) => /whatsapp/i.test(file));
-    for (const file of whatsapp) {
+  it("el WhatsApp MANUAL no tiene proveedor, base de datos ni red: no registra ningún envío", () => {
+    // El automático vive en su propio módulo (crypto, meta, service, webhook…) y se prueba aparte; estos archivos son solo del manual.
+    for (const file of [join("modules", "whatsapp", "links.ts"), join("modules", "whatsapp", "messages.ts"), join("lib", "phone.ts")]) {
       const text = readFileSync(file, "utf8");
       expect(text, file).not.toMatch(/\bfetch\(|axios|XMLHttpRequest|node:https?|graph\.facebook|twilio|\.create\(|\.update\(|prisma|from "@\/lib\/db"/);
-    }
-    // El canal de notificaciones sigue siendo solo email.
-    const schema = readFileSync(join("prisma", "schema.prisma"), "utf8");
-    expect(schema).not.toMatch(/model\s+Whatsapp|model\s+MessageWallet|delivered|readAt/i);
-    // Y ningún código dice que un mensaje se «envió» por WhatsApp.
-    for (const file of sources) {
-      expect(readFileSync(file, "utf8"), file).not.toMatch(/enviado por whatsapp|whatsapp enviado|mensaje entregado|leído por/i);
     }
   });
 });

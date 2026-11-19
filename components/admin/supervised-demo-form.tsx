@@ -11,7 +11,7 @@ export function SupervisedDemoForm() {
   const form = useForm(createSupervisedDemoAction);
   return (
     <form {...form.formProps} className="max-w-xl space-y-3">
-      <Field label="Correos autorizados a recibir avisos reales" htmlFor="recipients" hint="De 1 a 5, separados por coma. Típicamente el tuyo y el de quien recibe la demostración." error={form.error("recipients")}>
+      <Field label="Correos y teléfonos autorizados a recibir avisos reales" htmlFor="recipients" hint="De 1 a 8, separados por coma (los teléfonos pueden llevar espacios). Tu correo o tu celular (con característica); a cualquier otro destinatario se lo simula." error={form.error("recipients")}>
         <Input id="recipients" name="recipients" autoComplete="off" required />
       </Field>
       <FormMessage message={form.message} tone={form.state?.ok ? "success" : "error"} />

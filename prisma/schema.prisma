@@ -132,6 +132,9 @@ model Organization {
   slugAliases            OrganizationSlugAlias[]
   images                 OrganizationImage[]
   customerAccessTokens   CustomerAccessToken[]
+  whatsappConnection     WhatsappConnection?
+  whatsappConsents       WhatsappConsent[]
+  whatsappMessages       WhatsappMessage[]
 
   @@map("organizations")
 }
@@ -701,4 +704,110 @@ model Invitation {
   @@index([organizationId, status])
   @@index([email])
   @@map("invitations")
+}
+
+// ---- WhatsApp automático (Meta Cloud API oficial) -----------------------------------------------------------------
+// Una conexión por negocio, con credenciales PROPIAS (cifradas) y configuración propia. Sumar un negocio es cargar
+// estos datos desde /admin: no requiere código, migraciones ni variables de entorno por negocio (docs/WHATSAPP_ONBOARDING.md).
+model WhatsappConnection {
+  id             String    @id @default(uuid())
+  organizationId String    @unique
+  /// Interruptor de AtajoLab: solo con `enabled` y `status = connected` se envía algo.
+  enabled        Boolean   @default(false)
+  /// not_validated | connected | error  (lo fija la validación contra Meta).
+  status         String    @default("not_validated")
+  statusDetail   String?
+  validatedAt    DateTime?
+  wabaId         String?
+  /// Identifica al negocio en los webhooks (llega en metadata.phone_number_id): único entre negocios.
+  phoneNumberId  String?   @unique
+  displayPhone   String?
+  verifiedName   String?
+  qualityRating  String?
+  /// JSON {accessToken, appSecret} cifrado con AES-256-GCM (modules/whatsapp/crypto.ts). Nunca se muestra ni se registra.
+  credentials    String?
+  /// Últimos caracteres del token, solo para reconocerlo en pantalla.
+  credentialsHint String?
+  /// Hash (sha256) del token de verificación del webhook que se pegó en Meta; el token en claro se muestra una vez.
+  verifyTokenHash String?  @unique
+  templateLanguage String  @default("es_AR")
+  /// Estado de cada plantilla en Meta: { kind: "APPROVED" | "PENDING" | "REJECTED" | "MISSING" }.
+  templatesStatus Json?
+
+  // Qué se envía y cuánto
+  sendConfirmations   Boolean  @default(true)
+  sendReminders       Boolean  @default(true)
+  reminderHoursBefore Int      @default(24)
+  sendCancellations   Boolean  @default(true)
+  sendReschedules     Boolean  @default(true)
+  /// Tope de mensajes salientes por mes calendario (UTC); al alcanzarlo no se envía más hasta el mes siguiente o hasta subirlo.
+  monthlyLimit        Int      @default(300)
+  /// Números (solo dígitos) a los que AtajoLab puede enviar mensajes de prueba.
+  testRecipients      String[] @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_connections")
+}
+
+// Consentimiento del destinatario para recibir avisos por WhatsApp de ESTE negocio. Sin un consentimiento vigente no se envía.
+model WhatsappConsent {
+  id             String    @id @default(uuid())
+  organizationId String
+  /// Número en formato internacional, solo dígitos.
+  phone          String
+  customerId     String?
+  /// granted | revoked
+  status         String    @default("granted")
+  /// public_booking | dashboard | reply_stop
+  source         String
+  /// Versión del texto que se mostró al pedirlo (para poder demostrar qué aceptó).
+  textVersion    String
+  grantedAt      DateTime  @default(now())
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, phone])
+  @@map("whatsapp_consents")
+}
+
+// Historial de mensajes (salientes y respuestas) y sus estados de entrega. Base del consumo por negocio.
+model WhatsappMessage {
+  id                String   @id @default(uuid())
+  organizationId    String
+  appointmentId     String?
+  /// La notificación del outbox que lo originó: un envío por notificación, nunca dos.
+  notificationId    String?  @unique
+  /// outbound | inbound
+  direction         String
+  /// booking_confirmation | reminder | cancellation | reschedule | test | reply
+  kind              String
+  /// Número del destinatario (salientes) o del remitente (entrantes), solo dígitos.
+  phone             String?
+  /// Identificador de usuario de WhatsApp (BSUID) cuando Meta no informa el número.
+  bsuid             String?
+  templateName      String?
+  /// queued | sending | sent | delivered | read | failed | unknown | received
+  status            String
+  providerMessageId String?
+  errorCode         String?
+  errorMessage      String?
+  isTest            Boolean  @default(false)
+  /// Texto de una respuesta entrante (recortado); nunca contenido de salientes.
+  body              String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, providerMessageId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, direction, createdAt])
+  @@map("whatsapp_messages")
 }

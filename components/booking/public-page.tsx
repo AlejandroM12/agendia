@@ -14,6 +14,7 @@ export function PublicPage({
   team,
   bookable,
   preview = false,
+  whatsappConsent = false,
 }: {
   profile: PublicProfile;
   images: PublicImages;
@@ -23,6 +24,8 @@ export function PublicPage({
   /** `false` si el negocio no está tomando reservas (cuenta en solo lectura o sin servicios activos). */
   bookable: boolean;
   preview?: boolean;
+  /** Pedir el consentimiento para avisos por WhatsApp en la reserva. */
+  whatsappConsent?: boolean;
 }) {
   // Ocultar precios es una decisión del negocio: directamente no se envían al navegador.
   const shown = profile.showPrices ? services : services.map((service) => ({ ...service, price: null }));
@@ -34,7 +37,7 @@ export function PublicPage({
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-8 pb-10 sm:px-6 lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start lg:gap-10">
         <div className="min-w-0">
           {bookable && shown.length > 0 ? (
-            <BookingFlow slug={profile.slug} businessName={profile.name} services={shown} team={team} preview={preview} />
+            <BookingFlow slug={profile.slug} businessName={profile.name} services={shown} team={team} preview={preview} whatsappConsent={whatsappConsent} />
           ) : (
             <div className="rounded-3xl border border-dashed border-input bg-card/60 px-6 py-10 text-center">
               <p className="font-display text-lg font-semibold">Reservas online no disponibles</p>

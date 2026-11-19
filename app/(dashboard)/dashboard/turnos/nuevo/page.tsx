@@ -33,6 +33,8 @@ export default async function NewAppointmentPage(props: PageProps<"/dashboard/tu
     listActiveProfessionals(db, organization.id),
   ]);
 
+  const whatsappState = await db.whatsappConnection.findUnique({ where: { organizationId: organization.id }, select: { enabled: true, status: true } });
+
   // Con varios profesionales activos, el turno se agenda eligiendo con quién (o «cualquiera»).
   const requestedProfessional = typeof params.profesional === "string" ? params.profesional : "";
   const team =
@@ -65,6 +67,7 @@ export default async function NewAppointmentPage(props: PageProps<"/dashboard/tu
             .filter((s) => !restricted || s.allProfessionals || s.professionals.some((l) => l.professionalId === restricted))
             .map(({ id, name, durationMinutes, active }) => ({ id, name, durationMinutes, active }))}
           team={team}
+          whatsappConsent={Boolean(whatsappState?.enabled && whatsappState.status === "connected")}
           defaultDate={isValidDateStr(requestedDate) ? requestedDate : todayInTz(organization.timezone)}
           customer={customer ? { id: customer.id, name: customer.name, detail: restricted ? (customer.phone ?? "") : (customer.phone ?? customer.email ?? "") } : null}
         />

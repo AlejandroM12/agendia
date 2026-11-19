@@ -1,5 +1,6 @@
 "use client";
 
+import { CONSENT_TEXT } from "@/modules/whatsapp/consent-text";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarCheck, Check, ChevronRight, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -45,9 +46,12 @@ export function BookingFlow({
   services,
   team,
   preview = false,
+  whatsappConsent = false,
 }: {
   slug: string;
   businessName: string;
+  /** El negocio tiene avisos automáticos por WhatsApp: se pide el consentimiento del cliente. */
+  whatsappConsent?: boolean;
   services: BookableService[];
   /** Quiénes atienden cada servicio online. Sin esto, o con un solo profesional, no hay paso de profesional. */
   team?: PublicTeamView;
@@ -331,6 +335,12 @@ export function BookingFlow({
                     }}
                   />
                 </Field>
+                {whatsappConsent && (
+                  <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                    <input type="checkbox" name="whatsappConsent" className="mt-0.5 size-4 shrink-0 accent-primary" />
+                    <span>{CONSENT_TEXT}</span>
+                  </label>
+                )}
               </div>
             </fieldset>
 

@@ -8,6 +8,7 @@ import { isEmailConfigured, sendEmail } from "./email";
 import { renderAccountNotice } from "./account-notices";
 import { renderAppointmentEmail } from "./templates";
 import { DEMO_SIMULATED_NOTE, demoDelivery } from "@/modules/demo/policy";
+import { deliverNotification as deliverWhatsapp } from "@/modules/whatsapp/service";
 
 const MAX_ATTEMPTS = 5;
 const LOCK_MINUTES = 5;
@@ -164,6 +165,26 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
     if (organization.isDemo && demoDelivery(organization, notification.recipient) === "simulate") {
       await db.notification.update({ where: { id }, data: { status: "sent", sentAt: new Date(), lastError: DEMO_SIMULATED_NOTE, lockedUntil: null } });
       summary.sent++;
+      continue;
+    }
+
+    // WhatsApp automático: mismas garantías que el correo (bloqueo, reintentos con espera, máximo de intentos).
+    if (notification.channel === "whatsapp") {
+      const outcome = await deliverWhatsapp({ notification, organization, appointment, showProfessional: await showsProfessional(organization) });
+      if (outcome.kind === "sent") {
+        await db.notification.update({ where: { id }, data: { status: "sent", sentAt: new Date(), lastError: null, lockedUntil: null } });
+        summary.sent++;
+      } else if (outcome.kind === "skipped") {
+        await db.notification.update({ where: { id }, data: { status: "skipped", lockedUntil: null, lastError: outcome.reason } });
+        summary.skipped++;
+      } else if (outcome.kind === "failed" || notification.attempts >= MAX_ATTEMPTS) {
+        await db.notification.update({ where: { id }, data: { status: "failed", lastError: outcome.error, lockedUntil: null } });
+        summary.failed++;
+      } else {
+        const wait = BACKOFF_MINUTES[Math.min(notification.attempts - 1, BACKOFF_MINUTES.length - 1)];
+        await db.notification.update({ where: { id }, data: { lastError: outcome.error, lockedUntil: null, scheduledFor: new Date(Date.now() + wait * 60000) } });
+        summary.retried++;
+      }
       continue;
     }
 

@@ -16,6 +16,7 @@ import { syncCapacityGrace } from "@/modules/team/capacity";
 import { recordAudit } from "@/lib/audit";
 import { createDemoWorkspace } from "@/modules/demo/workspace";
 import { DEMO } from "@/modules/demo/policy";
+import { normalizePhone } from "@/modules/whatsapp/consent";
 
 /** Toda acción del panel vuelve a verificar el permiso: el layout no alcanza. */
 async function requirePlatformAdmin() {
@@ -187,13 +188,23 @@ export async function reconcileOrganizationAction(organizationId: string): Promi
  */
 export async function createSupervisedDemoAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const admin = await requirePlatformAdmin();
-  const recipients = String(formData.get("recipients") ?? "")
-    .split(/[\s,;]+/)
-    .map((value) => value.trim().toLowerCase())
+  // Autorizados a recibir avisos REALES: correos y/o teléfonos (estos se guardan normalizados, solo dígitos).
+  const raw = String(formData.get("recipients") ?? "")
+    .split(/[,;\n]+/)
+    .map((value) => value.trim())
     .filter(Boolean);
-  const invalid = recipients.filter((value) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
-  if (recipients.length === 0 || recipients.length > 5 || invalid.length > 0) {
-    return { message: "Ingresá de 1 a 5 correos válidos, separados por coma o espacio." };
+  const recipients: string[] = [];
+  const invalid: string[] = [];
+  for (const value of raw) {
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) recipients.push(value.toLowerCase());
+    else {
+      const phone = normalizePhone(value, "America/Argentina/Buenos_Aires");
+      if (phone) recipients.push(phone);
+      else invalid.push(value);
+    }
+  }
+  if (recipients.length === 0 || recipients.length > 8 || invalid.length > 0) {
+    return { message: "Ingresá de 1 a 8 correos o teléfonos válidos (con característica), separados por coma o espacio." };
   }
 
   const demo = await createDemoWorkspace({ kind: "supervised", allowedRecipients: recipients });
