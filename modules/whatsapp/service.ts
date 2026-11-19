@@ -136,6 +136,11 @@ export async function validateConnection(organizationId: string): Promise<Valida
 }
 
 /** Crea en la cuenta de WhatsApp del negocio las plantillas que falten y actualiza su estado. */
+/** Los botones de enlace de las plantillas apuntan a este origen. Meta exige una dirección https pública: en un entorno local se fija `WHATSAPP_TEMPLATE_BASE_URL`. */
+function templateBaseUrl(): string {
+  return process.env.WHATSAPP_TEMPLATE_BASE_URL?.trim().replace(/\/$/, "") || brand.url;
+}
+
 export async function syncTemplates(organizationId: string): Promise<{ ok: true; created: WhatsappKind[]; templates: TemplateStatuses } | { ok: false; message: string }> {
   const connection = await getConnection(organizationId);
   if (!connection?.credentials || !connection.wabaId) return { ok: false, message: "Faltan datos de la conexión." };
@@ -146,7 +151,7 @@ export async function syncTemplates(organizationId: string): Promise<{ ok: true;
     for (const kind of WHATSAPP_KINDS) {
       const exists = remote.some((template) => template.name === TEMPLATES[kind].name && template.language === connection.templateLanguage);
       if (!exists) {
-        await createTemplate(accessToken, connection.wabaId, metaTemplateDefinition(kind, brand.url, connection.templateLanguage));
+        await createTemplate(accessToken, connection.wabaId, metaTemplateDefinition(kind, templateBaseUrl(), connection.templateLanguage));
         created.push(kind);
       }
     }
