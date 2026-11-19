@@ -54,3 +54,5 @@ next-env.d.ts
 /instances/
 /deploy/sites/*.caddy
 /deploy/rclone.conf
+!.env.mp-test.example
+.mp-sandbox/
