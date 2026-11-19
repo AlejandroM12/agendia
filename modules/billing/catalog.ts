@@ -25,14 +25,29 @@ export function listPrice(tier: PlanTier): number {
   return PLAN_CAPABILITIES[tier].monthlyPrice;
 }
 
-/** Devuelve el plan del nivel, creándolo (idempotente) con el precio de lista si no existe. */
+function isUniqueViolation(error: unknown): boolean {
+  const text = error instanceof Error ? `${error.name} ${error.message} ${(error as { code?: string }).code ?? ""}` : String(error);
+  return text.includes("P2002") || text.includes("23505") || /unique constraint/i.test(text);
+}
+
+/**
+ * Devuelve el plan del nivel, creándolo con el precio de lista si no existe.
+ * Seguro ante pedidos simultáneos: `upsert` puede chocar con la restricción única cuando dos
+ * pedidos crean el mismo plan a la vez (una base nueva todavía sin esa fila), así que se lee
+ * primero y, si el alta pierde la carrera, se relee la fila que creó el otro pedido.
+ */
 export async function ensurePlan(tier: PlanTier): Promise<Plan> {
   const capability = PLAN_CAPABILITIES[tier];
-  return db.plan.upsert({
-    where: { code: capability.code },
-    update: {},
-    create: { code: capability.code, name: capability.name, price: listPrice(tier), currency: pricing.currency },
-  });
+  const existing = await db.plan.findUnique({ where: { code: capability.code } });
+  if (existing) return existing;
+  try {
+    return await db.plan.create({
+      data: { code: capability.code, name: capability.name, price: listPrice(tier), currency: pricing.currency },
+    });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    return db.plan.findUniqueOrThrow({ where: { code: capability.code } });
+  }
 }
 
 export type SellablePlan = { ok: true; plan: Plan } | { ok: false; error: string };
