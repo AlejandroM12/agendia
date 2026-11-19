@@ -6,6 +6,9 @@ import { ConfirmButton } from "@/components/form/confirm-button";
 import { Logo } from "@/components/brand/logo";
 import { Section } from "@/components/dashboard/section";
 import { Input } from "@/components/ui/input";
+import { notFound } from "next/navigation";
+import { requireContext } from "@/lib/dal";
+import { canAccessPlatformAdmin } from "@/lib/deployment";
 import { db } from "@/lib/db";
 import { getEffectiveStatus } from "@/lib/organization-access";
 import { formatMoney, offers, pricing } from "@/lib/brand";
@@ -56,6 +59,9 @@ const shortDate = (date: Date) => date.toLocaleDateString("es-AR", { day: "2-dig
 export default async function AdminPage(props: PageProps<"/admin">) {
   // Siempre con datos del momento: nada de esta página se prerenderiza.
   await connection();
+  // Defensa en profundidad: el layout no se reevalúa al navegar entre páginas.
+  const { user: viewer } = await requireContext();
+  if (!canAccessPlatformAdmin(viewer)) notFound();
   const params = await props.searchParams;
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);

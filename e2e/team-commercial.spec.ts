@@ -172,6 +172,18 @@ test("sesiones: cerrar la de otro dispositivo la deja sin acceso y la actual sig
   await other.close();
 });
 
+test("plataforma: un usuario común no ve ni /admin ni la ficha de un negocio", async ({ page }) => {
+  const email = `e2e-noadmin-${unique()}@example.com`;
+  await register(page, email);
+  await sql(`UPDATE organizations SET "onboardingCompletedAt" = now() WHERE id IN (SELECT m."organizationId" FROM memberships m JOIN users u ON u.id = m."userId" WHERE u.email = $1)`, [email]);
+  const org = (await sql(`SELECT o.id FROM organizations o JOIN memberships m ON m."organizationId" = o.id JOIN users u ON u.id = m."userId" WHERE u.email = $1`, [email])).rows[0].id as string;
+  for (const path of ["/admin", `/admin/negocios/${org}`]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: "No encontramos esta página" })).toBeVisible();
+    expect(await page.locator("body").innerText()).not.toContain("Equipo y cupos");
+  }
+});
+
 test("plataforma: el catálogo muestra los precios y la ficha de un negocio no revela datos de clientes", async ({ page }) => {
   const email = `e2e-admin-${unique()}@example.com`;
   await register(page, email);

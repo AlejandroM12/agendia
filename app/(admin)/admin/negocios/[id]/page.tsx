@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import { ConfirmButton } from "@/components/form/confirm-button";
 import { Section } from "@/components/dashboard/section";
 import { formatMoney } from "@/lib/brand";
+import { requireContext } from "@/lib/dal";
+import { canAccessPlatformAdmin } from "@/lib/deployment";
 import { setOrganizationFeatureAction, reconcileOrganizationAction } from "@/modules/admin/actions";
 import { getOrganizationAdminView } from "@/modules/admin/overview";
 
@@ -24,6 +26,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export default async function AdminOrganizationPage(props: PageProps<"/admin/negocios/[id]">) {
   await connection();
+  // El layout también lo exige, pero un layout no se vuelve a evaluar al navegar entre páginas: la página
+  // verifica el permiso por su cuenta antes de leer nada.
+  const { user } = await requireContext();
+  if (!canAccessPlatformAdmin(user)) notFound();
   const { id } = await props.params;
   const view = await getOrganizationAdminView(id);
   if (!view) notFound();
