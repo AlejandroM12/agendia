@@ -298,3 +298,46 @@ Además: textos legales aprobados y publicados (`docs/LEGAL_REVIEW.md`) y decisi
 
 ### 11.8 Verificación local previa (hecha)
 `npm run lint`, `npm run typecheck`, `npm run build`, `npm test` (base aislada por ejecución), `npx playwright test` (incluye los proyectos `published-*`, con la oferta publicada en otro puerto), `node scripts/check-standalone-install.mjs` y `npm run loadtest:local`. Resultados reales en el informe de la etapa y en `docs/PRODUCTION_READINESS.md` §14.
+
+## 12. Lanzamiento comercial directo (decisión D-66)
+
+Sin clientes activos no hay piloto restringido: se publica el Plan Equipo para todos y se valida Mercado Pago antes de comunicar la oferta. **Nada de esto se ejecuta desde el repositorio**: son comandos para el servidor, uno por vez, con tu confirmación. Los backups automáticos actuales se mantienen; la copia externa y los simulacros de restauración quedaron **postergados** (riesgo aceptado: un fallo del servidor perdería lo cargado desde la última copia diaria).
+
+### 12.1 Qué hace cada interruptor (verificado en `lib/features.ts` y `lib/plans.ts`)
+- `PUBLISH_TEAM_PLANS=1`: muestra los dos planes y las dos licencias, acepta `?plan=` en el registro y habilita equipo y cuentas para todos los negocios. **No cambia ningún cupo.** Se lee en ejecución: alcanza con recrear `web` y `worker`, sin reconstruir la imagen.
+- `TEAM_MODE_ENABLED` y `TEAM_ACCOUNTS_ENABLED`: dejarlas **vacías**. Son para instalaciones sueltas o pruebas; con la publicación encendida no hacen falta.
+- `TEAM_FEATURES_PAUSED=1`: emergencia. Anula la activación automática y la venta del Equipo; no apaga negocios que ya tengan equipo habilitado a mano, ni borra nada.
+- **Cupos:** prueba, Profesional, cancelada o suspendida = 2; Equipo = 5 **solo con cobro aprobado verificado**. Ningún interruptor lo modifica (`test/global-switches-limits.test.ts`).
+
+### 12.2 Publicar el Plan Equipo
+```sh
+cd <directorio-de-agendia>
+cp .env.production .env.production.bak-$(date +%Y%m%d-%H%M)
+grep -q '^PUBLISH_TEAM_PLANS=' .env.production && sed -i 's/^PUBLISH_TEAM_PLANS=.*/PUBLISH_TEAM_PLANS=1/' .env.production || echo 'PUBLISH_TEAM_PLANS=1' >> .env.production
+grep -E '^(PUBLISH_TEAM_PLANS|TEAM_FEATURES_PAUSED|TEAM_MODE_ENABLED|TEAM_ACCOUNTS_ENABLED|PRICE_[A-Z_]+)=' .env.production
+docker compose --env-file .env.production up -d web worker
+docker compose --env-file .env.production ps
+curl -fsS https://agendia.atajolab.dev/api/health
+```
+Verificación: la landing y `/precios` muestran Plan Profesional $9.900 y Plan Equipo $19.900, y las licencias $149.000 y $249.000; `/admin` dice «Publicación de los planes con equipo: ENCENDIDA» y no muestra discrepancias de precio (`plans.mensual = 9900`, `plans.equipo = 19900`).
+
+**Volver atrás:** poner `PUBLISH_TEAM_PLANS=` (vacío) y repetir el `up -d web worker`. No borra nada.
+
+### 12.3 Mercado Pago: qué obtener y dónde se carga
+1. Cuenta de Mercado Pago del titular (vendedor), con identidad verificada.
+2. En <https://www.mercadopago.com.ar/developers> → «Tus integraciones» → «Crear aplicación» (producto: pagos online; suscripciones y Checkout Pro).
+3. **Credenciales de prueba:** *Access Token* `TEST-…`. Dos **usuarios de prueba** (vendedor y comprador) y sus tarjetas de prueba.
+4. **Webhook** (en la aplicación → «Webhooks»): URL `https://agendia.atajolab.dev/api/webhooks/mercadopago`, temas `subscription_preapproval`, `subscription_authorized_payment` y `payment`. Copiar la **clave secreta** del webhook (no es el Access Token).
+5. **Cargarlas en el servidor sin pegarlas en ningún chat:**
+```sh
+set_env() { k="$1"; read -rsp "$k: " v; echo; if grep -q "^$k=" .env.production; then sed -i "s|^$k=.*|$k=$v|" .env.production; else echo "$k=$v" >> .env.production; fi; unset v; }
+set_env MERCADOPAGO_ACCESS_TOKEN
+set_env MERCADOPAGO_WEBHOOK_SECRET
+chmod 600 .env.production
+docker compose --env-file .env.production up -d web worker
+```
+6. **Validar en sandbox** con `docs/MERCADOPAGO.md` §6 (puntos 1–11) usando cuentas de prueba propias, **antes de comunicar la oferta**: mientras el Access Token sea `TEST-…`, una persona que contrate de verdad vería una suscripción «autorizada» sin pagar nada real.
+7. **Pasar a producción:** activar las credenciales de producción de la aplicación (Mercado Pago pide datos del negocio), reemplazar el token y el secreto del webhook de producción con `set_env`, recrear `web` y `worker`, y hacer **una compra real de importe mínimo supervisada** por vos antes de abrir.
+
+### 12.4 Ronda única de validación funcional (después de 12.2)
+Registro con `?plan=equipo` y sin plan · onboarding «¿Cómo trabajás?» · alta de un segundo profesional (y rechazo del tercero en prueba) · invitación por correo real aceptada desde otra ventana · permisos de un profesional · «Mi plan» en prueba, con la oferta de los dos planes · `/admin` y `/admin/negocios/<id>` · reserva pública con elección de profesional · cancelar y reprogramar desde «Ver mi turno» · WhatsApp manual desde el celular. Lo de pagos se hace en sandbox (12.3).

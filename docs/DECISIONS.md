@@ -314,3 +314,8 @@
 ### D-65 · Documentos legales como borradores no publicados
 **Estado:** PENDIENTE DE REVISIÓN.
 **Decisión:** `docs/legal/` contiene borradores marcados como no validados; no se publican ni se afirma cumplimiento legal; faltan los datos del titular (`docs/LEGAL_REVIEW.md` §5).
+
+### D-66 · Lanzamiento comercial directo, sin piloto restringido
+**Estado:** CONFIRMADO (decisión del titular, 2026-11-19; **pendiente de ejecutar en producción**).
+**Decisión:** como no hay clientes activos (solo datos de prueba), se descarta el piloto por organización: se publica el Plan Equipo para todos con `PUBLISH_TEAM_PLANS=1`, sin encender `TEAM_MODE_ENABLED` ni `TEAM_ACCOUNTS_ENABLED` (la publicación ya habilita equipo y cuentas según plan). Los interruptores globales deciden qué funciones existen, **nunca el cupo**: el cupo sale del plan y de un cobro verificado (`lib/plans.ts`; `test/global-switches-limits.test.ts`). La validación con Mercado Pago en sandbox puede hacerse sobre el propio dominio con credenciales `TEST-…` **antes** de comunicar la oferta; los cobros reales requieren credenciales de producción cargadas por el titular y su autorización. Siguen sin definir: textos legales publicados y datos del titular, renovación de licencias, retención de datos. Se mantienen los backups automáticos actuales; la copia externa y los simulacros de restauración quedan postergados por decisión del titular (riesgo aceptado y documentado en `docs/PRODUCTION_READINESS.md` §14.6).
+
