@@ -145,7 +145,7 @@ export default async function AdminPage(props: PageProps<"/admin">) {
 
       <Section title="Demostración supervisada">
         <p className="mb-3 text-sm text-muted-foreground">
-          Crea un negocio de demo para mostrar Agendia en vivo. Los avisos <strong>reales</strong> salen solo a los correos que autorices acá;
+          Crea un negocio de demo para mostrar Agendia en vivo. Los avisos <strong>reales</strong> salen solo a los correos o celulares que autorices acá;
           a cualquier otro destinatario se lo simula. Se borra a las {DEMO.supervisedTtlHours} horas.
         </p>
         <SupervisedDemoForm />

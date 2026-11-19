@@ -219,6 +219,6 @@ export async function createSupervisedDemoAction(_prev: ActionState, formData: F
   revalidatePath("/admin");
   return {
     ok: true,
-    message: `Demo supervisada lista (dura ${DEMO.supervisedTtlHours} h). Ingresá en /login con ${demo.email} y la contraseña ${demo.password}. Los avisos reales salen solo a: ${recipients.join(", ")}. Anotá estos datos ahora: no se vuelven a mostrar.`,
+    message: `Demo supervisada lista (dura ${DEMO.supervisedTtlHours} h). Ingresá en /login con ${demo.email} y la contraseña ${demo.password}. Los avisos reales salen solo a: ${recipients.join(", ")}. Para conectar WhatsApp a esta demo abrí /admin/negocios/${demo.organizationId}. Anotá estos datos ahora: la contraseña no se vuelve a mostrar.`,
   };
 }
