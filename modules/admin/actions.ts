@@ -13,6 +13,9 @@ import { ensurePlan, listPrice } from "@/modules/billing/catalog";
 import { getPreapproval, isMercadoPagoConfigured } from "@/modules/billing/mercadopago";
 import { applyPreapprovalState } from "@/modules/billing/subscriptions";
 import { syncCapacityGrace } from "@/modules/team/capacity";
+import { recordAudit } from "@/lib/audit";
+import { createDemoWorkspace } from "@/modules/demo/workspace";
+import { DEMO } from "@/modules/demo/policy";
 
 /** Toda acción del panel vuelve a verificar el permiso: el layout no alcanza. */
 async function requirePlatformAdmin() {
@@ -175,4 +178,36 @@ export async function reconcileOrganizationAction(organizationId: string): Promi
   });
   revalidatePath(`/admin/negocios/${organizationId}`);
   return { ok: true, message: `Conciliación: ${results.join(", ")} · cupos: ${capacity}.` };
+}
+
+/**
+ * Demostración SUPERVISADA: un negocio de demo para mostrar el producto en vivo, con avisos reales solo hacia los
+ * destinatarios que se autoricen acá (por ejemplo, tu propio correo). Cualquier otro destinatario se simula, como en
+ * la demo pública. Las credenciales se muestran UNA vez, en esta respuesta: no se guardan en ningún lado.
+ */
+export async function createSupervisedDemoAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const admin = await requirePlatformAdmin();
+  const recipients = String(formData.get("recipients") ?? "")
+    .split(/[\s,;]+/)
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  const invalid = recipients.filter((value) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
+  if (recipients.length === 0 || recipients.length > 5 || invalid.length > 0) {
+    return { message: "Ingresá de 1 a 5 correos válidos, separados por coma o espacio." };
+  }
+
+  const demo = await createDemoWorkspace({ kind: "supervised", allowedRecipients: recipients });
+  await recordAudit({
+    organizationId: demo.organizationId,
+    userId: admin.user.id,
+    action: "demo.supervised.created",
+    entityType: "organization",
+    entityId: demo.organizationId,
+    metadata: { recipients: recipients.length },
+  });
+  revalidatePath("/admin");
+  return {
+    ok: true,
+    message: `Demo supervisada lista (dura ${DEMO.supervisedTtlHours} h). Ingresá en /login con ${demo.email} y la contraseña ${demo.password}. Los avisos reales salen solo a: ${recipients.join(", ")}. Anotá estos datos ahora: no se vuelven a mostrar.`,
+  };
 }

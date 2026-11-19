@@ -67,21 +67,21 @@ export async function scanAccountNotices(now = new Date()): Promise<{ enqueued: 
   let enqueued = 0;
 
   const ending = await db.organization.findMany({
-    where: { status: "trial", trialEndsAt: { gt: now, lte: new Date(now.getTime() + TRIAL_REMINDER_DAYS * DAY) }, subscription: null },
+    where: { isDemo: false, status: "trial", trialEndsAt: { gt: now, lte: new Date(now.getTime() + TRIAL_REMINDER_DAYS * DAY) }, subscription: null },
     select: { id: true, trialEndsAt: true },
     take: 200,
   });
   for (const org of ending) enqueued += await enqueueAccountNotice(org.id, "trial_ending", { key: org.trialEndsAt.toISOString() });
 
   const ended = await db.organization.findMany({
-    where: { status: { in: ["trial", "trial_readonly"] }, trialEndsAt: { lte: now, gt: new Date(now.getTime() - 7 * DAY) }, subscription: null },
+    where: { isDemo: false, status: { in: ["trial", "trial_readonly"] }, trialEndsAt: { lte: now, gt: new Date(now.getTime() - 7 * DAY) }, subscription: null },
     select: { id: true, trialEndsAt: true },
     take: 200,
   });
   for (const org of ended) enqueued += await enqueueAccountNotice(org.id, "trial_ended", { key: org.trialEndsAt.toISOString() });
 
   const grace = await db.organization.findMany({
-    where: { capacityGraceStartedAt: { not: null } },
+    where: { isDemo: false, capacityGraceStartedAt: { not: null } },
     select: { id: true, capacityGraceStartedAt: true, capacityGraceEndsAt: true },
     take: 200,
   });

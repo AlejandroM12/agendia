@@ -1,5 +1,6 @@
 import "server-only";
 
+import { demoExpired } from "@/modules/demo/policy";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -101,6 +102,8 @@ export async function requireSignedInUser(): Promise<LoadedContext> {
 export async function requireContext(): Promise<AppContext> {
   const context = await requireSignedInUser();
   if (!context.emailVerified) redirect("/verificar-email");
+  // Una demo vencida ya no se puede usar (el proceso periódico la borra): se vuelve a la página de la demo.
+  if (demoExpired(context.organization)) redirect("/demo?vencida=1");
   return context;
 }
 

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEMO } from "@/modules/demo/policy";
 import { randomBytes } from "node:crypto";
 import type { Appointment, AppointmentStatus, Organization, Prisma, ProfessionalSelection } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -245,6 +246,17 @@ export async function createAppointment(params: {
   const idempotencyKey = normalizeIdempotencyKey(params.idempotencyKey);
 
   if (Number.isNaN(params.startsAt.getTime())) return fail("invalid", "La fecha u hora no es válida.");
+
+  if (organization.isDemo) {
+    // Una demo tiene tope de turnos y de clientes: es un espacio de prueba, no un negocio.
+    const [appointments, customers] = await Promise.all([
+      db.appointment.count({ where: { organizationId: organization.id } }),
+      db.customer.count({ where: { organizationId: organization.id } }),
+    ]);
+    if (appointments >= DEMO.maxAppointments || customers >= DEMO.maxCustomers) {
+      return fail("invalid", "Esta demostración llegó a su límite de turnos. Podés reiniciarla desde el panel.");
+    }
+  }
 
   const service = await db.service.findFirst({
     where: {

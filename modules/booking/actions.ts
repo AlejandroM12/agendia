@@ -228,6 +228,25 @@ export async function cancelByTokenAction(token: string): Promise<ManageState> {
   return result.ok ? { ok: true } : { ok: false, message: result.message };
 }
 
+/**
+ * «Confirmo que voy»: el cliente confirma su asistencia con el enlace de su turno. No cambia el estado del turno ni
+ * mueve nada: solo deja registrada la confirmación (`attendanceConfirmedAt`) para que el negocio la vea.
+ */
+export async function confirmAttendanceByTokenAction(token: string): Promise<ManageState> {
+  const ip = await clientIp();
+  if (!(await rateLimit(`manage:${ip}`, 30, 3600)).allowed) return { ok: false, message: TOO_MANY_ATTEMPTS };
+
+  const appointment = await findByToken(token);
+  if (!appointment) return { ok: false, message: "No encontramos ese turno." };
+  if (appointment.status !== "confirmed" || appointment.startsAt <= new Date()) {
+    return { ok: false, message: "Este turno ya no se puede confirmar." };
+  }
+  if (!appointment.attendanceConfirmedAt) {
+    await db.appointment.update({ where: { id: appointment.id }, data: { attendanceConfirmedAt: new Date() } });
+  }
+  return { ok: true };
+}
+
 export async function getRescheduleAvailabilityAction(token: string, fromDateStr?: string): Promise<PublicAvailability> {
   const ip = await clientIp();
   if (!(await rateLimit(`availability:${ip}`, 120, 60)).allowed) return { ok: false, message: TOO_MANY_ATTEMPTS };

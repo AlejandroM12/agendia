@@ -7,6 +7,7 @@ import { pruneSessions } from "@/lib/sessions";
 import { scanAccountNotices } from "@/modules/notifications/account-notices";
 import { processDueNotifications } from "@/modules/notifications/process";
 import { organizationsToSyncCapacity, syncCapacityGrace } from "@/modules/team/capacity";
+import { deleteExpiredDemos } from "@/modules/demo/cleanup";
 
 /**
  * Trabajo periódico de la plataforma. Lo dispara el proceso `worker` cada
@@ -55,8 +56,9 @@ export async function runTick() {
   await db.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(Date.now() - 24 * 3600000) } } });
   await db.passwordResetToken.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600000) } } });
   await pruneSessions();
+  const expiredDemos = await deleteExpiredDemos();
   await db.customerAccessToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
   await db.emailVerificationToken.deleteMany({ where: { expiresAt: { lt: new Date(Date.now() - 24 * 3600000) } } });
 
-  return { capacity, accountNotices, notifications, expiredTrials, lockedAccounts, subscriptions, durationMs: Date.now() - startedAt };
+  return { capacity, accountNotices, notifications, expiredTrials, lockedAccounts, expiredDemos, subscriptions, durationMs: Date.now() - startedAt };
 }

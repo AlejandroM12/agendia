@@ -1,5 +1,6 @@
 "use server";
 
+import { DEMO_BLOCKED_MESSAGE } from "@/modules/demo/policy";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -64,7 +65,8 @@ export async function updateRemindersAction(_prev: ActionState, formData: FormDa
 }
 
 export async function changePasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { user } = await requireContext();
+  const { user, organization } = await requireContext();
+  if (organization.isDemo) return { message: DEMO_BLOCKED_MESSAGE };
 
   const parsed = changePasswordSchema.safeParse({ current: formData.get("current"), next: formData.get("next") });
   if (!parsed.success) return { errors: fieldErrors(parsed.error) };

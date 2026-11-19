@@ -92,6 +92,11 @@ export default async function AppointmentPage(props: PageProps<"/dashboard/turno
           {appointment.status === "canceled" &&
             ` · Cancelado por ${appointment.canceledBy === "customer" ? "el cliente" : "vos"}`}
         </p>
+        {appointment.status === "confirmed" && appointment.attendanceConfirmedAt && (
+          <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-3 py-1 text-sm font-medium">
+            <Check className="size-4 text-primary" aria-hidden="true" /> El cliente confirmó que va
+          </p>
+        )}
       </div>
 
       {canManageExisting && appointment.status !== "canceled" && (

@@ -107,6 +107,13 @@ model Organization {
   maxAdvanceDays          Int @default(60)
   cancellationNoticeHours Int @default(2)
 
+  // Demostración (docs/DEMO.md). Un negocio de demostración es ficticio y aislado: nunca envía avisos reales
+  // (salvo una demo SUPERVISADA, y solo a `demoAllowedRecipients`), no tiene facturación y se borra al vencer.
+  isDemo                Boolean   @default(false)
+  demoKind              String? // "public" | "supervised"
+  demoExpiresAt         DateTime?
+  demoAllowedRecipients String[]  @default([])
+
   // Recordatorios
   remindersEnabled     Boolean @default(true)
   reminderHoursBefore  Int     @default(24)
@@ -319,6 +326,8 @@ model Appointment {
   price                   Int?
   canceledAt              DateTime?
   canceledBy              String? // "professional" | "customer"
+  /// El cliente confirmó que va (por el enlace del turno o, más adelante, por WhatsApp).
+  attendanceConfirmedAt   DateTime?
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 

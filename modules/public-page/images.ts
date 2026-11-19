@@ -1,5 +1,6 @@
 import "server-only";
 
+import { DEMO_BLOCKED_MESSAGE } from "@/modules/demo/policy";
 import sharp from "sharp";
 import type { OrganizationImageKind } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -105,6 +106,11 @@ export async function processImage(kind: OrganizationImageKind, input: Uint8Arra
 }
 
 /** Logo y portada: una por negocio. Las fotos de profesionales tienen sus propias funciones. */
+async function isDemoOrganization(organizationId: string): Promise<boolean> {
+  const organization = await db.organization.findUnique({ where: { id: organizationId }, select: { isDemo: true } });
+  return Boolean(organization?.isDemo);
+}
+
 export type BusinessImageKind = Exclude<OrganizationImageKind, "professional">;
 
 export type SaveImageResult = { ok: true; id: string } | { ok: false; message: string };
@@ -119,6 +125,7 @@ export async function saveOrganizationImage(
   kind: BusinessImageKind,
   input: Uint8Array,
 ): Promise<SaveImageResult> {
+  if (await isDemoOrganization(organizationId)) return { ok: false, message: DEMO_BLOCKED_MESSAGE };
   const processed = await processImage(kind, input);
   if (!processed.ok) return processed;
 
@@ -145,6 +152,7 @@ export async function saveProfessionalPhoto(
   professionalId: string,
   input: Uint8Array,
 ): Promise<ProfessionalPhotoResult> {
+  if (await isDemoOrganization(organizationId)) return { ok: false, message: DEMO_BLOCKED_MESSAGE };
   const professional = await db.professional.findFirst({
     where: { id: professionalId, organizationId },
     select: { id: true },

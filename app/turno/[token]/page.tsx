@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ConfirmAttendance } from "@/components/booking/confirm-attendance";
 import { ManageAppointment } from "@/components/booking/manage-appointment";
 import { PublicShell } from "@/components/booking/public-shell";
 import { StatusBadge } from "@/components/appointments/status";
@@ -67,6 +68,11 @@ export default async function ManageAppointmentPage(props: PageProps<"/turno/[to
       </div>
 
       <div className="mt-6">
+        {upcoming && (
+          <div className="mb-4">
+            <ConfirmAttendance token={token} confirmed={Boolean(appointment.attendanceConfirmedAt)} />
+          </div>
+        )}
         {upcoming && withinDeadline ? (
           <ManageAppointment
             token={token}

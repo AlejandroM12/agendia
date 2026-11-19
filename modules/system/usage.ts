@@ -61,23 +61,23 @@ const emptyEmails = (): EmailUsage => ({ sent: 0, failed: 0, skipped: 0, pending
  */
 export async function getUsageByOrganization(range: UsageRange, limit = 100): Promise<OrganizationUsage[]> {
   const [professionals, appointments, statuses, types, invitations] = await Promise.all([
-    db.professional.groupBy({ by: ["organizationId"], where: { active: true }, _count: { _all: true } }),
+    db.professional.groupBy({ by: ["organizationId"], where: { active: true, organization: { isDemo: false } }, _count: { _all: true } }),
     db.appointment.groupBy({
       by: ["organizationId"],
-      where: { createdAt: { gte: range.from, lt: range.to } },
+      where: { createdAt: { gte: range.from, lt: range.to }, organization: { isDemo: false } },
       _count: { _all: true },
     }),
     db.$queryRaw<Array<{ organizationId: string; status: string; total: bigint; retried: bigint }>>`
       SELECT "organizationId", "status"::text AS "status", count(*) AS total,
              count(*) FILTER (WHERE "attempts" > 1) AS retried
       FROM "notifications"
-      WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to}
+      WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to} AND "organizationId" NOT IN (SELECT "id" FROM "organizations" WHERE "isDemo")
       GROUP BY "organizationId", "status"
     `,
     db.$queryRaw<Array<{ organizationId: string; type: string; total: bigint }>>`
       SELECT "organizationId", "type"::text AS "type", count(*) AS total
       FROM "notifications"
-      WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to} AND "status" IN ('sent', 'failed')
+      WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to} AND "status" IN ('sent', 'failed') AND "organizationId" NOT IN (SELECT "id" FROM "organizations" WHERE "isDemo")
       GROUP BY "organizationId", "type"
     `,
     db.invitation.groupBy({
@@ -146,7 +146,7 @@ export async function getEmailsByType(range: UsageRange): Promise<EmailTypeUsage
            count(*) FILTER (WHERE "status" = 'sent') AS sent,
            count(*) FILTER (WHERE "status" = 'failed') AS failed
     FROM "notifications"
-    WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to}
+    WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to} AND "organizationId" NOT IN (SELECT "id" FROM "organizations" WHERE "isDemo")
     GROUP BY 1 ORDER BY 2 DESC
   `;
   return rows.map((row) => ({
@@ -165,7 +165,7 @@ export async function getDailyEmailUsage(range: UsageRange): Promise<DailyEmailU
            count(*) FILTER (WHERE "status" = 'failed') AS failed,
            count(*) FILTER (WHERE "status" = 'skipped') AS skipped
     FROM "notifications"
-    WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to}
+    WHERE "createdAt" >= ${range.from} AND "createdAt" < ${range.to} AND "organizationId" NOT IN (SELECT "id" FROM "organizations" WHERE "isDemo")
     GROUP BY 1 ORDER BY 1
   `;
   return rows.map((row) => ({

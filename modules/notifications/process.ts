@@ -7,6 +7,7 @@ import { usesTeam } from "@/modules/team/eligibility";
 import { isEmailConfigured, sendEmail } from "./email";
 import { renderAccountNotice } from "./account-notices";
 import { renderAppointmentEmail } from "./templates";
+import { DEMO_SIMULATED_NOTE, demoDelivery } from "@/modules/demo/policy";
 
 const MAX_ATTEMPTS = 5;
 const LOCK_MINUTES = 5;
@@ -155,6 +156,14 @@ export async function processDueNotifications(limit = 25): Promise<ProcessSummar
     if (obsolete || !stillAllowed) {
       await db.notification.update({ where: { id }, data: { status: "canceled", lockedUntil: null } });
       summary.canceled++;
+      continue;
+    }
+
+    // Una demo no envía nada real: el aviso se registra como simulado y se ve en la vista previa. Solo una demo
+    // supervisada envía, y únicamente a los destinatarios autorizados expresamente.
+    if (organization.isDemo && demoDelivery(organization, notification.recipient) === "simulate") {
+      await db.notification.update({ where: { id }, data: { status: "sent", sentAt: new Date(), lastError: DEMO_SIMULATED_NOTE, lockedUntil: null } });
+      summary.sent++;
       continue;
     }
 

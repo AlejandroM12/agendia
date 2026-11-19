@@ -1,6 +1,7 @@
 import type { MembershipRole, Organization } from "@prisma/client";
 import { canPerformWriteActions } from "@/lib/organization-access";
 import { permissionsFor, resolveProfessionalPermissions, type Permission, type ProfessionalPermissions } from "@/lib/permissions";
+import { DEMO_REMOVED_PERMISSIONS } from "@/modules/demo/policy";
 
 export type AppContext = {
   user: { id: string; email: string; name: string; isPlatformAdmin: boolean };
@@ -55,7 +56,10 @@ export function composeContext(input: {
     canManageExisting: canPerformWriteActions(organization) || organization.status !== "suspended",
     membership: { id: membership.id, notifyBookings: membership.notifyBookings },
     professional: professional ? { id: professional.id, displayName: professional.displayName, active: professional.active } : null,
-    permissions: permissionsFor(membership.role, professionalConfig),
+    // Una demo nunca concede facturación ni invitaciones, ni siquiera a su «propietario».
+    permissions: organization.isDemo
+      ? new Set([...permissionsFor(membership.role, professionalConfig)].filter((permission) => !DEMO_REMOVED_PERMISSIONS.includes(permission)))
+      : permissionsFor(membership.role, professionalConfig),
     professionalConfig,
     restrictedProfessionalId: membership.role === "professional" ? (professional?.id ?? NO_PROFESSIONAL) : null,
     emailVerified: user.emailVerifiedAt !== null,

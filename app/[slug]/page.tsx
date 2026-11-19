@@ -19,6 +19,7 @@ export async function generateMetadata(props: PageProps<"/[slug]">): Promise<Met
   if (!found) return { title: "Página no encontrada", robots: { index: false } };
 
   const { organization, profile, images } = found;
+  if (organization.isDemo) return { title: "Demo — Reservá tu turno", robots: { index: false, follow: false } };
   const title = profile.specialty ? `${profile.name} · ${profile.specialty}` : profile.name;
   const description =
     profile.description ?? `Reservá tu turno online en ${profile.name}: elegí servicio, día y horario en un minuto.`;
@@ -59,5 +60,14 @@ export default async function PublicBookingPage(props: PageProps<"/[slug]">) {
 
   const team = bookable ? await loadPublicTeamView(organization) : undefined;
 
-  return <PublicPage profile={profile} images={images} services={services} team={team} bookable={bookable} />;
+  return (
+    <>
+      {organization.isDemo && (
+        <p role="status" className="bg-amber-100 px-4 py-2 text-center text-sm text-amber-950">
+          <strong>Demo:</strong> negocio ficticio. Podés reservar para probar: no se envía ningún mensaje real.
+        </p>
+      )}
+      <PublicPage profile={profile} images={images} services={services} team={team} bookable={bookable} />
+    </>
+  );
 }
