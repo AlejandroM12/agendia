@@ -112,7 +112,7 @@ afterEach(async () => {
   await ctx.cleanup();
 });
 
-const start = (tier: "profesional" | "equipo", extra: { keepIds?: string[] } = {}) =>
+const start = (tier: "profesional" | "equipo", extra: { keepIds?: string[]; timing?: "now" | "period_end" } = {}) =>
   startPlanChange({ organization: ctx.organization, userId: ctx.userId, tier, payerEmail: "pagador@example.com", ...extra });
 
 describe("contratar un plan", () => {
@@ -205,7 +205,7 @@ describe("contratar un plan", () => {
 describe("Profesional → Equipo", () => {
   it("el cambio queda pendiente: volver de la pantalla de pago o autorizar no da los cupos", async () => {
     const base = await paidProfessional();
-    const preview = await previewPlanChange(await org(), "equipo");
+    const preview = await previewPlanChange(await org(), "equipo", new Date(), "now");
     expect(preview).toMatchObject({
       kind: "upgrade",
       current: { name: "Plan Profesional", price: 9900, capacity: 2 },
@@ -214,7 +214,7 @@ describe("Profesional → Equipo", () => {
       effective: "al aprobarse el pago",
     });
 
-    expect((await start("equipo")).ok).toBe(true);
+    expect((await start("equipo", { timing: "now" })).ok).toBe(true);
     const pending = (await sub()).pendingProviderSubscriptionId!;
     expect(pending).toBeTruthy();
     authorize(pending);
@@ -230,7 +230,7 @@ describe("Profesional → Equipo", () => {
 
   it("con el primer cobro aprobado pasa a regir el Plan Equipo y se cancela el anterior, una sola vez", async () => {
     const base = await paidProfessional();
-    await start("equipo");
+    await start("equipo", { timing: "now" });
     const pending = (await sub()).pendingProviderSubscriptionId!;
     authorize(pending);
 
@@ -248,7 +248,7 @@ describe("Profesional → Equipo", () => {
 
   it("un cobro que llega antes de que la suscripción figure autorizada no cambia el plan", async () => {
     await paidProfessional();
-    await start("equipo");
+    await start("equipo", { timing: "now" });
     const pending = (await sub()).pendingProviderSubscriptionId!; // sigue "pending" en Mercado Pago
     await applyAuthorizedPayment(payment(pending, 19900));
     expect((await sub()).plan.code).toBe("mensual");
@@ -260,7 +260,7 @@ describe("Profesional → Equipo", () => {
 
   it("un cobro con importe del plan equivocado no promueve el cambio", async () => {
     await paidProfessional();
-    await start("equipo");
+    await start("equipo", { timing: "now" });
     const pending = (await sub()).pendingProviderSubscriptionId!;
     authorize(pending);
     await applyAuthorizedPayment(payment(pending, 9900));
@@ -269,7 +269,7 @@ describe("Profesional → Equipo", () => {
 
   it("si Mercado Pago no puede cancelar la anterior, queda marcada para reintentar y no se pierde", async () => {
     const base = await paidProfessional();
-    await start("equipo");
+    await start("equipo", { timing: "now" });
     const pending = (await sub()).pendingProviderSubscriptionId!;
     authorize(pending);
     const fetchMock = vi.mocked(fetch);
@@ -289,9 +289,9 @@ describe("Profesional → Equipo", () => {
 
   it("no hay dos cambios a la vez: pedir otro descarta (cancela) el anterior sin tocar lo vigente", async () => {
     const base = await paidProfessional();
-    await start("equipo");
+    await start("equipo", { timing: "now" });
     const first = (await sub()).pendingProviderSubscriptionId!;
-    await start("equipo");
+    await start("equipo", { timing: "now" });
     const second = (await sub()).pendingProviderSubscriptionId!;
     expect(second).not.toBe(first);
     expect(remote.get(first)!.status).toBe("cancelled");
@@ -307,7 +307,7 @@ describe("Profesional → Equipo", () => {
   it("no se vende si el precio contratable difiere del publicado", async () => {
     await db.plan.update({ where: { code: "equipo" }, data: { price: 15000 } });
     try {
-      expect(await start("equipo")).toMatchObject({ ok: false });
+      expect(await start("equipo", { timing: "now" })).toMatchObject({ ok: false });
       expect(calls.filter((call) => call.method === "POST")).toHaveLength(0);
     } finally {
       await db.plan.update({ where: { code: "equipo" }, data: { price: 19900 } });
@@ -403,7 +403,7 @@ describe("Equipo → Profesional", () => {
     await applyAuthorizedPayment(payment(pending, 9900));
     expect((await org()).capacityGraceStartedAt).not.toBeNull();
 
-    await start("equipo");
+    await start("equipo", { timing: "now" });
     const again = (await sub()).pendingProviderSubscriptionId!;
     authorize(again);
     await applyAuthorizedPayment(payment(again, 19900));
@@ -412,5 +412,36 @@ describe("Equipo → Profesional", () => {
     const organization = await org();
     expect(organization.capacityGraceStartedAt).toBeNull();
     expect(organization.capacityGraceEndsAt).toBeNull();
+  });
+});
+
+describe("Profesional → Equipo al terminar el período ya pago (recomendado)", () => {
+  it("no pierde lo abonado: la nueva empieza a cobrar al renovar, la anterior se cancela al autorizarla y los lugares llegan con el primer cobro", async () => {
+    const base = await paidProfessional();
+    const preview = await previewPlanChange(await org(), "equipo");
+    expect(preview).toMatchObject({ kind: "upgrade", amountToday: 0, effective: "al finalizar el período ya pago" });
+    expect(preview.effectiveAt).toBeInstanceOf(Date);
+
+    expect((await start("equipo")).ok).toBe(true);
+    const create = calls.find((call) => call.method === "POST" && call.path === "/preapproval")!;
+    expect((create.body!.auto_recurring as { start_date?: string }).start_date).toBeTruthy();
+    const pending = (await sub()).pendingProviderSubscriptionId!;
+    expect((await sub()).pendingEffectiveAt).not.toBeNull();
+
+    authorize(pending);
+    await applyPreapprovalState(await preapprovalOf(pending));
+    // Al autorizarse (todavía sin cobrar) se cancela la anterior, antes de su próximo cobro.
+    expect(remote.get(base)!.status).toBe("cancelled");
+    expect((await getProfessionalQuota(db, await org())).limit).toBe(2); // los 5 lugares todavía no
+
+    await applyAuthorizedPayment(payment(pending, 19900));
+    expect((await sub()).plan.code).toBe("equipo");
+    expect((await getProfessionalQuota(db, await org()))).toMatchObject({ limit: 5, tier: "equipo" });
+  });
+
+  it("«hoy» sigue disponible, cobra el Equipo ya y lo avisa", async () => {
+    await paidProfessional();
+    const now = await previewPlanChange(await org(), "equipo", new Date(), "now");
+    expect(now).toMatchObject({ amountToday: 19900, effective: "al aprobarse el pago", effectiveAt: null });
   });
 });

@@ -28,6 +28,23 @@ import { rankProfessionalsForCapacity, setKeepSelection } from "@/modules/team/c
 
 export type ChangeKind = "new" | "upgrade" | "downgrade" | "same";
 
+/**
+ * Cuándo rige el plan nuevo en un cambio. `period_end` (predeterminado y recomendado): al terminar el
+ * período ya pago, sin cobro adicional hoy y sin perder lo abonado. `now`: solo para Profesional → Equipo,
+ * cobra el Equipo completo desde hoy y lo ya pagado del Profesional NO se reintegra solo (docs/MERCADOPAGO.md §4).
+ */
+export type ChangeTiming = "period_end" | "now";
+
+export function isDeferredChange(
+  kind: ChangeKind,
+  timing: ChangeTiming,
+  subscription: Pick<Subscription, "currentPeriodEnd"> | null,
+  now: Date,
+): boolean {
+  if (kind === "downgrade") return true;
+  return kind === "upgrade" && timing === "period_end" && Boolean(subscription?.currentPeriodEnd && subscription.currentPeriodEnd > now);
+}
+
 type SubscriptionState = Pick<
   Subscription,
   "status" | "lastPaymentAt" | "currentPeriodEnd" | "pendingProviderSubscriptionId" | "pendingKind" | "pendingEffectiveAt" | "planId"
@@ -68,12 +85,13 @@ export async function previewPlanChange(
   organization: Pick<Organization, "id" | "status" | "extraProfessionals" | "teamModeEnabled">,
   target: PlanTier,
   now: Date = new Date(),
+  timing: ChangeTiming = "period_end",
 ): Promise<PlanChangePreview> {
   const subscription = await db.subscription.findUnique({ where: { organizationId: organization.id }, include: { plan: true } });
   const kind = changeKind(subscription, target);
   const capability = PLAN_CAPABILITIES[target];
   const currentTier = kind === "new" || !subscription ? null : planTierFromCode(subscription.plan.code);
-  const deferred = kind === "downgrade";
+  const deferred = isDeferredChange(kind, timing, subscription, now);
 
   let reduction: PlanChangePreview["reduction"] = null;
   if (kind === "downgrade") {
@@ -110,6 +128,8 @@ export async function startPlanChange(params: {
   payerEmail: string;
   /** Solo en una baja: profesionales que siguen recibiendo reservas. */
   keepIds?: string[];
+  /** Solo en Profesional → Equipo: ver `ChangeTiming`. Por defecto, al terminar el período ya pago. */
+  timing?: ChangeTiming;
   now?: Date;
 }): Promise<StartResult> {
   const { organization, tier } = params;
@@ -139,7 +159,8 @@ export async function startPlanChange(params: {
     );
   }
 
-  const startDate = kind === "downgrade" && subscription!.currentPeriodEnd! > now ? subscription!.currentPeriodEnd! : undefined;
+  const deferred = isDeferredChange(kind, params.timing ?? "period_end", subscription, now);
+  const startDate = deferred && subscription?.currentPeriodEnd && subscription.currentPeriodEnd > now ? subscription.currentPeriodEnd : undefined;
   let checkoutUrl: string;
   try {
     const preapproval = await createPreapproval({

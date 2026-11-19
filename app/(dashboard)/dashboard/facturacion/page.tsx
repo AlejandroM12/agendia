@@ -213,7 +213,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
         <div className="mt-6 rounded-2xl border border-border bg-card p-5" data-testid="pending-change">
           <p className="font-medium">Cambio a {subscription.pendingPlan.name} en curso</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {subscription.pendingKind === "downgrade" && subscription.pendingEffectiveAt
+            {subscription.pendingEffectiveAt
               ? `Pasa a regir el ${date(subscription.pendingEffectiveAt)}, cuando termina el período que ya pagaste.`
               : "Pasa a regir cuando Mercado Pago confirme el pago. Hasta entonces tu plan y tus lugares no cambian."}
           </p>

@@ -22,11 +22,13 @@ export default async function ChangePlanPage(props: PageProps<"/dashboard/factur
   if (isStandalone()) notFound();
   const { organization, user, canWrite } = await requirePagePermission("billing.manage");
 
-  const tier = parsePlanTier((await props.searchParams).plan);
+  const search = await props.searchParams;
+  const tier = parsePlanTier(search.plan);
+  const timing = search.cuando === "ahora" ? "now" : "period_end";
   if (!tier || (tier === "equipo" && !teamPlansAvailable())) notFound();
   if (!canWrite || !isMercadoPagoConfigured()) redirect("/dashboard/facturacion");
 
-  const preview = await previewPlanChange(organization, tier);
+  const preview = await previewPlanChange(organization, tier, new Date(), timing);
   if (preview.kind === "same") redirect("/dashboard/facturacion");
   const date = (d: Date) => formatDateLong(toZoned(d, organization.timezone).dateStr);
 
@@ -66,11 +68,28 @@ export default async function ChangePlanPage(props: PageProps<"/dashboard/factur
           </div>
         </dl>
 
-        {preview.kind === "upgrade" && (
+        {preview.kind === "upgrade" && preview.effectiveAt && (
+          <nav aria-label="Cuándo pasar al Plan Equipo" className="flex flex-wrap gap-2 text-sm" data-testid="timing">
+            <Link href="/dashboard/facturacion/cambiar?plan=equipo" aria-current={timing === "period_end" ? "page" : undefined} className={`rounded-full border px-3 py-1.5 ${timing === "period_end" ? "border-primary bg-accent font-medium" : "border-border"}`}>
+              Al terminar mi período (recomendado)
+            </Link>
+            <Link href="/dashboard/facturacion/cambiar?plan=equipo&cuando=ahora" aria-current={timing === "now" ? "page" : undefined} className={`rounded-full border px-3 py-1.5 ${timing === "now" ? "border-primary bg-accent font-medium" : "border-border"}`}>
+              Hoy
+            </Link>
+          </nav>
+        )}
+        {preview.kind === "upgrade" && preview.effectiveAt && (
           <p className="text-sm text-muted-foreground">
-            Se crea una suscripción nueva en Mercado Pago. Tus {preview.target.capacity} lugares se habilitan cuando el pago se confirma, no antes.
-            Cuando eso ocurra cancelamos tu suscripción anterior para que no se cobren las dos. Lo que ya pagaste del Plan Profesional este mes
-            no se reintegra automáticamente: escribinos a {brand.contactEmail} si querés revisarlo.
+            Se crea una suscripción nueva en Mercado Pago que empieza a cobrar el {date(preview.effectiveAt)}. Hasta ese día seguís con el Plan Profesional
+            que ya pagaste y, al autorizarla, cancelamos la anterior para que no se cobren las dos. Tus {preview.target.capacity} lugares se habilitan con el
+            primer cobro aprobado, no antes. No perdés nada de lo abonado.
+          </p>
+        )}
+        {preview.kind === "upgrade" && !preview.effectiveAt && (
+          <p className="text-sm text-muted-foreground">
+            Se crea una suscripción nueva en Mercado Pago. Tus {preview.target.capacity} lugares se habilitan cuando el pago se confirma, no antes. Cuando eso
+            ocurra cancelamos tu suscripción anterior para que no se cobren las dos. <strong>Lo que ya pagaste del Plan Profesional de este período no se
+            reintegra automáticamente</strong>: escribinos a {brand.contactEmail} si querés revisarlo.
           </p>
         )}
         {preview.kind === "new" && (
@@ -104,12 +123,13 @@ export default async function ChangePlanPage(props: PageProps<"/dashboard/factur
           tier={tier}
           defaultEmail={user.email}
           submitLabel={
-            preview.kind === "downgrade"
+            preview.kind === "downgrade" || preview.effectiveAt
               ? "Confirmar el cambio y autorizar en Mercado Pago"
               : `Continuar a Mercado Pago · ${formatMoney(preview.target.price)} por mes`
           }
           professionals={preview.reduction?.professionals}
           keepLimit={preview.reduction?.newLimit}
+          timing={preview.kind === "upgrade" ? timing : undefined}
         />
         <p className="text-sm">
           <Link href="/dashboard/facturacion" className="text-muted-foreground underline underline-offset-4">

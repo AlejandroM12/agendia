@@ -46,6 +46,7 @@ export async function startSubscriptionAction(_prev: ActionState, formData: Form
     tier,
     payerEmail: payerEmail.data,
     keepIds: formData.has("keepSelection") ? keepIds : undefined,
+    timing: formData.get("timing") === "now" ? "now" : "period_end",
   });
   if (!result.ok) return { message: result.message };
 

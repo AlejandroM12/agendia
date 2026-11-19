@@ -18,11 +18,13 @@ export function PlanChangeForm(props: {
   /** Solo al bajar de plan: quiénes siguen recibiendo reservas. */
   professionals?: Member[];
   keepLimit?: number;
+  timing?: "period_end" | "now";
 }) {
   const form = useForm(startSubscriptionAction);
   return (
     <form {...form.formProps} className="space-y-5">
       <input type="hidden" name="tier" value={props.tier} />
+      {props.timing && <input type="hidden" name="timing" value={props.timing} />}
       {props.professionals && (
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium">

@@ -115,9 +115,10 @@ export async function applyPreapprovalState(preapproval: Preapproval): Promise<A
         data: { pendingPlanId: null, pendingProviderSubscriptionId: null, pendingKind: null, pendingEffectiveAt: null },
       });
       await audit(subscription.organizationId, "subscription.change_discarded", subscription.id, { providerStatus: preapproval.status });
-    } else if (status === "active" && subscription.pendingKind === "downgrade") {
-      // Bajar de plan: la suscripción nueva ya está autorizada, así que la de mayor importe se
-      // cancela ahora (antes de su próximo cobro). El acceso ya pago sigue hasta fin de período.
+    } else if (status === "active" && (subscription.pendingKind === "downgrade" || subscription.pendingEffectiveAt !== null)) {
+      // Cambio diferido al fin del período (baja, o subida «al renovar»): la suscripción nueva ya está
+      // autorizada pero todavía no cobra, así que la anterior se cancela ahora (antes de su próximo
+      // cobro). El acceso ya pago sigue hasta fin de período y no hay doble cobro.
       await retireProviderSubscription(subscription.id, subscription.providerSubscriptionId);
     }
     return "applied";
