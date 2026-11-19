@@ -183,6 +183,50 @@ describe("conexión por negocio", () => {
     expect(created).not.toContain(TEMPLATES.booking_confirmation.name);
   });
 
+  it("si Meta rechaza una plantilla, el error dice cuál y el motivo exacto; las demás se crean igual y reintentar no duplica", async () => {
+    const t = await tenant();
+    await connectWhatsapp(t.organization.id);
+    const meta = fakeMeta();
+    const rejecting = vi.fn(async (input: unknown, init?: RequestInit) => {
+      const body = init?.body ? (JSON.parse(String(init.body)) as { name?: string }) : null;
+      if (init?.method === "POST" && String(input).endsWith("/message_templates") && body?.name === TEMPLATES.reminder.name) {
+        return new Response(
+          JSON.stringify({ error: { message: "Invalid parameter", code: 100, error_subcode: 2388293, error_user_title: "Demasiadas variables", error_user_msg: "Reducí el número de variables.", fbtrace_id: "ATRACE123" } }),
+          { status: 400 },
+        );
+      }
+      return meta.handler(input, init);
+    });
+    vi.stubGlobal("fetch", rejecting);
+    const result = await syncTemplates(t.organization.id);
+    expect(result.ok).toBe(false);
+    const message = result.ok ? "" : result.message;
+    expect(message).toContain(TEMPLATES.reminder.name);
+    expect(message).toContain("Demasiadas variables: Reducí el número de variables.");
+    expect(message).toMatch(/código 100, subcódigo 2388293, traza ATRACE123/);
+    expect(message).not.toContain(TEMPLATES.booking_confirmation.name);
+    expect(message).not.toMatch(/token-/);
+    // Las otras tres se crearon aunque una falló.
+    const created = () => meta.calls.filter((call) => call.method === "POST" && call.path.endsWith("/message_templates")).map((call) => call.body?.name);
+    expect(created()).toEqual(expect.arrayContaining([TEMPLATES.booking_confirmation.name, TEMPLATES.cancellation.name, TEMPLATES.reschedule.name]));
+    // Reintentar (ya sin rechazo) crea solo la que faltaba.
+    vi.stubGlobal("fetch", meta.handler);
+    const before = created().length;
+    expect((await syncTemplates(t.organization.id)).ok).toBe(true);
+    expect(created().slice(before)).toEqual([TEMPLATES.reminder.name]);
+    // Y una tercera vez no crea nada.
+    const after = created().length;
+    expect((await syncTemplates(t.organization.id)).ok).toBe(true);
+    expect(created()).toHaveLength(after);
+  });
+
+  it("los cuerpos de las plantillas respetan la proporción de variables que exige Meta (al menos 5 palabras de texto por variable; Meta rechazó 4 variables en ~10 palabras, código 100/2388293)", () => {
+    for (const kind of WHATSAPP_KINDS) {
+      const words = TEMPLATES[kind].body.replace(/\{\{\d\}\}/g, " ").split(/\s+/).filter(Boolean).length;
+      expect(words / 4, kind).toBeGreaterThanOrEqual(5);
+    }
+  });
+
   it("activar exige una conexión validada; desactivar siempre se puede; revocar borra las credenciales", async () => {
     const t = await tenant();
     await saveConnection(t.organization.id, { phoneNumberId: nextId(), wabaId: nextId(), accessToken: "t", appSecret: "s" });

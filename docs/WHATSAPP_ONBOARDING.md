@@ -59,6 +59,8 @@ WHATSAPP_ENCRYPTION_KEY=<salida de: openssl rand -base64 32>
 3. En Meta → WhatsApp → Configuración → **Webhook**: URL de devolución `https://agendia.atajolab.dev/api/webhooks/whatsapp`, token de verificación = el del paso anterior; suscribirse al campo **`messages`**.
 4. **Validar conexión**: Agendia consulta a Meta con las credenciales del negocio y registra el estado, el nombre verificado y la calidad.
 5. **Crear/sincronizar plantillas**: Agendia crea en la WABA las 4 plantillas (confirmación, recordatorio, cancelación, reprogramación; categoría utilidad, idioma `es_AR`). **Meta las aprueba**: suele tardar de minutos a horas; volver a sincronizar hasta que figuren *Aprobadas*.
+   - Meta rechaza plantillas con **demasiadas variables para su largo** (error 100/2388293). Las cuatro de Agendia ya llevan texto suficiente; si se cambia el texto, mantener esa proporción. Si Meta rechaza una, el panel indica **cuál** y el motivo exacto, y las demás se crean igual; volver a sincronizar solo crea las que faltan.
+   - **Desarrollo local**: los botones de enlace exigen una dirección https pública; definir `WHATSAPP_TEMPLATE_BASE_URL` (en producción se usa `APP_URL`).
 6. **Límites**: definir el **límite mensual de mensajes** (por defecto 300), los **números autorizados para pruebas** y los avisos que se envían.
 7. **Enviar prueba** a un número autorizado y comprobar que llegó (historial: *Enviado → Entregado → Leído*).
 8. **Activar**. Solo se deja activar con la conexión validada.

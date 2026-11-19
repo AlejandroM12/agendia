@@ -8,11 +8,13 @@ type Tenant = Awaited<ReturnType<typeof createSchedulableOrganization>>;
 let busy: Tenant;
 let quiet: Tenant;
 const range = monthRange();
+let nextDay = 0;
 
 async function appointmentWithNotifications(tenant: Tenant, notifications: Array<{ type: string; status: string; attempts: number }>) {
   const customer = await db.customer.create({ data: { organizationId: tenant.organization.id, name: `Uso ${uniqueSuffix()}` } });
   const professional = await db.professional.findFirstOrThrow({ where: { organizationId: tenant.organization.id } });
-  const startsAt = new Date(Date.now() + 86400000 * (2 + Math.floor(Math.random() * 20)));
+  // Un día distinto por turno: con un día al azar dos turnos del mismo profesional podían superponerse y la base lo rechaza (falla intermitente).
+  const startsAt = new Date(Date.now() + 86400000 * (2 + nextDay++));
   const appointment = await db.appointment.create({
     data: {
       organizationId: tenant.organization.id, professionalId: professional.id, serviceId: tenant.service.id, customerId: customer.id,

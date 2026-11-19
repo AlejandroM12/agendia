@@ -20,6 +20,7 @@ export class MetaError extends Error {
     message: string,
     /** Un reintento puede funcionar (límite de uso, caída de Meta); si no, el envío falla definitivamente. */
     readonly retryable: boolean,
+    readonly subcode: string | null = null,
   ) {
     super(message);
     this.name = "MetaError";
@@ -34,6 +35,17 @@ function classify(status: number, code: string | null): boolean {
   if (status === 429 || status >= 500) return true;
   if (code === "4" || code === "80007" || code === "130429" || code === "131056") return true; // límites de uso
   return false;
+}
+
+/** El motivo que da Meta (título y mensaje para el usuario, o el genérico) más los códigos y la traza para consultarla. Nunca incluye credenciales. */
+function describeMetaError(
+  status: number,
+  error: { code?: number | string; error_subcode?: number | string; message?: string; error_user_title?: string; error_user_msg?: string; error_data?: { details?: string }; fbtrace_id?: string } | undefined,
+): string {
+  const reason = [error?.error_user_title, error?.error_user_msg].filter(Boolean).join(": ") || error?.message || `Meta respondió ${status}`;
+  const detail = error?.error_data?.details ? ` (${error.error_data.details})` : "";
+  const ids = [error?.code !== undefined ? `código ${error.code}` : null, error?.error_subcode !== undefined ? `subcódigo ${error.error_subcode}` : null, error?.fbtrace_id ? `traza ${error.fbtrace_id}` : null].filter(Boolean);
+  return `${reason}${detail}${ids.length ? ` [${ids.join(", ")}]` : ""}`.slice(0, 600);
 }
 
 async function graph<T>(method: "GET" | "POST", path: string, token: string, body?: unknown): Promise<T> {
@@ -56,10 +68,13 @@ async function graph<T>(method: "GET" | "POST", path: string, token: string, bod
     json = null;
   }
   if (!response.ok) {
-    const error = (json as { error?: { code?: number | string; message?: string; error_data?: { details?: string } } } | null)?.error;
+    const error = (
+      json as {
+        error?: { code?: number | string; error_subcode?: number | string; message?: string; error_user_title?: string; error_user_msg?: string; error_data?: { details?: string }; fbtrace_id?: string };
+      } | null
+    )?.error;
     const code = error?.code !== undefined ? String(error.code) : null;
-    const detail = error?.error_data?.details ? ` (${error.error_data.details})` : "";
-    throw new MetaError(response.status, code, `${error?.message ?? `Meta respondió ${response.status}`}${detail}`.slice(0, 400), classify(response.status, code));
+    throw new MetaError(response.status, code, describeMetaError(response.status, error), classify(response.status, code), error?.error_subcode !== undefined ? String(error.error_subcode) : null);
   }
   return json as T;
 }

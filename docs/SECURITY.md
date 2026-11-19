@@ -121,4 +121,4 @@ Los riesgos de roles que seguían abiertos (`docs/MULTI_PROFESSIONAL.md` §10) q
 - **Consentimiento y baja**: solo se envía con consentimiento versionado; BAJA lo revoca y anula lo pendiente. Cancelar por WhatsApp requiere una segunda confirmación.
 - **Entrega**: cada aviso se envía a lo sumo una vez; un estado incierto no se reenvía; token vencido apaga la conexión.
 - **Demos**: la demo pública nunca envía WhatsApp real; la supervisada solo a números autorizados.
-
+- **Registros (logs)**: el token de verificación del webhook viaja en la URL del apretón de manos de Meta. La configuración de Caddy (`deploy/Caddyfile`) lo reemplaza por `REDACTED` en el registro de acceso (verificado con un contenedor de prueba). El servidor de desarrollo (`next dev`) sí lo escribe en su consola local.

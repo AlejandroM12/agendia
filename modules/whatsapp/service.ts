@@ -148,11 +148,17 @@ export async function syncTemplates(organizationId: string): Promise<{ ok: true;
     const { accessToken } = credentialsOf(connection);
     const remote = await listTemplates(accessToken, connection.wabaId);
     const created: WhatsappKind[] = [];
+    const failed: string[] = [];
     for (const kind of WHATSAPP_KINDS) {
       const exists = remote.some((template) => template.name === TEMPLATES[kind].name && template.language === connection.templateLanguage);
-      if (!exists) {
+      if (exists) continue; // idempotente: lo que ya está en Meta no se vuelve a crear
+      try {
         await createTemplate(accessToken, connection.wabaId, metaTemplateDefinition(kind, templateBaseUrl(), connection.templateLanguage));
         created.push(kind);
+      } catch (error) {
+        if (error instanceof MetaError && error.status === 401) throw error; // credenciales inválidas: no tiene sentido seguir
+        // Una plantilla que Meta rechaza no impide crear las demás: se informa cuál falló y por qué.
+        failed.push(`«${TEMPLATES[kind].name}»: ${error instanceof Error ? error.message : "error desconocido"}`);
       }
     }
     const refreshed = await listTemplates(accessToken, connection.wabaId);
@@ -161,6 +167,7 @@ export async function syncTemplates(organizationId: string): Promise<{ ok: true;
       templates[kind] = refreshed.find((template) => template.name === TEMPLATES[kind].name && template.language === connection.templateLanguage)?.status ?? "MISSING";
     }
     await db.whatsappConnection.update({ where: { organizationId }, data: { templatesStatus: templates } });
+    if (failed.length > 0) return { ok: false, message: `No se pudieron crear ${failed.length === 1 ? "la plantilla" : "las plantillas"} ${failed.join(" · ")}`.slice(0, 900) };
     return { ok: true, created, templates };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : "Error desconocido" };

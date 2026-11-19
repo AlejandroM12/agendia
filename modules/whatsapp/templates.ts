@@ -45,28 +45,28 @@ export const TEMPLATES: Record<WhatsappKind, TemplateDef> = {
   booking_confirmation: {
     kind: "booking_confirmation",
     name: "agendia_confirmacion_v1",
-    body: "Hola {{1}}, tu turno en {{2}} quedó confirmado: {{3}}, {{4}}.",
+    body: "Hola {{1}}, ¡gracias por reservar! Tu turno en {{2}} quedó confirmado para el servicio {{3}}, el {{4}}. Si necesitás hacer algún cambio, podés usar los botones de este mensaje.",
     example: ["Ana", "Barbería Don Lucho", "Corte clásico con Luciano", "martes 4 de noviembre, 10:30"],
     buttons: CONFIRM_BUTTONS,
   },
   reminder: {
     kind: "reminder",
     name: "agendia_recordatorio_v1",
-    body: "Hola {{1}}, te recordamos tu turno en {{2}}: {{3}}, {{4}}. ¿Venís?",
+    body: "Hola {{1}}, te escribimos de {{2}} para recordarte que tenés un turno reservado para el servicio {{3}}, el {{4}}. Por favor, confirmanos si vas a poder asistir.",
     example: ["Ana", "Barbería Don Lucho", "Corte clásico con Luciano", "martes 4 de noviembre, 10:30"],
     buttons: CONFIRM_BUTTONS,
   },
   cancellation: {
     kind: "cancellation",
     name: "agendia_cancelacion_v1",
-    body: "Hola {{1}}, tu turno en {{2}} ({{3}}, {{4}}) fue cancelado. Si querés, podés reservar otro.",
+    body: "Hola {{1}}, te avisamos que tu turno en {{2}} para el servicio {{3}}, que estaba reservado para el {{4}}, fue cancelado. Si querés, podés reservar un nuevo turno cuando quieras.",
     example: ["Ana", "Barbería Don Lucho", "Corte clásico", "martes 4 de noviembre, 10:30"],
     buttons: [{ type: "URL", text: "Reservar de nuevo", action: "manage", urlPath: "negocio" }],
   },
   reschedule: {
     kind: "reschedule",
     name: "agendia_reprogramacion_v1",
-    body: "Hola {{1}}, tu turno en {{2}} cambió de horario: {{3}}, {{4}}.",
+    body: "Hola {{1}}, te avisamos que el horario de tu turno en {{2}} para el servicio {{3}} cambió. Tu nuevo turno es el {{4}}. Si tenés algún inconveniente con el nuevo horario, podés gestionarlo desde este mensaje.",
     example: ["Ana", "Barbería Don Lucho", "Corte clásico con Luciano", "miércoles 5 de noviembre, 11:00"],
     buttons: [
       { type: "QUICK_REPLY", text: "Confirmo", action: "confirm", payloadPrefix: "c" },
