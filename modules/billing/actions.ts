@@ -8,6 +8,7 @@ import { requireContext } from "@/lib/dal";
 import { FORBIDDEN_MESSAGE } from "@/lib/permissions";
 import { type ActionState } from "@/lib/action-state";
 import { isStandalone } from "@/lib/deployment";
+import { canManageBilling } from "@/lib/organization-access";
 import { parsePlanTier } from "@/lib/plans";
 import { teamPlansAvailable } from "@/lib/features";
 import { cancelPreapproval, canPayOnline } from "./mercadopago";
@@ -26,6 +27,8 @@ export async function startSubscriptionAction(_prev: ActionState, formData: Form
   if (!context.permissions.has("billing.manage")) return { message: FORBIDDEN_MESSAGE };
   const { organization, user } = context;
   if (isStandalone()) return { message: "Esta instalación no usa suscripción." };
+  // Se valida en el servidor, no solo ocultando botones: una cuenta suspendida no contrata aunque invoque la acción.
+  if (!canManageBilling(organization)) return { message: "Tu cuenta está suspendida. Escribinos para resolverlo." };
   if (!canPayOnline(user.email)) {
     return { message: "El pago online todavía no está habilitado. Escribinos y activamos tu plan." };
   }

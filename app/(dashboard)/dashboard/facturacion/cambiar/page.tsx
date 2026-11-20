@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { requirePagePermission } from "@/lib/dal";
 import { brand, formatMoney } from "@/lib/brand";
 import { isStandalone } from "@/lib/deployment";
+import { canManageBilling } from "@/lib/organization-access";
 import { teamPlansAvailable } from "@/lib/features";
 import { parsePlanTier } from "@/lib/plans";
 import { formatDateLong, toZoned } from "@/lib/time";
@@ -20,13 +21,14 @@ export const metadata: Metadata = { title: "Confirmar plan" };
  */
 export default async function ChangePlanPage(props: PageProps<"/dashboard/facturacion/cambiar">) {
   if (isStandalone()) notFound();
-  const { organization, user, canWrite } = await requirePagePermission("billing.manage");
+  const { organization, user } = await requirePagePermission("billing.manage");
 
   const search = await props.searchParams;
   const tier = parsePlanTier(search.plan);
   const timing = search.cuando === "ahora" ? "now" : "period_end";
   if (!tier || (tier === "equipo" && !teamPlansAvailable())) notFound();
-  if (!canWrite || !canPayOnline(user.email)) redirect("/dashboard/facturacion");
+  // La contratación no depende del solo lectura (prueba vencida, bloqueo o baja): solo una cuenta suspendida no puede.
+  if (!canManageBilling(organization) || !canPayOnline(user.email)) redirect("/dashboard/facturacion");
 
   const preview = await previewPlanChange(organization, tier, new Date(), timing);
   if (preview.kind === "same") redirect("/dashboard/facturacion");

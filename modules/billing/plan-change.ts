@@ -3,6 +3,7 @@ import "server-only";
 import type { Organization, Subscription } from "@prisma/client";
 import { db } from "@/lib/db";
 import { brand } from "@/lib/brand";
+import { canManageBilling } from "@/lib/organization-access";
 import { PLAN_CAPABILITIES, planTierFromCode, type PlanTier } from "@/lib/plans";
 import { getSellablePlan } from "./catalog";
 import { cancelPreapproval, createPreapproval } from "./mercadopago";
@@ -134,7 +135,7 @@ export async function startPlanChange(params: {
 }): Promise<StartResult> {
   const { organization, tier } = params;
   const now = params.now ?? new Date();
-  if (organization.status === "suspended") return { ok: false, message: "Tu cuenta está suspendida. Escribinos para resolverlo." };
+  if (!canManageBilling(organization)) return { ok: false, message: "Tu cuenta está suspendida. Escribinos para resolverlo." };
 
   const sellable = await getSellablePlan(tier);
   if (!sellable.ok) return { ok: false, message: sellable.error };

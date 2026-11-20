@@ -56,6 +56,16 @@ export function canPerformWriteActions(
   );
 }
 
+/**
+ * Contratar, cambiar o cancelar un plan NO depende del modo de solo lectura: una prueba vencida, una cuenta
+ * bloqueada o una suscripción cancelada restringen las operaciones del negocio, nunca la salida de esa situación.
+ * Solo una cuenta suspendida (decisión de la plataforma) no puede contratar. Es la única regla: páginas y
+ * acciones la usan, para que no haya criterios distintos en cada lugar.
+ */
+export function canManageBilling(org: Pick<Organization, "status">): boolean {
+  return org.status !== OrganizationStatus.suspended;
+}
+
 export function daysRemainingInTrial(
   org: Pick<Organization, "status" | "trialEndsAt">,
 ): number {

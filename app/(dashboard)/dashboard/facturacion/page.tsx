@@ -12,7 +12,7 @@ import { requirePagePermission } from "@/lib/dal";
 import { brand, formatMoney, licenseTerms, offers, trialPolicy } from "@/lib/brand";
 import { isStandalone } from "@/lib/deployment";
 import { isTeamModeEnabled, teamPlansAvailable } from "@/lib/features";
-import { daysRemainingInTrial, getEffectiveStatus } from "@/lib/organization-access";
+import { canManageBilling, daysRemainingInTrial, getEffectiveStatus } from "@/lib/organization-access";
 import { PLAN_CAPABILITIES, planTierFromCode, type PlanTier } from "@/lib/plans";
 import { formatDateLong, toZoned } from "@/lib/time";
 import { getSellablePlan } from "@/modules/billing/catalog";
@@ -241,7 +241,7 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
                   <div className="mt-4">
                     {isCurrent ? (
                       <p className="text-sm font-medium text-primary">Tu plan actual</p>
-                    ) : !canWrite || status === "suspended" ? null : !paymentsReady || !sellable[tier] ? (
+                    ) : !canManageBilling(organization) ? null : !paymentsReady || !sellable[tier] ? (
                       contactBlock
                     ) : (
                       <ButtonLink href={`/dashboard/facturacion/cambiar?plan=${tier}`} variant={kind === "downgrade" ? "outline" : "default"}>
