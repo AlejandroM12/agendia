@@ -145,16 +145,19 @@ describe("contratar un plan", () => {
     expect((await getProfessionalQuota(db, await org())).limit).toBe(2);
   });
 
-  it("autorizar sin un cobro aprobado activa la cuenta pero NO los 5 cupos del Plan Equipo", async () => {
+  it("autorizar sin un cobro aprobado NO activa la cuenta ni los 5 cupos del Plan Equipo; el cobro aprobado sí", async () => {
     await start("equipo");
     const id = (await sub()).providerSubscriptionId!;
     authorize(id);
     expect(await applyPreapprovalState(await preapprovalOf(id))).toBe("applied");
 
-    expect((await org()).status).toBe("active");
+    expect((await org()).status).toBe("trial");
+    expect((await sub()).status).toBe("pending");
     expect((await getProfessionalQuota(db, await org())).limit).toBe(2);
 
     await applyAuthorizedPayment(payment(id, 19900));
+    expect((await org()).status).toBe("active");
+    expect((await sub()).status).toBe("active");
     expect((await getProfessionalQuota(db, await org()))).toMatchObject({ limit: 5, tier: "equipo" });
   });
 
@@ -193,6 +196,8 @@ describe("contratar un plan", () => {
     expect((await sub()).status).toBe("pending");
     authorize(id);
     for (let i = 0; i < 3; i++) await applyPreapprovalState(await preapprovalOf(id)); // eventos repetidos
+    expect((await sub()).status).toBe("pending"); // autorizada, pero todavía sin primer cobro verificado
+    await applyAuthorizedPayment(payment(id, 9900));
     expect((await sub()).status).toBe("active");
     await applyAuthorizedPayment(payment(id, 9900, "rejected"));
     expect((await org()).status).toBe("past_due");

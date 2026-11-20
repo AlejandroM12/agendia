@@ -451,6 +451,9 @@ model Subscription {
   providerSubscriptionId        String?            @unique
   currentPeriodEnd              DateTime?
   lastPaymentAt                 DateTime?
+  // Estado del último cobro consultado a Mercado Pago mientras no hay un primer cobro verificado («approved», «rejected»,
+  // «in_process»…): permite mostrar «pago pendiente» o «rechazado». Nulo al contratar y en suscripciones anteriores.
+  lastChargeStatus              String?
   // Cambio de plan en curso (modules/billing/plan-change.ts): el plan nuevo no
   // rige hasta que Mercado Pago confirma lo necesario (ver docs).
   pendingPlanId                 String?

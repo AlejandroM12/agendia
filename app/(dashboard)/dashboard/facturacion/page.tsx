@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check } from "lucide-react";
-import { CancelSubscriptionButton, DiscardChangeButton } from "@/components/billing/billing-actions";
+import { CancelSubscriptionButton, DiscardChangeButton, RefreshPaymentButton } from "@/components/billing/billing-actions";
 import { KeepSelectionForm } from "@/components/billing/plan-change-form";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Section } from "@/components/dashboard/section";
@@ -56,6 +56,9 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
   const returned = (await props.searchParams).retorno === "1";
   const date = (d: Date) => formatDateLong(toZoned(d, tz).dateStr);
   const live = isLiveSubscription(subscription) && status !== "suspended";
+  // Primer contrato todavía sin un cobro aprobado y verificado: no hay plan pago, y se explica por qué y qué se puede hacer.
+  const awaitingFirstPayment = Boolean(subscription && subscription.status === "pending" && subscription.providerSubscriptionId && !subscription.pendingProviderSubscriptionId);
+  const firstPaymentRejected = awaitingFirstPayment && subscription?.lastChargeStatus === "rejected";
   const currentTier: PlanTier | null = live ? planTierFromCode(subscription!.plan.code) : null;
   const showTeamPlan = teamPlansAvailable() || currentTier === "equipo";
   const teamEnabled = isTeamModeEnabled(organization) || showTeamPlan;
@@ -206,6 +209,35 @@ export default async function BillingPage(props: PageProps<"/dashboard/facturaci
             También podés <Link href="/dashboard/equipo" className="font-medium underline underline-offset-4">desactivar a alguien</Link> (hay que resolver antes
             sus turnos futuros){showTeamPlan && " o volver al Plan Equipo"}.
           </p>
+        </div>
+      )}
+
+      {awaitingFirstPayment && (
+        <div className="mt-6 rounded-2xl border border-border bg-card p-5" data-testid="first-payment">
+          <p className="font-medium">{firstPaymentRejected ? "No pudimos cobrar tu primer pago" : "Esperando la confirmación de tu primer pago"}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {firstPaymentRejected
+              ? "Mercado Pago rechazó el cobro. Tu plan todavía no se activó y tu cuenta sigue como estaba."
+              : "Tu plan se activa cuando Mercado Pago confirme el primer cobro: autorizar la suscripción no alcanza. Tu cuenta sigue como estaba hasta entonces y no perdés los días de prueba que te queden."}
+          </p>
+          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+            {!firstPaymentRejected && <li>Si ya pagaste, tocá «Verificar mi pago ahora»: puede demorar unos minutos en llegar.</li>}
+            <li>
+              Podés elegir el plan de nuevo (abajo), por ejemplo con otro medio de pago: reemplaza este intento y no se cobra dos veces.
+            </li>
+            <li>
+              O escribinos a{" "}
+              <a href={`mailto:${brand.contactEmail}?subject=${encodeURIComponent(`Pago de ${organization.name}`)}`} className="font-medium underline underline-offset-4">
+                {brand.contactEmail}
+              </a>
+              .
+            </li>
+          </ul>
+          {!firstPaymentRejected && canManageBilling(organization) && paymentsReady && (
+            <div className="mt-4">
+              <RefreshPaymentButton />
+            </div>
+          )}
         </div>
       )}
 

@@ -13,6 +13,8 @@ import { parsePlanTier } from "@/lib/plans";
 import { teamPlansAvailable } from "@/lib/features";
 import { cancelPreapproval, canPayOnline } from "./mercadopago";
 import { discardPendingChange, startPlanChange } from "./plan-change";
+import { reconcileOrganization } from "./subscriptions";
+import { rateLimit, TOO_MANY_ATTEMPTS } from "@/lib/rate-limit";
 import { applyPreapprovalState } from "./subscriptions";
 
 /**
@@ -88,6 +90,26 @@ export async function cancelSubscriptionAction(): Promise<ActionState> {
 
   revalidatePath("/dashboard", "layout");
   return { ok: true, message: "Suscripción cancelada." };
+}
+
+/**
+ * El propietario pide verificar ahora su pago (ya pagó y todavía no ve su plan). Consulta a Mercado Pago por la misma vía que el
+ * webhook y la conciliación, con límite de pedidos. Lo que cambia sale de la verificación, no de este pedido.
+ */
+export async function refreshPaymentStatusAction(): Promise<ActionState> {
+  const context = await requireContext();
+  if (!context.permissions.has("billing.manage")) return { message: FORBIDDEN_MESSAGE };
+  const { organization } = context;
+  if (!canManageBilling(organization)) return { message: "Tu cuenta está suspendida. Escribinos para resolverlo." };
+  if (!(await rateLimit(`payment-refresh:${organization.id}`, 6, 600)).allowed) return { message: TOO_MANY_ATTEMPTS };
+  try {
+    const { checked } = await reconcileOrganization(organization.id);
+    revalidatePath("/dashboard", "layout");
+    return { ok: true, message: checked ? "Listo, verificamos tu pago con Mercado Pago. Si ya está confirmado, tu plan se actualizó." : "No hay un pago para verificar." };
+  } catch (error) {
+    console.error("[billing] no se pudo verificar el pago", error);
+    return { message: "No pudimos consultar a Mercado Pago. Probá de nuevo en unos minutos." };
+  }
 }
 
 /** Descarta un cambio de plan pedido (sin tocar la suscripción vigente). */

@@ -127,6 +127,13 @@ export async function applyPreapprovalState(preapproval: Preapproval): Promise<A
     return "applied";
   }
 
+  // AUTORIZAR NO ES COBRAR. Una suscripción nueva (todavía sin un cobro aprobado y verificado) no da acceso a un plan pago ni
+  // cambia el estado de la cuenta: la prueba sigue como estaba (vigente o en solo lectura) hasta que `applyAuthorizedPayment`
+  // verifique el primer cobro. No se escribe nada: si un cobro verificado se aplica en paralelo, no se lo pisa.
+  if (subscription.lastPaymentAt === null && subscription.status === "pending" && (status === "active" || status === "paused")) {
+    return "applied";
+  }
+
   const nextPayment = preapproval.next_payment_date ? new Date(preapproval.next_payment_date) : null;
   const currentPeriodEnd =
     nextPayment && !Number.isNaN(nextPayment.getTime()) ? nextPayment : subscription.currentPeriodEnd;
@@ -329,7 +336,16 @@ export async function applyAuthorizedPayment(payment: AuthorizedPayment): Promis
   const preapprovalId = payment.preapproval_id;
   if (!preapprovalId) return;
 
-  await applyPreapprovalState(await getPreapproval(preapprovalId));
+  // Un cobro de una suscripción que no iniciamos nosotros se ignora SIN consultarla: Mercado Pago respondería 404 y el aviso
+  // fallaría y se reintentaría por horas.
+  const known = await db.subscription.findFirst({
+    where: { OR: [{ providerSubscriptionId: preapprovalId }, { pendingProviderSubscriptionId: preapprovalId }] },
+    select: { id: true },
+  });
+  if (!known) return;
+
+  const preapproval = await getPreapproval(preapprovalId);
+  await applyPreapprovalState(preapproval);
 
   const subscription = (await db.subscription.findFirst({
     where: { OR: [{ providerSubscriptionId: preapprovalId }, { pendingProviderSubscriptionId: preapprovalId }] },
@@ -343,6 +359,12 @@ export async function applyAuthorizedPayment(payment: AuthorizedPayment): Promis
     : { amount: subscription.contractedAmount, currency: subscription.contractedCurrency };
   const paymentStatus = payment.payment?.status;
 
+  // Antes del primer cobro verificado se recuerda cómo va (pendiente, rechazado…) para decírselo al propietario. Solo mientras
+  // no haya un cobro verificado: un aviso viejo o desordenado no pisa un estado posterior.
+  if (!isPending && paymentStatus && paymentStatus !== "approved" && subscription.lastPaymentAt === null) {
+    await db.subscription.updateMany({ where: { id: subscription.id, lastPaymentAt: null }, data: { lastChargeStatus: paymentStatus.slice(0, 40) } });
+  }
+
   if (paymentStatus === "approved") {
     if (!paymentAmountMatches(payment, expected)) {
       await audit(subscription.organizationId, "subscription.rejected_payment_amount", subscription.id, {
@@ -355,10 +377,14 @@ export async function applyAuthorizedPayment(payment: AuthorizedPayment): Promis
     if (isPending) {
       await promotePendingPlan(subscription.id, preapprovalId, new Date());
     } else {
-      await db.subscription.update({ where: { id: subscription.id }, data: { lastPaymentAt: new Date() } });
+      await db.subscription.update({ where: { id: subscription.id }, data: { lastPaymentAt: new Date(), lastChargeStatus: "approved" } });
+      // Con el cobro verificado, la autorización de Mercado Pago (que puede haber llegado antes) activa por fin la cuenta.
+      await applyPreapprovalState(preapproval);
       await syncCapacityGrace(subscription.organizationId);
     }
-  } else if (paymentStatus === "rejected" && !isPending && subscription.organization.status === "active") {
+  } else if (paymentStatus === "rejected" && !isPending && subscription.lastPaymentAt !== null && subscription.organization.status === "active") {
+    // Renovación rechazada de un cliente que YA pagó un período: se le da margen (en mora) como siempre. Un primer cobro
+    // rechazado no toca la cuenta: no había nada pago que proteger.
     await db.$transaction([
       db.subscription.update({ where: { id: subscription.id }, data: { status: "past_due" } }),
       db.organization.update({ where: { id: subscription.organizationId }, data: { status: "past_due" } }),
@@ -373,6 +399,48 @@ export async function applyAuthorizedPayment(payment: AuthorizedPayment): Promis
 async function hasVerifiedPaymentFor(subscriptionId: string): Promise<boolean> {
   const row = await db.subscription.findUnique({ where: { id: subscriptionId }, select: { lastPaymentAt: true } });
   return Boolean(row?.lastPaymentAt);
+}
+
+/**
+ * Revisa una suscripción contra Mercado Pago: su estado y los cobros cuyo aviso se perdió. Se consultan los cobros de la
+ * suscripción y cada uno APROBADO pasa por el mismo camino y las mismas verificaciones (importe, moneda, suscripción
+ * consultada) que el webhook. El resumen de cobros de la suscripción (`summarized`) no se usa para nada. La suscripción
+ * vigente solo se revisa mientras no tenga un cobro verificado, para no pisar `lastPaymentAt` en cada vuelta.
+ */
+async function reconcileOne(subscription: { id: string; providerSubscriptionId: string | null; pendingProviderSubscriptionId: string | null }): Promise<void> {
+  if (subscription.providerSubscriptionId) await applyPreapprovalState(await getPreapproval(subscription.providerSubscriptionId));
+  if (subscription.pendingProviderSubscriptionId) await applyPreapprovalState(await getPreapproval(subscription.pendingProviderSubscriptionId));
+  const toCheck: string[] = [];
+  if (subscription.pendingProviderSubscriptionId) toCheck.push(subscription.pendingProviderSubscriptionId);
+  if (subscription.providerSubscriptionId && !(await hasVerifiedPaymentFor(subscription.id))) toCheck.push(subscription.providerSubscriptionId);
+  for (const preapprovalId of toCheck) {
+    const charges = await searchAuthorizedPayments(preapprovalId);
+    for (const payment of charges) {
+      if (payment.payment?.status === "approved") await applyAuthorizedPayment({ ...payment, preapproval_id: payment.preapproval_id ?? preapprovalId });
+    }
+    // Sin un cobro aprobado se recuerda el último estado (pendiente, rechazado) para mostrarlo; lo aprobado ya pasó por arriba.
+    const last = charges.find((payment) => payment.payment?.status && payment.payment.status !== "approved");
+    if (last && !charges.some((payment) => payment.payment?.status === "approved")) {
+      await applyAuthorizedPayment({ ...last, preapproval_id: last.preapproval_id ?? preapprovalId });
+    }
+  }
+  // Marca la revisión aunque no haya habido cambios.
+  await db.subscription.update({ where: { id: subscription.id }, data: { updatedAt: new Date() } });
+}
+
+/**
+ * Verifica ahora, contra Mercado Pago, el pago de UNA organización (el propietario lo pide cuando ya pagó y todavía no ve su
+ * plan). Pasa por las mismas verificaciones que el webhook y la conciliación; no confía en nada del navegador.
+ */
+export async function reconcileOrganization(organizationId: string): Promise<{ checked: boolean }> {
+  if (!isMercadoPagoConfigured()) return { checked: false };
+  const subscription = await db.subscription.findUnique({
+    where: { organizationId },
+    select: { id: true, providerSubscriptionId: true, pendingProviderSubscriptionId: true },
+  });
+  if (!subscription || (!subscription.providerSubscriptionId && !subscription.pendingProviderSubscriptionId)) return { checked: false };
+  await reconcileOne(subscription);
+  return { checked: true };
 }
 
 /**
@@ -413,24 +481,7 @@ export async function reconcileSubscriptions(limit = 20): Promise<{ checked: num
   for (const subscription of stale) {
     result.checked++;
     try {
-      if (subscription.providerSubscriptionId) await applyPreapprovalState(await getPreapproval(subscription.providerSubscriptionId));
-      if (subscription.pendingProviderSubscriptionId) {
-        await applyPreapprovalState(await getPreapproval(subscription.pendingProviderSubscriptionId));
-      }
-      // Cobros cuyo aviso se perdió. Se consultan los cobros de la suscripción y cada uno APROBADO pasa por el mismo
-      // camino y las mismas verificaciones (importe, moneda, suscripción consultada) que el webhook. El resumen de
-      // cobros de la suscripción (`summarized`) sigue sin usarse para nada. La suscripción vigente solo se revisa
-      // mientras no tenga un cobro verificado, para no pisar `lastPaymentAt` en cada vuelta.
-      const toCheck: string[] = [];
-      if (subscription.pendingProviderSubscriptionId) toCheck.push(subscription.pendingProviderSubscriptionId);
-      if (subscription.providerSubscriptionId && !(await hasVerifiedPaymentFor(subscription.id))) toCheck.push(subscription.providerSubscriptionId);
-      for (const preapprovalId of toCheck) {
-        for (const payment of await searchAuthorizedPayments(preapprovalId)) {
-          if (payment.payment?.status === "approved") await applyAuthorizedPayment({ ...payment, preapproval_id: payment.preapproval_id ?? preapprovalId });
-        }
-      }
-      // Marca la revisión aunque no haya habido cambios.
-      await db.subscription.update({ where: { id: subscription.id }, data: { updatedAt: new Date() } });
+      await reconcileOne(subscription);
     } catch (error) {
       result.errors++;
       console.error("[billing] no se pudo reconciliar la suscripción", subscription.id, error);

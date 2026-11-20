@@ -239,7 +239,7 @@ describe("sin suscripciones duplicadas y sin activar antes del pago", () => {
     expect(preapprovalCreations()).toBe(0);
   });
 
-  it("desde el solo lectura la cuenta se reactiva solo cuando Mercado Pago confirma la autorización, y los lugares del Equipo solo con el cobro aprobado", async () => {
+  it("desde el solo lectura la cuenta se reactiva solo con el primer cobro aprobado y verificado, no con la autorización", async () => {
     vi.stubEnv("PUBLISH_TEAM_PLANS", "1");
     await READ_ONLY_STATES["prueba vencida (solo lectura)"]();
     await actAs("owner");
@@ -252,14 +252,14 @@ describe("sin suscripciones duplicadas y sin activar antes del pago", () => {
     await actAs("owner");
     expect((session.current as AppContext).canWrite).toBe(false);
 
-    // Mercado Pago autoriza: la cuenta vuelve a operar, con los lugares de la prueba hasta el primer cobro.
+    // Mercado Pago autoriza: autorizar NO es cobrar, la cuenta sigue en solo lectura.
     remote.get(id)!.status = "authorized";
     await applyPreapprovalState(await getPreapproval(id));
-    expect((await refreshOrganization(ctx.organization.id)).status).toBe("active");
-    expect((await getProfessionalQuota(db, await refreshOrganization(ctx.organization.id))).limit).toBe(2);
+    expect((await refreshOrganization(ctx.organization.id)).status).toBe("trial_readonly");
 
-    // Un cobro aprobado por el importe del plan habilita los 5 lugares del Equipo.
+    // Un cobro aprobado por el importe del plan reactiva la cuenta y habilita los 5 lugares del Equipo.
     await applyAuthorizedPayment({ id: "pay-1", preapproval_id: id, transaction_amount: 19900, currency_id: "ARS", payment: { id: 1, status: "approved" } } as never);
+    expect((await refreshOrganization(ctx.organization.id)).status).toBe("active");
     expect(await getProfessionalQuota(db, await refreshOrganization(ctx.organization.id))).toMatchObject({ limit: 5, tier: "equipo" });
     await actAs("owner");
     expect((session.current as AppContext).canWrite).toBe(true);

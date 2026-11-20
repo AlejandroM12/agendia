@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppContext } from "@/lib/dal";
 import { db } from "@/lib/db";
+import { ensurePlan } from "@/modules/billing/catalog";
 import { createSchedulableOrganization, fakeContext, refreshOrganization } from "./helpers";
 
 /**
@@ -154,5 +155,49 @@ describe("/dashboard/facturacion/cambiar", () => {
     expect(await run(() => open("gratis"))).toBe("NOT_FOUND");
     vi.stubEnv("PUBLISH_TEAM_PLANS", "");
     expect(await run(() => open("equipo"))).toBe("NOT_FOUND");
+  });
+});
+
+describe("/dashboard/facturacion: primer pago pendiente o rechazado", () => {
+  async function contracted(extra: Record<string, unknown> = {}) {
+    const plan = await ensurePlan("profesional");
+    await db.subscription.create({
+      data: { organizationId: ctx.organization.id, planId: plan.id, status: "pending", providerSubscriptionId: `pre-${Date.now()}`, contractedAmount: plan.price, contractedCurrency: "ARS", ...extra },
+    });
+  }
+  afterEach(async () => {
+    await db.subscription.deleteMany({ where: { organizationId: ctx.organization.id } });
+  });
+
+  it("autorizada sin primer cobro: explica que el plan no se activó, ofrece verificar el pago y elegir de nuevo, y la cuenta sigue como estaba", async () => {
+    await READ_ONLY["prueba vencida"]();
+    await contracted();
+    await actAs("owner");
+    const page = await html();
+    expect(page).toContain("first-payment");
+    expect(page).toContain("Esperando la confirmación de tu primer pago");
+    expect(page).toContain("Verificar mi pago ahora");
+    expect(page).toContain("/dashboard/facturacion/cambiar?plan=profesional"); // alternativa: elegir de nuevo, sin duplicar
+    expect(page).toContain("Tu prueba gratuita terminó");
+    expect(page).not.toContain("Plan activo");
+  });
+
+  it("primer cobro rechazado: lo dice y ofrece las alternativas, sin botón de verificar", async () => {
+    await contracted({ lastChargeStatus: "rejected" });
+    await actAs("owner");
+    const page = await html();
+    expect(page).toContain("No pudimos cobrar tu primer pago");
+    expect(page).not.toContain("Verificar mi pago ahora");
+    expect(page).toContain("/dashboard/facturacion/cambiar?plan=profesional");
+    expect(page).toContain("mailto:");
+  });
+
+  it("con el plan ya cobrado no aparece ningún aviso de primer pago", async () => {
+    await contracted({ status: "active", lastPaymentAt: new Date(), currentPeriodEnd: new Date(Date.now() + 20 * DAY) });
+    await setStatus({ status: "active" });
+    await actAs("owner");
+    const page = await html();
+    expect(page).not.toContain("first-payment");
+    expect(page).toContain("Plan activo");
   });
 });

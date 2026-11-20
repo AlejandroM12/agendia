@@ -185,6 +185,7 @@ export async function startPlanChange(params: {
           providerSubscriptionId: preapproval.id,
           canceledAt: null,
           lastPaymentAt: null,
+          lastChargeStatus: null,
           contractedAmount: plan.price,
           contractedCurrency: plan.currency,
           pendingPlanId: null,

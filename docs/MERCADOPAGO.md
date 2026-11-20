@@ -94,7 +94,7 @@ Consultada en los sitios de desarrolladores de Mercado Pago (Argentina y regiona
 4. Variables locales (no versionadas): `MERCADOPAGO_ACCESS_TOKEN=TEST-…`, `MERCADOPAGO_WEBHOOK_SECRET=…`, `PUBLISH_TEAM_PLANS=1`, `APP_URL`/`AUTH_URL` con la URL pública del túnel.
 5. Preparar los datos: `npm run demo:seed` (negocios ficticios) o registrar una cuenta nueva.
 
-**1. Contratar el Plan Profesional.** «Mi plan» → Plan Profesional → autorizar con el comprador de prueba. Comprobar: suscripción `pending` → `authorized`; `contractedAmount = 9900`; primer cobro; `lastPaymentAt`; la cuenta pasa a activa; un `payment_events` por aviso, todos procesados; `/admin/negocios/<id>` sin discrepancias.
+**1. Contratar el Plan Profesional.** «Mi plan» → Plan Profesional → autorizar con el comprador de prueba. Comprobar: suscripción `pending` → `authorized`; `contractedAmount = 9900`; **autorizar no activa la cuenta (D-68)**; con el primer cobro aprobado queda `lastPaymentAt` y **recién ahí** la cuenta pasa a activa; un `payment_events` por aviso, todos procesados; `/admin/negocios/<id>` sin discrepancias.
 **2. Contratar el Plan Equipo** (otra cuenta): ídem con 19.900 y confirmar que los 5 lugares aparecen **solo** tras el cobro aprobado (autorizar sin cobro no los da).
 **3. Profesional → Equipo «al terminar mi período»:** que la suscripción nueva tenga `start_date` correcto, que al autorizarla se cancele la anterior, que **nunca haya dos cobros activos** y que el primer cobro habilite los 5 lugares.
 **4. Profesional → Equipo «hoy»:** cobro inmediato, baja de la anterior (forzar un fallo de la baja y comprobar el reintento del worker).
@@ -109,3 +109,9 @@ Consultada en los sitios de desarrolladores de Mercado Pago (Argentina y regiona
 
 **Criterio de salida:** los puntos 1–11 sin cobros duplicados, sin lugares habilitados sin cobro, con importes verificados y sin eventos sin procesar. Hasta entonces: **bloqueo comercial** («no cobrar»).
 Detalle histórico del checklist: `docs/PRODUCTION_READINESS.md` §6.
+
+## Regla del primer cobro (D-68)
+- **Autorizar ≠ cobrar.** La suscripción nueva queda `pending` hasta un primer cobro aprobado y verificado (importe y moneda contra lo contratado, suscripción y organización consultadas a la API). Antes de eso la cuenta no cambia: prueba vigente (con sus días) o solo lectura.
+- **Qué se ve:** «Mi plan» muestra «Esperando la confirmación de tu primer pago» o «No pudimos cobrar tu primer pago» y las alternativas (verificar el pago ahora, elegir de nuevo —reemplaza el intento anterior, sin duplicar— o escribirnos).
+- **Quien ya pagó un período** conserva las renovaciones, la gracia por cobro rechazado, las cancelaciones con período pago y los cambios de plan.
+- **Migración**: `20261122000000_subscription_charge_status` (aditiva: columna `subscriptions.lastChargeStatus`).

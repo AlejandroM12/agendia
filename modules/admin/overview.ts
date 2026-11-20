@@ -65,7 +65,7 @@ export async function getOrganizationAdminView(organizationId: string, now = new
   const billingNeeded: string[] = [];
   if (!subscription && status === "trial") billingNeeded.push("Todavía no contrató: está en prueba.");
   if (!subscription && status !== "trial" && status !== "active") billingNeeded.push("Sin suscripción: necesita elegir un plan.");
-  if (subscription?.status === "pending") billingNeeded.push("Suscripción pendiente de autorización en Mercado Pago.");
+  if (subscription?.status === "pending") billingNeeded.push("Suscripción sin primer cobro verificado: pendiente de autorización o de pago en Mercado Pago (la cuenta no cambió).");
   if (subscription?.status === "past_due" || status === "past_due") billingNeeded.push("Cobro rechazado o suscripción pausada.");
   if (subscription?.pendingPlan) billingNeeded.push(`Cambio a ${subscription.pendingPlan.name} sin confirmar el pago.`);
   if (subscription?.retiredProviderSubscriptionId) billingNeeded.push("Hay una suscripción anterior por cancelar en Mercado Pago.");

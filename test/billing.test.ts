@@ -45,6 +45,8 @@ describe("suscripciones", () => {
 
   const organization = () => db.organization.findUniqueOrThrow({ where: { id: ctx.organization.id } });
   const subscription = () => db.subscription.findUniqueOrThrow({ where: { organizationId: ctx.organization.id } });
+  /** Simula que el primer cobro ya fue aprobado y verificado (eso se prueba en test/first-payment.test.ts). */
+  const firstPaymentVerified = () => db.subscription.update({ where: { organizationId: ctx.organization.id }, data: { lastPaymentAt: new Date() } });
 
   function webhookRequest(body: Record<string, unknown>, options: { signature?: string } = {}) {
     const requestId = "req-test";
@@ -79,7 +81,19 @@ describe("suscripciones", () => {
     await ctx.cleanup();
   });
 
-  it("una suscripción autorizada activa la cuenta; aplicarla dos veces no cambia nada", async () => {
+  it("una suscripción autorizada pero sin primer cobro verificado NO activa la cuenta", async () => {
+    const next = new Date(Date.now() + 30 * 24 * 3600000).toISOString();
+    const preapproval = { id: preapprovalId, status: "authorized", external_reference: ctx.organization.id, next_payment_date: next };
+
+    expect(await applyPreapprovalState(preapproval)).toBe("applied");
+    expect(await applyPreapprovalState(preapproval)).toBe("applied");
+
+    expect((await organization()).status).toBe("trial");
+    expect(await subscription()).toMatchObject({ status: "pending", currentPeriodEnd: null, lastPaymentAt: null });
+  });
+
+  it("con el primer cobro verificado, la autorización activa la cuenta; aplicarla dos veces no cambia nada", async () => {
+    await firstPaymentVerified();
     const next = new Date(Date.now() + 30 * 24 * 3600000).toISOString();
     const preapproval = { id: preapprovalId, status: "authorized", external_reference: ctx.organization.id, next_payment_date: next };
 
@@ -100,6 +114,7 @@ describe("suscripciones", () => {
 
   it("al cancelar se respeta el período ya pago; vencido ese período la cuenta queda cancelada", async () => {
     const future = new Date(Date.now() + 10 * 24 * 3600000).toISOString();
+    await firstPaymentVerified();
     await applyPreapprovalState({ id: preapprovalId, status: "authorized", next_payment_date: future });
     await applyPreapprovalState({ id: preapprovalId, status: "cancelled", next_payment_date: future });
 
@@ -132,6 +147,7 @@ describe("suscripciones", () => {
   });
 
   it("webhook: activa con el estado consultado a la API (no con el cuerpo) y es idempotente", async () => {
+    await firstPaymentVerified();
     const eventId = `evt-${preapprovalId}`;
     eventIds.push(eventId);
     const fetchSpy = mpFetch({ id: preapprovalId, status: "authorized", external_reference: ctx.organization.id });
@@ -166,6 +182,7 @@ describe("suscripciones", () => {
     expect((await organization()).status).toBe("trial");
 
     // El reintento de Mercado Pago, ya con la API disponible, lo procesa.
+    await firstPaymentVerified();
     vi.stubGlobal("fetch", mpFetch({ id: preapprovalId, status: "authorized" }));
     const retried = await webhook(webhookRequest(body));
     expect(retried.status).toBe(200);
