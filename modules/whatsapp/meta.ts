@@ -108,11 +108,30 @@ export const createTemplate = (token: string, wabaId: string, definition: Record
 
 export type SendResult = { messageId: string };
 
-async function sendMessage(token: string, phoneNumberId: string, payload: Record<string, unknown>): Promise<SendResult> {
+/**
+ * Formato del destinatario que se le entrega a Meta. Internamente los números argentinos son `549…` (móvil, como pide
+ * wa.me); la lista de destinatarios del número de PRUEBA de Meta, en cambio, guarda `54…` sin el 9 y rechaza `549…`
+ * con el error 131030 (confirmado con envíos reales: 543705204454 sale bien y 5493705204454 no, mismo token y número).
+ * - `e164`: tal cual (por defecto; es lo que usan los números reales de producción).
+ * - `ar-without-9`: solo los móviles argentinos `549` + 10 dígitos pasan a `54` + 10 dígitos; el resto no se toca.
+ */
+export type RecipientFormat = "e164" | "ar-without-9";
+
+/** `WHATSAPP_AR_RECIPIENT_FORMAT=ar-without-9` para las líneas que lo necesiten; cualquier otro valor deja el número como está. */
+export const recipientFormat = (): RecipientFormat => (process.env.WHATSAPP_AR_RECIPIENT_FORMAT === "ar-without-9" ? "ar-without-9" : "e164");
+
+export function toCloudRecipient(to: string, format: RecipientFormat): string {
+  if (format !== "ar-without-9") return to;
+  const match = /^549(\d{10})$/.exec(to);
+  return match ? `54${match[1]}` : to;
+}
+
+async function sendMessage(token: string, phoneNumberId: string, payload: Record<string, unknown>, format: RecipientFormat = recipientFormat()): Promise<SendResult> {
   const result = await graph<{ messages?: Array<{ id: string }> }>("POST", `/${encodeURIComponent(phoneNumberId)}/messages`, token, {
     messaging_product: "whatsapp",
     recipient_type: "individual",
     ...payload,
+    to: toCloudRecipient(String(payload.to), format),
   });
   const id = result.messages?.[0]?.id;
   if (!id) throw new MetaError(200, null, "Meta no devolvió el identificador del mensaje.", false);
@@ -121,24 +140,29 @@ async function sendMessage(token: string, phoneNumberId: string, payload: Record
 
 export type TemplateComponent = { type: "body" | "button"; sub_type?: "quick_reply" | "url"; index?: string; parameters: Array<{ type: "text"; text: string } | { type: "payload"; payload: string }> };
 
-export const sendTemplate = (token: string, phoneNumberId: string, to: string, name: string, language: string, components: TemplateComponent[]) =>
-  sendMessage(token, phoneNumberId, { to, type: "template", template: { name, language: { code: language }, components } });
+export const sendTemplate = (token: string, phoneNumberId: string, to: string, name: string, language: string, components: TemplateComponent[], format?: RecipientFormat) =>
+  sendMessage(token, phoneNumberId, { to, type: "template", template: { name, language: { code: language }, components } }, format);
 
 /** Mensaje de texto libre: solo dentro de las 24 h posteriores a una respuesta del destinatario. */
-export const sendText = (token: string, phoneNumberId: string, to: string, text: string) =>
-  sendMessage(token, phoneNumberId, { to, type: "text", text: { body: text.slice(0, 1000), preview_url: false } });
+export const sendText = (token: string, phoneNumberId: string, to: string, text: string, format?: RecipientFormat) =>
+  sendMessage(token, phoneNumberId, { to, type: "text", text: { body: text.slice(0, 1000), preview_url: false } }, format);
 
 /** Mensaje con botones de respuesta (también dentro de las 24 h): se usa para confirmar una cancelación. */
-export const sendButtons = (token: string, phoneNumberId: string, to: string, text: string, buttons: Array<{ id: string; title: string }>) =>
-  sendMessage(token, phoneNumberId, {
-    to,
-    type: "interactive",
-    interactive: {
-      type: "button",
-      body: { text: text.slice(0, 1000) },
-      action: { buttons: buttons.slice(0, 3).map((button) => ({ type: "reply", reply: { id: button.id.slice(0, 256), title: button.title.slice(0, 20) } })) },
+export const sendButtons = (token: string, phoneNumberId: string, to: string, text: string, buttons: Array<{ id: string; title: string }>, format?: RecipientFormat) =>
+  sendMessage(
+    token,
+    phoneNumberId,
+    {
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: text.slice(0, 1000) },
+        action: { buttons: buttons.slice(0, 3).map((button) => ({ type: "reply", reply: { id: button.id.slice(0, 256), title: button.title.slice(0, 20) } })) },
+      },
     },
-  });
+    format,
+  );
 
 /**
  * Firma del webhook: `X-Hub-Signature-256: sha256=<hex>` = HMAC-SHA256 del cuerpo CRUDO con el secreto de la aplicación

@@ -106,6 +106,17 @@ export function toWhatsAppNumber(raw: string | null | undefined, defaultCallingC
   return { ok: true, digits: full };
 }
 
+/**
+ * Número tal como lo informa Meta en un mensaje ENTRANTE → formato interno (`549…`). Meta puede informar un móvil
+ * argentino con o sin el 9 (`54` + 10 dígitos o `549` + 10 dígitos): se unifica para poder compararlo con el teléfono del
+ * turno, la baja y el consentimiento, que se guardan como `549…`. El resto de los números no se toca.
+ */
+export function canonicalInboundNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  const match = /^54([1-9]\d{9})$/.exec(digits);
+  return match ? `549${match[1]}` : digits;
+}
+
 /** Enlace wa.me con el texto ya escrito: se abre el chat y la persona revisa y envía el mensaje. */
 export function whatsAppUrl(digits: string, text: string): string {
   return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;

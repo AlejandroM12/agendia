@@ -45,3 +45,12 @@ El recordatorio se programa `reminderHoursBefore` horas antes del turno (por def
 - «Desactivar» la conexión y, si ya no se usa, «Revocar credenciales» en el panel.
 - Revocar el token en Meta si fue expuesto en algún lado.
 - Volcar los resultados (qué llegó, tiempos y errores) en `docs/WHATSAPP_ONBOARDING.md` §6 antes de tocar producción.
+
+## Formato del destinatario argentino con el número de prueba de Meta
+
+La lista de destinatarios del número de prueba de Meta guarda los móviles argentinos sin el 9 (`543705204454`) y rechaza `5493705204454` con el error 131030. Agendia guarda y compara siempre `549…`; solo al llamar a Meta adapta el destinatario:
+
+- **Envío manual de prueba:** siempre sin el 9.
+- **Avisos automáticos y respuestas:** sin el 9 únicamente si el negocio es una **demo supervisada** y el número que Meta informó al validar la conexión es de prueba (`+1 555…`). Un negocio real, o una demo con un número propio, conserva `549…`.
+- **Mensajes entrantes:** un móvil argentino llega con o sin el 9 y se unifica a `549…` para reconocer el turno, la baja y el consentimiento.
+- `WHATSAPP_AR_RECIPIENT_FORMAT=ar-without-9` fuerza el formato para todos los envíos; no hace falta para la demo.

@@ -5,7 +5,7 @@ import { brand } from "@/lib/brand";
 import { db } from "@/lib/db";
 import { formatDateTime } from "@/lib/time";
 import { decryptCredentials, encryptCredentials, hintOf, newVerifyToken, sha256Hex, type WhatsappCredentials } from "./crypto";
-import { MetaError, createTemplate, getPhoneNumber, listTemplates, sendButtons, sendTemplate, sendText } from "./meta";
+import { MetaError, type RecipientFormat, createTemplate, getPhoneNumber, listTemplates, sendButtons, sendTemplate, sendText } from "./meta";
 import { hasActiveConsent } from "./consent";
 import { TEMPLATES, TEMPLATE_LANGUAGE, WHATSAPP_KINDS, metaTemplateDefinition, templateComponents, whatsappKindOf, type WhatsappKind } from "./templates";
 
@@ -281,7 +281,7 @@ export async function deliverNotification(params: DeliverParams): Promise<Delive
       },
       { appointmentToken: appointment.manageToken, organizationSlug: organization.slug },
     );
-    const sent = await sendTemplate(accessToken, connection.phoneNumberId, phone, TEMPLATES[kind].name, connection.templateLanguage, components);
+    const sent = await sendTemplate(accessToken, connection.phoneNumberId, phone, TEMPLATES[kind].name, connection.templateLanguage, components, recipientFormatFor(connection, organization));
     await db.whatsappMessage.update({ where: { id: row.id }, data: { status: "sent", providerMessageId: sent.messageId } });
     return { kind: "sent" };
   } catch (error) {
@@ -303,15 +303,36 @@ export async function sendSessionReply(
 ): Promise<void> {
   const connection = await getConnection(organizationId);
   if (!connection?.credentials || !connection.phoneNumberId) return;
+  const organization = await db.organization.findUnique({ where: { id: organizationId }, select: { isDemo: true, demoKind: true } });
+  const format = organization ? recipientFormatFor(connection, organization) : undefined;
   const row = await db.whatsappMessage.create({ data: { organizationId, appointmentId: params.appointmentId ?? null, direction: "outbound", kind: "reply", phone: params.to, status: "sending" } });
   try {
     const { accessToken } = credentialsOf(connection);
-    const sent = params.buttons ? await sendButtons(accessToken, connection.phoneNumberId, params.to, params.text, params.buttons) : await sendText(accessToken, connection.phoneNumberId, params.to, params.text);
+    const sent = params.buttons ? await sendButtons(accessToken, connection.phoneNumberId, params.to, params.text, params.buttons, format) : await sendText(accessToken, connection.phoneNumberId, params.to, params.text, format);
     await db.whatsappMessage.update({ where: { id: row.id }, data: { status: "sent", providerMessageId: sent.messageId } });
   } catch (error) {
     await db.whatsappMessage.update({ where: { id: row.id }, data: { status: "failed", errorCode: error instanceof MetaError ? error.code : null, errorMessage: (error instanceof Error ? error.message : "Error").slice(0, 300) } });
   }
 }
+
+/** Los destinatarios de prueba son los que autorizó Meta para su número de prueba: ahí el móvil argentino va sin el 9. */
+const TEST_RECIPIENT_FORMAT: RecipientFormat = "ar-without-9";
+
+/** Los números de prueba que entrega Meta son estadounidenses ficticios: +1 555 xxx xxxx. */
+const META_TEST_NUMBER = /^1555\d{7}$/;
+
+/**
+ * ¿Esta conexión usa el número de PRUEBA de Meta? Solo entonces los destinatarios se entregan en el formato de su lista
+ * autorizada. Se exige TODO junto: demo supervisada (nunca un negocio real) y que el número que Meta informó al validar la
+ * conexión sea de prueba; una demo con un número propio, o cualquier negocio real, conserva el formato predeterminado.
+ */
+export function usesMetaTestNumber(connection: { displayPhone: string | null }, organization: { isDemo: boolean; demoKind: string | null }): boolean {
+  return organization.isDemo && organization.demoKind === "supervised" && META_TEST_NUMBER.test((connection.displayPhone ?? "").replace(/\D/g, ""));
+}
+
+/** Formato del destinatario para esta conexión; `undefined` deja el predeterminado (e164, o el de WHATSAPP_AR_RECIPIENT_FORMAT). */
+export const recipientFormatFor = (connection: { displayPhone: string | null }, organization: { isDemo: boolean; demoKind: string | null }): RecipientFormat | undefined =>
+  usesMetaTestNumber(connection, organization) ? "ar-without-9" : undefined;
 
 /**
  * Envío de prueba autorizado: solo a un número de la lista de prueba del negocio, con la plantilla `hello_world` (que
@@ -331,7 +352,7 @@ export async function sendTest(organizationId: string, params: { to: string; tem
     const { accessToken } = credentialsOf(connection);
     const sent =
       params.template === "hello_world"
-        ? await sendTemplate(accessToken, connection.phoneNumberId, params.to, "hello_world", "en_US", [])
+        ? await sendTemplate(accessToken, connection.phoneNumberId, params.to, "hello_world", "en_US", [], TEST_RECIPIENT_FORMAT)
         : await sendTemplate(
             accessToken,
             connection.phoneNumberId,
@@ -343,6 +364,7 @@ export async function sendTest(organizationId: string, params: { to: string; tem
               { customerFirstName: "Prueba", organizationName: "Agendia", serviceName: "Turno de prueba", when: "mañana, 10:00" },
               { appointmentToken: "prueba", organizationSlug: "prueba" },
             ),
+            TEST_RECIPIENT_FORMAT,
           );
     await db.whatsappMessage.update({ where: { id: row.id }, data: { status: "sent", providerMessageId: sent.messageId } });
     return { ok: true };

@@ -128,7 +128,7 @@ describe("administración de WhatsApp: circuito completo con la plataforma", () 
     // El mensaje de prueba salió con el token de ESTE negocio, a un destinatario autorizado, y quedó marcado como prueba.
     const sent = meta.messages().at(-1)!;
     expect(sent.token).toBe(secrets[0]);
-    expect(sent.body).toMatchObject({ to: "5491155550000", template: { name: "hello_world" } });
+    expect(sent.body).toMatchObject({ to: "541155550000", template: { name: "hello_world" } });
     expect(await db.whatsappMessage.findFirstOrThrow({ where: { organizationId: target.organization.id, kind: "test" } })).toMatchObject({ isTest: true, status: "sent" });
 
     // Ninguna respuesta ni registro de auditoría contiene los secretos.

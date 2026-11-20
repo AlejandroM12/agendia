@@ -6,6 +6,7 @@ import { formatDateTime } from "@/lib/time";
 import { cancelAppointment } from "@/modules/appointments/service";
 import { decryptCredentials, sha256Hex } from "./crypto";
 import { normalizePhone, revokeConsent } from "./consent";
+import { canonicalInboundNumber } from "@/lib/phone";
 import { verifyMetaSignature } from "./meta";
 import { sendSessionReply } from "./service";
 
@@ -102,7 +103,7 @@ const STOP_WORDS = /^\s*(baja|stop|parar|no quiero|darme de baja|dar de baja)\s*
 
 async function applyInbound(organizationId: string, message: MetaMessage): Promise<void> {
   if (!message.id) return;
-  const phone = message.from ? message.from.replace(/\D/g, "") : null;
+  const phone = message.from ? canonicalInboundNumber(message.from) : null;
   const action = message.button?.payload ?? message.interactive?.button_reply?.id ?? null;
   const text = (message.text?.body ?? message.button?.text ?? message.interactive?.button_reply?.title ?? "").slice(0, 200);
 

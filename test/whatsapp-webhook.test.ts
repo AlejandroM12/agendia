@@ -155,6 +155,18 @@ describe("estados de entrega", () => {
 });
 
 describe("respuestas de los clientes", () => {
+  it("el número entrante sin el 9 (54 + 10 dígitos) se reconoce igual que el 549…: confirma el turno y se guarda en el formato interno", async () => {
+    const t = await shop();
+    const { phoneNumberId } = await connectWhatsapp(t.organization.id);
+    const appointment = await bookFor(t);
+    vi.stubGlobal("fetch", fakeMeta().handler);
+    const withoutNine = PHONE.replace(/^549/, "54");
+    expect(withoutNine).not.toBe(PHONE);
+    await post(APP_SECRET, metaPayload(phoneNumberId, { messages: [buttonReply(wamid(), withoutNine, `c:${appointment.manageToken}`)] }));
+    expect((await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).attendanceConfirmedAt).not.toBeNull();
+    expect((await db.whatsappMessage.findFirstOrThrow({ where: { organizationId: t.organization.id, direction: "inbound" } })).phone).toBe(PHONE);
+  });
+
   it("«Confirmo» deja registrada la asistencia, contesta y no se procesa dos veces", async () => {
     const t = await shop();
     const { phoneNumberId } = await connectWhatsapp(t.organization.id);
